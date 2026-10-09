@@ -239,18 +239,50 @@ app.post('/api/availability', authenticate, requireVerification, (req, res) => {
   }
 });
 
-// 1-Tap Quick Mark Busy: instantly toggles priest offline if verbally booked elsewhere
-app.post('/api/availability/quick-busy', authenticate, requireVerification, (req, res) => {
+// Check priest's own current status (Available or Busy)
+app.get('/api/availability/my-status', authenticate, (req, res) => {
+  const { date } = req.query;
+  const status = db.getPriestStatus(req.user.id, date);
+  return res.json({ status, isAvailable: status === 'available' });
+});
+
+// 1-Tap Toggle: instantly switches priest between Available and Busy
+app.post('/api/availability/toggle-status', authenticate, requireVerification, async (req, res) => {
   const { date } = req.body;
 
   try {
-    db.setPriestBusy(req.user.id, date);
-    return res.json({ message: 'You are now marked offline/busy. Your slot was removed from the live roster.' });
+    const updatedSlot = await db.togglePriestStatus(req.user.id, date);
+    const isNowAvailable = updatedSlot.status === 'available';
+    return res.json({
+      message: isNowAvailable ? 'You are now marked Available for ministry.' : 'You are now marked Busy / Offline.',
+      status: updatedSlot.status,
+      slot: updatedSlot
+    });
   } catch (error) {
-    console.error('Error setting busy status:', error);
+    console.error('Error toggling priest status:', error);
     return res.status(500).json({ error: 'Failed to update availability status.' });
   }
 });
+
+// Mark a specific date or period as unavailable / busy
+app.post('/api/availability/unavailable', authenticate, requireVerification, async (req, res) => {
+  const { date, reason } = req.body;
+  if (!date) {
+    return res.status(400).json({ error: 'Date is required to block out unavailable dates.' });
+  }
+
+  try {
+    const slot = await db.setPriestUnavailableDate(req.user.id, date, reason);
+    return res.json({
+      message: `Date ${date} marked as Unavailable / Busy.`,
+      slot
+    });
+  } catch (error) {
+    console.error('Error marking date unavailable:', error);
+    return res.status(500).json({ error: 'Failed to record unavailable date.' });
+  }
+});
+
 
 // --- Bookings Routes ---
 

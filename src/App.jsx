@@ -36,6 +36,7 @@ export default function App() {
   const [availablePriests, setAvailablePriests] = useState([]);
   const [bookings, setBookings] = useState([]);
   const [pendingUsers, setPendingUsers] = useState([]);
+  const [myStatus, setMyStatus] = useState('available');
 
   // Modals & Feedback
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -149,6 +150,15 @@ export default function App() {
         const resPending = await fetch('/api/users/pending', { headers: getHeaders(u) });
         if (resPending.ok) {
           setPendingUsers(await resPending.json());
+        }
+      }
+
+      // 4. Fetch Priest's Own Status
+      if (u.is_verified === 1 && u.clergy_type !== 'convent') {
+        const resStatus = await fetch('/api/availability/my-status', { headers: getHeaders(u) });
+        if (resStatus.ok) {
+          const statusData = await resStatus.json();
+          setMyStatus(statusData.status);
         }
       }
     } catch (err) {
@@ -270,34 +280,30 @@ export default function App() {
     setActiveMode('roster');
   };
 
-  // Set Availability Handler ("Go Available")
-  const handleSetAvailability = async (e) => {
+  // Set Unavailable Dates Handler (Advance Busy Scheduling)
+  const handleSetUnavailableDates = async (e) => {
     e.preventDefault();
     if (!availDate) {
-      showFeedback('error', 'Please choose the celebration date.');
+      showFeedback('error', 'Please choose the date you will be unavailable.');
       return;
     }
     setFormSubmitting(true);
     try {
-      const res = await fetch('/api/availability', {
+      const res = await fetch('/api/availability/unavailable', {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({
           date: availDate,
-          time_start: availStart,
-          time_end: availEnd,
-          languages: availLanguages,
-          notes: availNotes
+          reason: availNotes || 'Personal Leave / Travelling'
         })
       });
       const data = await res.json();
       if (res.ok) {
-        showFeedback('success', 'Your availability has been saved! Parishes and convents can now find you.');
+        showFeedback('success', `You are marked as Unavailable / Busy on ${availDate}.`);
         setShowAvailabilityModal(false);
         loadDashboardData();
       } else {
-
-        showFeedback('error', data.error || 'Failed to set availability.');
+        showFeedback('error', data.error || 'Failed to update unavailable date.');
       }
     } catch (err) {
       showFeedback('error', 'Failed to communicate with server.');
@@ -306,23 +312,29 @@ export default function App() {
     }
   };
 
-  // 1-Tap Quick Mark Busy Handler
-  const handleQuickMarkBusy = async () => {
+  // 1-Tap Toggle Status Handler (Always Available by Default)
+  const handleToggleStatus = async () => {
     try {
-      const res = await fetch('/api/availability/quick-busy', {
+      const res = await fetch('/api/availability/toggle-status', {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({})
       });
       const data = await res.json();
       if (res.ok) {
-        showFeedback('success', 'You are now marked offline/busy. Your slot was removed from the live roster.');
+        showFeedback('success', data.message);
+        if (data.status) {
+          setMyStatus(data.status);
+        }
         loadDashboardData();
+      } else {
+        showFeedback('error', data.error || 'Failed to update status.');
       }
     } catch (err) {
-      showFeedback('error', 'Failed to update status.');
+      showFeedback('error', 'Failed to update status. Please ensure server is running.');
     }
   };
+
 
   // Direct Verbal Booking Confirmation Handler
   const handleConfirmDirectBooking = async (e) => {
@@ -781,30 +793,49 @@ export default function App() {
 
         {activeMode !== 'admin' && (
           <>
-            {/* Quick Priest Availability Toggle Banner (Priests Only) */}
-            {user.is_verified === 1 && user.clergy_type !== 'convent' && (
-              <div className="quick-status-card">
-                <div className="quick-status-info">
-                  <h4>🕊️ Your Ministry Availability</h4>
-                  <p>
-                    {user.residence_name ? `📍 ${user.residence_name}` : 'Residence not set'} • Travel radius: {user.max_travel_km} km
-                  </p>
+            {/* Priest Availability Status (Always Available by Default) */}
+            {user.is_verified === 1 && user.clergy_type !== 'convent' && (() => {
+              const isAvailable = myStatus === 'available';
+
+              return (
+                <div className="quick-status-card">
+                  <div className="quick-status-info">
+                    <h4>🕊️ Your Ministry Status</h4>
+                    <p>
+                      {user.residence_name ? `📍 ${user.residence_name}` : 'Residence not set'} • Travel radius: {user.max_travel_km} km
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.85rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    {/* Switch-like Toggle Control */}
+                    <div 
+                      className="status-switch-container"
+                      onClick={handleToggleStatus}
+                      role="button"
+                      tabIndex={0}
+                      title="Click to switch your status between Available and Busy"
+                    >
+                      <span className={`status-switch-option ${isAvailable ? 'active-available' : ''}`}>
+                        🟢 Available
+                      </span>
+                      <span className={`status-switch-option ${!isAvailable ? 'active-busy' : ''}`}>
+                        🔴 Busy
+                      </span>
+                    </div>
+
+                    {/* Button for blocking out unavailable dates */}
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => setShowAvailabilityModal(true)}
+                      title="Set upcoming dates when you will be away or busy"
+                      style={{ borderColor: '#CBD5E1', color: '#334155', fontWeight: 600 }}
+                    >
+                      🗓️ Set Your Unavailable Dates
+                    </button>
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-                  <button className="btn btn-success btn-sm" onClick={() => setShowAvailabilityModal(true)}>
-                    🟢 Set Available Dates
-                  </button>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={handleQuickMarkBusy}
-                    title="Mark yourself offline or busy when you are already engaged"
-                    style={{ borderColor: '#CBD5E1', color: '#475569' }}
-                  >
-                    ⚪ Mark as Busy / Offline
-                  </button>
-                </div>
-              </div>
-            )}
+              );
+            })()}
+
 
 
             {/* Marketplace Dual-Mode Switcher */}
@@ -1081,18 +1112,21 @@ export default function App() {
         )}
       </main>
 
-      {/* --- MODAL 1: GO AVAILABLE (Roster Supply) --- */}
+      {/* --- MODAL 1: SET UNAVAILABLE DATES --- */}
       {showAvailabilityModal && (
         <div className="modal-overlay">
           <div className="modal-container">
             <div className="modal-header">
-              <h3 className="modal-title">🟢 Set Your Availability</h3>
+              <h3 className="modal-title">🗓️ Set Your Unavailable Dates</h3>
               <button className="modal-close" onClick={() => setShowAvailabilityModal(false)}>&times;</button>
             </div>
-            <form onSubmit={handleSetAvailability}>
+            <form onSubmit={handleSetUnavailableDates}>
               <div className="modal-body">
+                <p style={{ fontSize: '0.88rem', color: '#64748B', marginBottom: '1rem', lineHeight: '1.4' }}>
+                  You are available for ministry by default. Use this to block out dates in advance when you will be away, travelling, or unavailable.
+                </p>
                 <div className="form-group">
-                  <label className="form-label">AVAILABLE CELEBRATION DATE</label>
+                  <label className="form-label">UNAVAILABLE DATE</label>
                   <input
                     type="date"
                     className="form-input"
@@ -1101,50 +1135,21 @@ export default function App() {
                     required
                   />
                 </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">START TIME</label>
-                    <input
-                      type="time"
-                      className="form-input"
-                      value={availStart}
-                      onChange={(e) => setAvailStart(e.target.value)}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">END TIME</label>
-                    <input
-                      type="time"
-                      className="form-input"
-                      value={availEnd}
-                      onChange={(e) => setAvailEnd(e.target.value)}
-                    />
-                  </div>
-                </div>
                 <div className="form-group">
-                  <label className="form-label">LANGUAGES YOU CAN CELEBRATE IN</label>
-                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                    {LANGUAGES.map(lang => (
-                      <span
-                        key={lang}
-                        className={`card-tag ${availLanguages.includes(lang) ? 'accepted' : 'pending'}`}
-                        style={{ cursor: 'pointer', padding: '0.35rem 0.6rem' }}
-                        onClick={() => {
-                          if (availLanguages.includes(lang)) {
-                            setAvailLanguages(availLanguages.filter(l => l !== lang));
-                          } else {
-                            setAvailLanguages([...availLanguages, lang]);
-                          }
-                        }}
-                      >
-                        {lang} {availLanguages.includes(lang) ? '✓' : '+'}
-                      </span>
-                    ))}
-                  </div>
+                  <label className="form-label">REASON / NOTE (OPTIONAL)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. Annual Retreat, Family Visit, Travelling, etc."
+                    value={availNotes}
+                    onChange={(e) => setAvailNotes(e.target.value)}
+                  />
                 </div>
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
                   <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowAvailabilityModal(false)}>Cancel</button>
-                  <button type="submit" className="btn btn-success" style={{ flex: 1 }} disabled={formSubmitting}>Save Availability</button>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={formSubmitting}>
+                    {formSubmitting ? 'Saving...' : 'Mark as Unavailable'}
+                  </button>
                 </div>
 
               </div>

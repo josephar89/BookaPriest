@@ -60,21 +60,28 @@ class RelationalDatabase {
         fs.mkdirSync(DATA_DIR, { recursive: true });
       }
 
-      // If Turso Cloud DB is active, sync from cloud
+      if (fs.existsSync(DB_FILE)) {
+        try {
+          const fileContent = fs.readFileSync(DB_FILE, 'utf8');
+          const parsed = JSON.parse(fileContent);
+          this.data = {
+            users: parsed.users || [],
+            bookings: parsed.bookings || [],
+            availability_slots: parsed.availability_slots || []
+          };
+        } catch (e) {
+          console.error('Error parsing local db cache:', e);
+        }
+      }
+
+      // If Turso Cloud DB is active, sync newest records from cloud
       if (tursoClient) {
         await this.syncFromTurso();
-      } else if (fs.existsSync(DB_FILE)) {
-        const fileContent = fs.readFileSync(DB_FILE, 'utf8');
-        const parsed = JSON.parse(fileContent);
-        this.data = {
-          users: parsed.users || [],
-          bookings: parsed.bookings || [],
-          availability_slots: parsed.availability_slots || []
-        };
-      } else {
+      } else if (!fs.existsSync(DB_FILE)) {
         this.saveLocal();
         this.seed();
       }
+
     } catch (error) {
       console.error('Failed to initialize database:', error);
     }
@@ -241,34 +248,53 @@ class RelationalDatabase {
 
   getAvailabilitySlots(filter = {}) {
     const { date, lat, lon } = filter;
-    let slots = this.data.availability_slots.filter(s => s.status === 'available');
+    const todayStr = date || new Date().toISOString().split('T')[0];
 
-    if (date) {
-      slots = slots.filter(s => s.date === date);
-    }
+    // Get all verified priests (excluding sisters and unverified accounts)
+    const verifiedPriests = this.data.users.filter(
+      u => u.is_verified === 1 && u.clergy_type !== 'convent' && u.is_admin !== 1
+    );
 
-    const enriched = slots.map(s => {
-      const priest = this.getUserById(s.priest_id);
+    // Build roster: by default every verified priest is available unless explicitly marked 'busy' or 'booked'
+    const enriched = verifiedPriests.map(priest => {
+      // Check if priest has a specific slot or status for this date
+      const slot = this.data.availability_slots.find(
+        s => s.priest_id === priest.id && (s.date === todayStr || !s.date)
+      );
+
+      // Check if priest has an accepted booking on this date
+      const bookedOnDate = this.data.bookings.some(
+        b => b.responder_id === priest.id && b.status === 'accepted' && b.datetime.startsWith(todayStr)
+      );
+
+      const isBusy = (slot && (slot.status === 'busy' || slot.status === 'offline' || slot.status === 'booked')) || bookedOnDate;
+
       let distance_km = null;
-      if (lat && lon && priest && priest.latitude && priest.longitude) {
+      if (lat && lon && priest.latitude && priest.longitude) {
         distance_km = calculateDistanceKm(parseFloat(lat), parseFloat(lon), priest.latitude, priest.longitude);
       }
 
       return {
-        ...s,
-        priest_name: priest ? priest.name : 'Unknown Priest',
-        priest_mobile: priest ? priest.mobile : '',
-        clergy_type: priest ? priest.clergy_type : 'diocesan',
-        religious_order: priest ? priest.religious_order : '',
-        residence_name: priest ? priest.residence_name : '',
-        diocese_province: priest ? priest.diocese_province : '',
-        transport_mode: priest ? priest.transport_mode : 'own_bike',
-        max_travel_km: priest ? priest.max_travel_km : 25,
-        priest_latitude: priest ? priest.latitude : null,
-        priest_longitude: priest ? priest.longitude : null,
+        id: slot ? slot.id : `priest-${priest.id}`,
+        priest_id: priest.id,
+        date: todayStr,
+        time_start: slot ? slot.time_start : '06:00',
+        time_end: slot ? slot.time_end : '20:00',
+        languages: slot && slot.languages ? slot.languages : ['English', 'Tamil'],
+        status: isBusy ? 'busy' : 'available',
+        priest_name: priest.name,
+        priest_mobile: priest.mobile,
+        clergy_type: priest.clergy_type,
+        religious_order: priest.religious_order,
+        residence_name: priest.residence_name,
+        diocese_province: priest.diocese_province,
+        transport_mode: priest.transport_mode,
+        max_travel_km: priest.max_travel_km,
+        priest_latitude: priest.latitude,
+        priest_longitude: priest.longitude,
         distance_km
       };
-    });
+    }).filter(p => p.status === 'available'); // Only show currently available priests on public list
 
     if (lat && lon) {
       enriched.sort((a, b) => {
@@ -280,6 +306,7 @@ class RelationalDatabase {
 
     return enriched;
   }
+
 
   async createOrUpdateAvailability(slot) {
     const priestId = parseInt(slot.priest_id);
@@ -335,22 +362,110 @@ class RelationalDatabase {
     return newSlot;
   }
 
-  async setPriestBusy(priestId, date) {
-    const slots = this.data.availability_slots.filter(
-      s => s.priest_id === parseInt(priestId) && (!date || s.date === date)
+  async togglePriestStatus(priestId, date) {
+    const pId = parseInt(priestId);
+    const todayStr = date || new Date().toISOString().split('T')[0];
+
+    let slot = this.data.availability_slots.find(
+      s => s.priest_id === pId && (s.date === todayStr || !s.date)
     );
-    slots.forEach(s => {
-      s.status = 'offline';
-      if (tursoClient) {
-        tursoClient.execute({
-          sql: 'UPDATE availability_slots SET status = ? WHERE id = ?',
-          args: ['offline', s.id]
-        }).catch(err => console.error('Turso background set busy failed:', err));
-      }
-    });
+
+    if (!slot) {
+      // If no slot exists, priest was available by default; toggling means making them busy
+      const nextId = this.data.availability_slots.reduce((max, s) => s.id > max ? s.id : max, 0) + 1;
+      slot = {
+        id: nextId,
+        priest_id: pId,
+        date: todayStr,
+        time_start: '06:00',
+        time_end: '20:00',
+        languages: ['English', 'Tamil'],
+        notes: '',
+        status: 'busy',
+        created_at: new Date().toISOString()
+      };
+      this.data.availability_slots.push(slot);
+    } else {
+      // Toggle between available and busy
+      slot.status = slot.status === 'busy' || slot.status === 'offline' ? 'available' : 'busy';
+      slot.updated_at = new Date().toISOString();
+    }
+
     this.saveLocal();
-    return slots;
+
+    if (tursoClient) {
+      tursoClient.execute({
+        sql: `INSERT INTO availability_slots (id, priest_id, date, time_start, time_end, languages, notes, status, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO UPDATE SET status = excluded.status`,
+        args: [
+          slot.id, slot.priest_id, slot.date, slot.time_start, slot.time_end,
+          JSON.stringify(slot.languages || []), slot.notes || '', slot.status, slot.created_at || new Date().toISOString()
+        ]
+      }).catch(err => console.error('Turso background toggle status failed:', err));
+    return slot;
   }
+
+  getPriestStatus(priestId, date) {
+    const pId = parseInt(priestId);
+    const todayStr = date || new Date().toISOString().split('T')[0];
+    const slot = this.data.availability_slots.find(
+      s => s.priest_id === pId && (s.date === todayStr || !s.date)
+    );
+    const bookedOnDate = this.data.bookings.some(
+      b => b.responder_id === pId && b.status === 'accepted' && b.datetime.startsWith(todayStr)
+    );
+    const isBusy = (slot && (slot.status === 'busy' || slot.status === 'offline' || slot.status === 'booked')) || bookedOnDate;
+    return isBusy ? 'busy' : 'available';
+  }
+
+  async setPriestUnavailableDate(priestId, date, reason = 'Unavailable / Personal Leave') {
+    const pId = parseInt(priestId);
+    let slot = this.data.availability_slots.find(
+      s => s.priest_id === pId && s.date === date
+    );
+
+    if (!slot) {
+      const nextId = this.data.availability_slots.reduce((max, s) => s.id > max ? s.id : max, 0) + 1;
+      slot = {
+        id: nextId,
+        priest_id: pId,
+        date: date,
+        time_start: '00:00',
+        time_end: '23:59',
+        languages: ['English'],
+        notes: reason,
+        status: 'busy',
+        created_at: new Date().toISOString()
+      };
+      this.data.availability_slots.push(slot);
+    } else {
+      slot.status = 'busy';
+      slot.notes = reason;
+      slot.updated_at = new Date().toISOString();
+    }
+
+    this.saveLocal();
+
+    if (tursoClient) {
+      tursoClient.execute({
+        sql: `INSERT INTO availability_slots (id, priest_id, date, time_start, time_end, languages, notes, status, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO UPDATE SET status = 'busy', notes = excluded.notes`,
+        args: [
+          slot.id, slot.priest_id, slot.date, slot.time_start, slot.time_end,
+          JSON.stringify(slot.languages || []), slot.notes, slot.status, slot.created_at || new Date().toISOString()
+        ]
+      }).catch(err => console.error('Turso background set unavailable failed:', err));
+    }
+
+    return slot;
+  }
+
+  async setPriestBusy(priestId, date) {
+    return this.togglePriestStatus(priestId, date);
+  }
+
 
   // --- Bookings Operations ---
 
