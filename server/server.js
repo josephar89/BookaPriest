@@ -264,22 +264,45 @@ app.post('/api/availability/toggle-status', authenticate, requireVerification, a
   }
 });
 
-// Mark a specific date or period as unavailable / busy
+// Get all future busy/unavailable dates set by the logged in priest
+app.get('/api/availability/my-unavailability', authenticate, (req, res) => {
+  const pId = req.user.id;
+  const busySlots = (db.data.availability_slots || []).filter(
+    s => s.priest_id === pId && s.status === 'busy'
+  );
+  return res.json(busySlots);
+});
+
+// Remove / delete an unavailable date
+app.delete('/api/availability/unavailable/:date', authenticate, requireVerification, async (req, res) => {
+  const { date } = req.params;
+  await db.clearPriestUnavailableDate(req.user.id, date);
+  return res.json({ message: `Unavailability removed for ${date}` });
+});
+
+// Mark a specific date range and time period as unavailable / busy
 app.post('/api/availability/unavailable', authenticate, requireVerification, async (req, res) => {
-  const { date, reason } = req.body;
-  if (!date) {
-    return res.status(400).json({ error: 'Date is required to block out unavailable dates.' });
+  const { startDate, endDate, date, startTime, endTime, notes } = req.body;
+  const start = startDate || date;
+  if (!start) {
+    return res.status(400).json({ error: 'Start date is required to block out unavailable dates.' });
   }
 
   try {
-    const slot = await db.setPriestUnavailableDate(req.user.id, date, reason);
+    const slots = await db.setPriestUnavailableDate(req.user.id, {
+      startDate: start,
+      endDate: endDate || start,
+      startTime: startTime || '00:00',
+      endTime: endTime || '23:59',
+      notes: notes || 'Unavailable / Personal Leave'
+    });
     return res.json({
-      message: `Date ${date} marked as Unavailable / Busy.`,
-      slot
+      message: `Marked as Unavailable / Busy from ${start}${endDate && endDate !== start ? ` to ${endDate}` : ''}.`,
+      slots
     });
   } catch (error) {
-    console.error('Error marking date unavailable:', error);
-    return res.status(500).json({ error: 'Failed to record unavailable date.' });
+    console.error('Error marking dates unavailable:', error);
+    return res.status(500).json({ error: 'Failed to record unavailable dates.' });
   }
 });
 
@@ -303,7 +326,7 @@ app.get('/api/bookings', authenticate, (req, res) => {
 
 // Create a booking (Requesting Parish Priest or Convent Sister posts an open request)
 app.post('/api/bookings', authenticate, requireVerification, (req, res) => {
-  const { datetime, location, language, honorarium, latitude, longitude, notes, service_type } = req.body;
+  const { datetime, datetime_end, location, language, honorarium, latitude, longitude, notes, service_type } = req.body;
 
   if (!datetime || !location || !language) {
     return res.status(400).json({ error: 'Date/time, location, and language requirements are required.' });
@@ -317,6 +340,7 @@ app.post('/api/bookings', authenticate, requireVerification, (req, res) => {
     const newBooking = db.createBooking({
       requester_id: req.user.id,
       datetime,
+      datetime_end,
       location,
       latitude: latitude || req.user.latitude,
       longitude: longitude || req.user.longitude,
@@ -372,8 +396,8 @@ app.post('/api/bookings/confirm-call', authenticate, requireVerification, (req, 
   }
 });
 
-// Accept an open slot from the broadcast board (Available Priest claims it)
-app.post('/api/bookings/accept', authenticate, requireVerification, (req, res) => {
+// Offer Ministry for an open request (Available Priest expresses willingness; request stays open)
+app.post('/api/bookings/offer', authenticate, requireVerification, async (req, res) => {
   const { bookingId } = req.body;
 
   if (!bookingId) {
@@ -382,23 +406,64 @@ app.post('/api/bookings/accept', authenticate, requireVerification, (req, res) =
 
   const booking = db.getBookingById(bookingId);
   if (!booking) {
-    return res.status(404).json({ error: 'Liturgical slot not found.' });
+    return res.status(404).json({ error: 'Liturgical request not found.' });
   }
 
   if (booking.status !== 'pending') {
-    return res.status(400).json({ error: 'This liturgical slot is no longer available.' });
+    return res.status(400).json({ error: 'This liturgical request is already filled.' });
   }
 
   if (booking.requester_id === req.user.id) {
-    return res.status(400).json({ error: 'You cannot accept your own liturgical slot.' });
+    return res.status(400).json({ error: 'You cannot offer ministry for your own request.' });
   }
 
   try {
-    const updatedBooking = db.acceptBooking(bookingId, req.user.id);
-    return res.json({ message: 'Liturgical slot accepted successfully. WhatsApp contact unlocked!', booking: updatedBooking });
+    const result = await db.applyForBooking(bookingId, req.user.id);
+    if (result.error) {
+      return res.status(400).json({ error: result.error });
+    }
+    return res.json({
+      message: 'Your offer for ministry has been submitted! The parish/convent will review and confirm.',
+      booking: result.booking
+    });
   } catch (error) {
-    console.error('Error accepting booking:', error);
-    return res.status(500).json({ error: 'Failed to accept liturgical slot.' });
+    console.error('Error offering ministry for booking:', error);
+    return res.status(500).json({ error: 'Failed to submit ministry offer.' });
+  }
+});
+
+// Requester confirms a specific priest who offered ministry (Ticket locked, contacts revealed)
+app.post('/api/bookings/confirm-applicant', authenticate, requireVerification, async (req, res) => {
+  const { bookingId, priestId } = req.body;
+
+  if (!bookingId || !priestId) {
+    return res.status(400).json({ error: 'Booking ID and Priest ID are required.' });
+  }
+
+  try {
+    const result = await db.confirmApplicant(bookingId, req.user.id, priestId);
+    if (result.error) {
+      return res.status(400).json({ error: result.error });
+    }
+    return res.json({
+      message: 'Priest confirmed! Contact details and WhatsApp have been unlocked.',
+      booking: result.booking
+    });
+  } catch (error) {
+    console.error('Error confirming applicant:', error);
+    return res.status(500).json({ error: 'Failed to confirm priest.' });
+  }
+});
+
+// Backward compatibility alias for single direct accept
+app.post('/api/bookings/accept', authenticate, requireVerification, (req, res) => {
+  const { bookingId } = req.body;
+  if (!bookingId) return res.status(400).json({ error: 'Booking ID is required.' });
+  try {
+    const updatedBooking = db.acceptBooking(bookingId, req.user.id);
+    return res.json({ message: 'Slot confirmed.', booking: updatedBooking });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to accept slot.' });
   }
 });
 

@@ -26,10 +26,10 @@ export default function App() {
   const [regTransportMode, setRegTransportMode] = useState('own_bike');
 
   // Application Modes & Views
-  // 'roster': Browse available priests (Bike-Taxi style)
-  // 'broadcast': Open mass requests posted by parish priests
+  // 'broadcast': Do you need to book a priest?
+  // 'roster': Are you available for ministry outside?
   // 'admin': Diocesan admin verification queue
-  const [activeMode, setActiveMode] = useState('roster');
+  const [activeMode, setActiveMode] = useState('broadcast');
   const [rosterDateFilter, setRosterDateFilter] = useState('');
 
   // Data States
@@ -37,6 +37,9 @@ export default function App() {
   const [bookings, setBookings] = useState([]);
   const [pendingUsers, setPendingUsers] = useState([]);
   const [myStatus, setMyStatus] = useState('available');
+  const [requestsTab, setRequestsTab] = useState('open'); // 'open' (requested) vs 'accepted' (confirmed with contact)
+  const [myUnavailableSlots, setMyUnavailableSlots] = useState([]);
+  const [calMonthOffset, setCalMonthOffset] = useState(0); // 0 = current month, 1 = next month, etc.
 
   // Modals & Feedback
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -49,18 +52,20 @@ export default function App() {
 
   // New Mass Request Form Fields
   const [bookingLocation, setBookingLocation] = useState('');
-  const [bookingDatetime, setBookingDatetime] = useState('');
+  const [bookingDate, setBookingDate] = useState('');
+  const [bookingEndDate, setBookingEndDate] = useState('');
+  const [bookingTimeStart, setBookingTimeStart] = useState('06:30');
+  const [bookingTimeEnd, setBookingTimeEnd] = useState('07:30');
   const [bookingLanguage, setBookingLanguage] = useState('Tamil');
   const [bookingHonorarium, setBookingHonorarium] = useState('');
   const [bookingServiceType, setBookingServiceType] = useState('Holy Mass');
   const [bookingNotes, setBookingNotes] = useState('');
 
-  // Set Availability Form Fields
-  const [availDate, setAvailDate] = useState('');
+  // Set Availability Form Fields (Date Range & Times)
+  const [availStartDate, setAvailStartDate] = useState('');
+  const [availEndDate, setAvailEndDate] = useState('');
   const [availStart, setAvailStart] = useState('06:00');
-  const [availEnd, setAvailEnd] = useState('12:00');
-  const [availLanguages, setAvailLanguages] = useState(['English', 'Tamil']);
-  const [availNotes, setAvailNotes] = useState('');
+  const [availEnd, setAvailEnd] = useState('22:00');
 
   // Direct Verbal Booking Confirmation Fields
   const [confirmDate, setConfirmDate] = useState('');
@@ -105,6 +110,47 @@ export default function App() {
   ];
 
   const LANGUAGES = ['English', 'Tamil', 'Malayalam', 'Hindi', 'Kannada', 'Latin', 'Konkani', 'Telugu'];
+
+  // 15-minute interval options for single scroll & select (e.g. 06:00 AM, 06:15 AM)
+  const TIME_SLOTS_15MIN = (() => {
+    const slots = [];
+    for (let h = 0; h < 24; h++) {
+      for (let m = 0; m < 60; m += 15) {
+        const hour24 = String(h).padStart(2, '0');
+        const minStr = String(m).padStart(2, '0');
+        const period = h < 12 ? 'AM' : 'PM';
+        let displayHour = h % 12;
+        if (displayHour === 0) displayHour = 12;
+        const displayLabel = `${displayHour}:${minStr} ${period}`;
+        slots.push({ value: `${hour24}:${minStr}`, label: displayLabel });
+      }
+    }
+    return slots;
+  })();
+
+  // Helper to generate Google Calendar month grid
+  const getCalendarDays = (monthOffset = 0) => {
+    const now = new Date();
+    const target = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+    const year = target.getFullYear();
+    const month = target.getMonth();
+    const monthName = target.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+
+    const firstDayIndex = new Date(year, month, 1).getDay(); // 0 = Sun
+    const totalDays = new Date(year, month + 1, 0).getDate();
+
+    const days = [];
+    // Leading empty days
+    for (let i = 0; i < firstDayIndex; i++) {
+      days.push(null);
+    }
+    // Month days
+    for (let day = 1; day <= totalDays; day++) {
+      const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      days.push({ day, dateStr });
+    }
+    return { monthName, days, year, month };
+  };
 
   useEffect(() => {
     const cached = localStorage.getItem('bookapriest_user');
@@ -153,12 +199,17 @@ export default function App() {
         }
       }
 
-      // 4. Fetch Priest's Own Status
+      // 4. Fetch Priest's Own Status & Future Unavailability
       if (u.is_verified === 1 && u.clergy_type !== 'convent') {
         const resStatus = await fetch('/api/availability/my-status', { headers: getHeaders(u) });
         if (resStatus.ok) {
           const statusData = await resStatus.json();
           setMyStatus(statusData.status);
+        }
+
+        const resUnavail = await fetch('/api/availability/my-unavailability', { headers: getHeaders(u) });
+        if (resUnavail.ok) {
+          setMyUnavailableSlots(await resUnavail.json());
         }
       }
     } catch (err) {
@@ -280,11 +331,11 @@ export default function App() {
     setActiveMode('roster');
   };
 
-  // Set Unavailable Dates Handler (Advance Busy Scheduling)
+  // Set Unavailable Dates Handler (Date Range & Time)
   const handleSetUnavailableDates = async (e) => {
     e.preventDefault();
-    if (!availDate) {
-      showFeedback('error', 'Please choose the date you will be unavailable.');
+    if (!availStartDate) {
+      showFeedback('error', 'Please choose the start date you will be unavailable.');
       return;
     }
     setFormSubmitting(true);
@@ -293,22 +344,40 @@ export default function App() {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({
-          date: availDate,
-          reason: availNotes || 'Personal Leave / Travelling'
+          startDate: availStartDate,
+          endDate: availEndDate || availStartDate,
+          startTime: availStart,
+          endTime: availEnd
         })
       });
       const data = await res.json();
       if (res.ok) {
-        showFeedback('success', `You are marked as Unavailable / Busy on ${availDate}.`);
+        showFeedback('success', `Marked as Unavailable from ${availStartDate}${availEndDate && availEndDate !== availStartDate ? ` to ${availEndDate}` : ''}.`);
         setShowAvailabilityModal(false);
         loadDashboardData();
       } else {
-        showFeedback('error', data.error || 'Failed to update unavailable date.');
+        showFeedback('error', data.error || 'Failed to update unavailable dates.');
       }
     } catch (err) {
       showFeedback('error', 'Failed to communicate with server.');
     } finally {
       setFormSubmitting(false);
+    }
+  };
+
+  // Remove an unavailable date block
+  const handleClearUnavailableDate = async (dateStr) => {
+    try {
+      const res = await fetch(`/api/availability/unavailable/${dateStr}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+      });
+      if (res.ok) {
+        showFeedback('success', `Unavailability removed for ${dateStr}. You are now available!`);
+        loadDashboardData();
+      }
+    } catch (err) {
+      showFeedback('error', 'Failed to clear unavailable date.');
     }
   };
 
@@ -376,10 +445,16 @@ export default function App() {
   // Create Broadcast Mass Request
   const handleCreateBooking = async (e) => {
     e.preventDefault();
-    if (!bookingLocation || !bookingDatetime || !bookingLanguage) {
-      showFeedback('error', 'Venue location, date/time, and language are required.');
+    if (!bookingLocation || !bookingDate || !bookingLanguage) {
+      showFeedback('error', 'Venue location, date, and liturgical language are required.');
       return;
     }
+
+    // Combine selected date and time for start and end
+    const toDate = bookingEndDate || bookingDate;
+    const formattedDatetime = `${bookingDate}T${bookingTimeStart}:00`;
+    const formattedDatetimeEnd = `${toDate}T${bookingTimeEnd}:00`;
+
     setFormSubmitting(true);
     try {
       const res = await fetch('/api/bookings', {
@@ -387,7 +462,8 @@ export default function App() {
         headers: getHeaders(),
         body: JSON.stringify({
           location: bookingLocation,
-          datetime: bookingDatetime,
+          datetime: formattedDatetime,
+          datetime_end: formattedDatetimeEnd,
           language: bookingLanguage,
           honorarium: bookingHonorarium,
           service_type: bookingServiceType,
@@ -399,7 +475,8 @@ export default function App() {
         showFeedback('success', 'Mass request broadcasted successfully!');
         setShowRequestModal(false);
         setBookingLocation('');
-        setBookingDatetime('');
+        setBookingDate('');
+        setBookingEndDate('');
         loadDashboardData();
       } else {
         showFeedback('error', data.error || 'Failed to post slot.');
@@ -411,20 +488,40 @@ export default function App() {
     }
   };
 
-  // Accept Broadcast Slot
-  const handleAcceptBooking = async (bookingId) => {
+  // Available Priest Offers Ministry for an open request (request stays open)
+  const handleOfferMinistry = async (bookingId) => {
     try {
-      const res = await fetch('/api/bookings/accept', {
+      const res = await fetch('/api/bookings/offer', {
         method: 'POST',
         headers: getHeaders(),
         body: JSON.stringify({ bookingId })
       });
       const data = await res.json();
       if (res.ok) {
-        showFeedback('success', 'Mass slot accepted! You can now contact the parish priest via WhatsApp or call.');
+        showFeedback('success', 'Your offer to take up this ministry has been sent! The parish/convent will review and confirm.');
         loadDashboardData();
       } else {
-        showFeedback('error', data.error || 'Failed to accept slot.');
+        showFeedback('error', data.error || 'Failed to offer ministry.');
+      }
+    } catch (err) {
+      showFeedback('error', 'Failed to communicate with server.');
+    }
+  };
+
+  // Requester Confirms a specific priest from the applicant list (Locks ticket, reveals contacts)
+  const handleConfirmApplicant = async (bookingId, priestId, priestName) => {
+    try {
+      const res = await fetch('/api/bookings/confirm-applicant', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ bookingId, priestId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showFeedback('success', `Fr. ${priestName} is confirmed! Contact details and WhatsApp have been unlocked.`);
+        loadDashboardData();
+      } else {
+        showFeedback('error', data.error || 'Failed to confirm priest.');
       }
     } catch (err) {
       showFeedback('error', 'Failed to communicate with server.');
@@ -449,10 +546,19 @@ export default function App() {
     }
   };
 
-  const formatDateTime = (isoString) => {
+  const formatDateTime = (isoString, isoEndString = null) => {
     const d = new Date(isoString);
-    const date = d.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-    const time = d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    let date = d.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+    let time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+    if (isoEndString) {
+      const dEnd = new Date(isoEndString);
+      const timeEnd = dEnd.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+      time = `${time} – ${timeEnd}`;
+      const endDate = dEnd.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+      if (endDate !== date) {
+        date = `${date} → ${endDate}`;
+      }
+    }
     return { date, time };
   };
 
@@ -793,20 +899,37 @@ export default function App() {
 
         {activeMode !== 'admin' && (
           <>
-            {/* Priest Availability Status (Always Available by Default) */}
+            {/* CARD 1: DO YOU WANT TO FIND A PRIEST? */}
+            <div className="quick-status-card" style={{ marginBottom: '1.25rem', background: '#F8FAFC', borderColor: '#E2E8F0' }}>
+              <div className="quick-status-info">
+                <h4>📖 Do You Want to Find a Priest?</h4>
+                <p>
+                  Need a priest for Holy Mass, Recollection, or Retreat? Post a ministry request to broadcast to available priests.
+                </p>
+              </div>
+              <div>
+                {user.is_verified === 1 && (
+                  <button className="btn btn-primary" onClick={() => setShowRequestModal(true)}>
+                    ➕ Post a Ministry Request
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* CARD 2: ARE YOU AVAILABLE FOR MINISTRY OUTSIDE? */}
             {user.is_verified === 1 && user.clergy_type !== 'convent' && (() => {
               const isAvailable = myStatus === 'available';
 
               return (
-                <div className="quick-status-card">
+                <div className="quick-status-card" style={{ marginBottom: '1.75rem' }}>
                   <div className="quick-status-info">
-                    <h4>🕊️ Your Ministry Status</h4>
+                    <h4>🕊️ Are You Available for Ministry Outside?</h4>
                     <p>
-                      {user.residence_name ? `📍 ${user.residence_name}` : 'Residence not set'} • Travel radius: {user.max_travel_km} km
+                      {user.residence_name ? `📍 ${user.residence_name}` : 'Residence not set'} • Travel radius: {user.max_travel_km} km • Status: <strong>{isAvailable ? '🟢 Available' : '🔴 Busy (Default)'}</strong>
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: '0.85rem', alignItems: 'center', flexWrap: 'wrap' }}>
-                    {/* Switch-like Toggle Control */}
+                    {/* Switch-like Toggle Control: Available / Busy */}
                     <div 
                       className="status-switch-container"
                       onClick={handleToggleStatus}
@@ -822,249 +945,211 @@ export default function App() {
                       </span>
                     </div>
 
-                    {/* Button for blocking out unavailable dates */}
+                    {/* Set Future Unavailability button */}
                     <button
                       className="btn btn-secondary btn-sm"
                       onClick={() => setShowAvailabilityModal(true)}
                       title="Set upcoming dates when you will be away or busy"
                       style={{ borderColor: '#CBD5E1', color: '#334155', fontWeight: 600 }}
                     >
-                      🗓️ Set Your Unavailable Dates
+                      🗓️ Set Your Future Unavailability
                     </button>
                   </div>
                 </div>
               );
             })()}
 
-
-
-            {/* Marketplace Dual-Mode Switcher */}
-            <div className="mode-switcher">
-              <div
-                className={`mode-tab ${activeMode === 'roster' ? 'active' : ''}`}
-                onClick={() => setActiveMode('roster')}
-              >
-                <div className="mode-tab-title">
-                  🔍 Find Available Priests
-                </div>
-                <div className="mode-tab-subtitle">
-                  Priests nearby ready to take up ministry
+            {/* CARD 3: RELEVANT MINISTRY REQUESTS WITH TWO TABS (REQUESTED VS ACCEPTED) */}
+            <div style={{ marginTop: '0.5rem' }}>
+              <div className="dashboard-header" style={{ marginBottom: '1rem', alignItems: 'flex-start' }}>
+                <div className="dashboard-title">
+                  <h2>Relevant Ministry Requests</h2>
+                  <p>Browse open liturgical needs or view confirmed celebrations to contact the priest/parish.</p>
                 </div>
               </div>
 
-              <div
-                className={`mode-tab ${activeMode === 'broadcast' ? 'active' : ''}`}
-                onClick={() => setActiveMode('broadcast')}
-              >
-                <div className="mode-tab-title">
-                  📖 Ministry Requests ({bookings.filter(b => b.status === 'pending').length})
+              {/* Sub-Tabs: Requested vs Accepted */}
+              <div className="tabs" style={{ marginBottom: '1.25rem' }}>
+                <div
+                  className={`tab ${requestsTab === 'open' ? 'active' : ''}`}
+                  onClick={() => setRequestsTab('open')}
+                >
+                  ⏳ Open Requests ({bookings.filter(b => b.status === 'pending').length})
                 </div>
-                <div className="mode-tab-subtitle">
-                  Parishes & Convents needing a priest
+                <div
+                  className={`tab ${requestsTab === 'accepted' ? 'active' : ''}`}
+                  onClick={() => setRequestsTab('accepted')}
+                >
+                  🤝 Confirmed & Accepted ({bookings.filter(b => b.status === 'accepted' || b.status === 'completed').length})
                 </div>
               </div>
-            </div>
 
-            {/* --- MODE 1: AVAILABLE PRIESTS --- */}
-            {activeMode === 'roster' && (
-              <div>
-                <div className="dashboard-header">
-                  <div className="dashboard-title">
-                    <h2>Available Priests</h2>
-                    <p>Verified priests nearby ready for Holy Mass, Recollections, and Retreats</p>
-                  </div>
-                </div>
+              <div className="roster-grid">
+                {(() => {
+                  const filteredBookings = bookings.filter(b => {
+                    if (requestsTab === 'open') return b.status === 'pending';
+                    return b.status === 'accepted' || b.status === 'completed';
+                  });
 
-                {availablePriests.length === 0 ? (
-                  <div className="no-data">
-                    <div className="no-data-icon">⛪</div>
-                    <p>No priests are currently listed as available for this date.</p>
-                    {user.clergy_type !== 'convent' && (
-                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        Are you free, Father? Tap <strong>"🟢 Go Available for Mass"</strong> above to help parishes and convents find you!
-                      </p>
-                    )}
-                  </div>
-                ) : (
+                  if (filteredBookings.length === 0) {
+                    return (
+                      <div className="no-data" style={{ gridColumn: '1 / -1' }}>
+                        <div className="no-data-icon">{requestsTab === 'open' ? '📖' : '🤝'}</div>
+                        <p>
+                          {requestsTab === 'open'
+                            ? 'No open ministry requests waiting for a priest.'
+                            : 'No confirmed celebrations found yet.'}
+                        </p>
+                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                          {requestsTab === 'open'
+                            ? 'Parishes and Convents can click "➕ Post a Ministry Request" to broadcast a need.'
+                            : 'When a parish chooses and confirms a priest, it will appear here with direct contact details.'}
+                        </p>
+                      </div>
+                    );
+                  }
 
-                  <div className="roster-grid">
-                    {availablePriests.map((slot) => {
-                      const isOwnSlot = slot.priest_id === user.id;
-                      const callMsg = `Praised be Jesus Christ, Fr. ${slot.priest_name}. I found your availability on BookaPriest for ${slot.date}. Could you please celebrate Mass for our parish?`;
+                  return filteredBookings.map((b) => {
+                    const { date, time } = formatDateTime(b.datetime, b.datetime_end);
+                    const isMyRequest = b.requester_id === user.id;
+                    const isConfirmed = b.status === 'accepted' || b.status === 'completed';
+                    const isConfirmedPriest = b.responder_id === user.id;
+                    const hasOffered = (b.applicants || []).some(a => a.priest_id === user.id);
 
-                      return (
-                        <div className="priest-card" key={slot.id}>
-                          <div className="priest-header">
-                            <div>
-                              <div className="priest-name">Fr. {slot.priest_name}</div>
-                              <div className="priest-order">
-                                {slot.clergy_type === 'religious' ? slot.religious_order : slot.diocese_province}
-                              </div>
-                            </div>
-                            {slot.distance_km !== null && (
-                              <span className="distance-badge">
-                                📍 {slot.distance_km} km away
-                              </span>
-                            )}
+                    return (
+                      <div className="priest-card" key={b.id} style={{ borderColor: isConfirmed ? '#BBF7D0' : '#E2E8F0' }}>
+                        <div className="priest-header">
+                          <div>
+                            <div className="priest-name">{date}</div>
+                            <div style={{ color: 'var(--accent-gold)', fontSize: '0.85rem' }}>⏰ {time}</div>
                           </div>
+                          <span
+                            className={`distance-badge ${isConfirmed ? 'badge-confirmed' : ''}`}
+                            style={{ background: isConfirmed ? '#DCFCE7' : '#EFF6FF', color: isConfirmed ? '#15803D' : '#1D4ED8' }}
+                          >
+                            {isConfirmed ? '🔒 Confirmed & Locked' : '⏳ Open Request'}
+                          </span>
+                        </div>
 
-                          <div className="priest-meta-row">
-                            <div className="priest-meta-item">
-                              <span>📅</span>
-                              <strong>Date:</strong> {slot.date} ({slot.time_start} - {slot.time_end})
-                            </div>
-                            <div className="priest-meta-item">
-                              <span>⛪</span>
-                              <strong>Base:</strong> {slot.residence_name || slot.diocese_province}
-                            </div>
-                            <div className="priest-meta-item">
-                              <span>🗣️</span>
-                              <strong>Languages:</strong> {slot.languages.join(', ')}
-                            </div>
+                        <div className="priest-meta-row">
+                          <div className="priest-meta-item">
+                            <span>✨</span>
+                            <strong>Service:</strong> <span style={{ color: 'var(--accent-gold)', fontWeight: '600' }}>{b.service_type || 'Holy Mass'}</span>
                           </div>
-
-                          {/* Verbal Confirmation Handshake Actions */}
-                          {!isOwnSlot && user.is_verified === 1 && (
-                            <div className="priest-actions">
-                              {/* Direct Phone Call (tel:) */}
-                              <a href={`tel:${slot.priest_mobile}`} className="btn btn-call btn-sm">
-                                📞 Call Priest
-                              </a>
-
-                              {/* Direct WhatsApp (wa.me:) */}
-                              <a
-                                href={getWhatsAppLink(slot.priest_mobile, callMsg)}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="wa-btn"
-                              >
-                                💬 WhatsApp
-                              </a>
-
-                              {/* 1-Tap Verbal Confirmation Button */}
-                              <button
-                                className="btn confirm-booking-btn btn-sm"
-                                onClick={() => {
-                                  setShowDirectConfirmModal(slot);
-                                  setConfirmDate(`${slot.date}T08:00`);
-                                }}
-                              >
-                                🤝 Verbal Agreement Reached? Confirm Booking
-                              </button>
+                          <div className="priest-meta-item">
+                            <span>⛪</span>
+                            <strong>Venue:</strong> {b.location}
+                          </div>
+                          <div className="priest-meta-item">
+                            <span>🗣️</span>
+                            <strong>Language:</strong> {b.language}
+                          </div>
+                          <div className="priest-meta-item">
+                            <span>👤</span>
+                            <strong>Requested By:</strong> {b.requester_name.startsWith('Sr.') || b.requester_name.startsWith('Fr.') ? b.requester_name : (b.requester_clergy_type === 'convent' ? `Sr. ${b.requester_name}` : `Fr. ${b.requester_name}`)} ({b.requester_order || b.requester_diocese})
+                          </div>
+                          {b.distance_km !== null && (
+                            <div className="priest-meta-item">
+                              <span>📍</span>
+                              <strong>Distance:</strong> {b.distance_km} km away
+                            </div>
+                          )}
+                          {b.notes && (
+                            <div className="priest-meta-item" style={{ gridColumn: '1 / -1', fontStyle: 'italic', color: '#64748B' }}>
+                              <span>📝</span>
+                              <strong>Note:</strong> {b.notes}
                             </div>
                           )}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
 
-            {/* --- MODE 2: BROADCAST PARISH REQUESTS --- */}
-            {activeMode === 'broadcast' && (
-              <div>
-                <div className="dashboard-header">
-                  <div className="dashboard-title">
-                    <h2>Ministry Requests</h2>
-                    <p>Parishes & Convents needing a priest. Tap to review details or opt-in to celebrate.</p>
-                  </div>
-                  {user.is_verified === 1 && (
-                    <button className="btn btn-primary" onClick={() => setShowRequestModal(true)}>
-                      ➕ Post Ministry Request
-                    </button>
-                  )}
-                </div>
-
-                <div className="roster-grid">
-                  {bookings.filter(b => b.status === 'pending').length === 0 ? (
-                    <div className="no-data" style={{ gridColumn: '1 / -1' }}>
-                      <div className="no-data-icon">📖</div>
-                      <p>No open ministry requests right now.</p>
-                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                        Parishes and Convents can tap <strong>"➕ Post Ministry Request"</strong> to request a priest for Mass or Recollections.
-                      </p>
-                    </div>
-                  ) : (
-
-                    bookings.filter(b => b.status === 'pending').map((b) => {
-                      const { date, time } = formatDateTime(b.datetime);
-                      const isOwn = b.requester_id === user.id;
-
-                      return (
-                        <div className="priest-card" key={b.id}>
-                          <div className="priest-header">
-                            <div>
-                              <div className="priest-name">{date}</div>
-                              <div style={{ color: 'var(--accent-gold)', fontSize: '0.85rem' }}>⏰ {time}</div>
+                        {/* CASE A: ACCEPTED TAB - DISPLAY CONTACT OPTIONS */}
+                        {isConfirmed && (
+                          <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 'var(--radius-md)', padding: '0.9rem', marginTop: 'auto' }}>
+                            <div style={{ fontWeight: 700, color: '#166534', fontSize: '0.92rem', marginBottom: '0.35rem' }}>
+                              🤝 Confirmed Celebrant: Fr. {b.responder_name}
                             </div>
-                            {b.distance_km !== null && (
-                              <span className="distance-badge">📍 {b.distance_km} km away</span>
-                            )}
-                          </div>
+                            <div style={{ fontSize: '0.82rem', color: '#15803D', marginBottom: '0.75rem' }}>
+                              {b.responder_order || b.responder_diocese}
+                            </div>
 
-                          <div className="priest-meta-row">
-                            <div className="priest-meta-item">
-                              <span>✨</span>
-                              <strong>Service:</strong> <span style={{ color: 'var(--accent-gold)', fontWeight: '600' }}>{b.service_type || 'Holy Mass'}</span>
-                            </div>
-                            <div className="priest-meta-item">
-                              <span>⛪</span>
-                              <strong>Venue:</strong> {b.location}
-                            </div>
-                            <div className="priest-meta-item">
-                              <span>🗣️</span>
-                              <strong>Language:</strong> {b.language}
-                            </div>
-                            <div className="priest-meta-item">
-                              <span>👤</span>
-                              <strong>Requested By:</strong> {b.requester_name.startsWith('Sr.') || b.requester_name.startsWith('Fr.') ? b.requester_name : (b.requester_clergy_type === 'convent' ? `Sr. ${b.requester_name}` : `Fr. ${b.requester_name}`)} ({b.requester_order || b.requester_diocese})
-                            </div>
-                          </div>
-
-                          {!isOwn && user.is_verified === 1 && (
-                            <div className="request-actions-3col" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.45rem', marginTop: 'auto', paddingTop: '0.85rem', borderTop: '1px solid #F1F5F9' }}>
-                              {/* 1. Phone Call */}
+                            {/* Contact buttons visible to confirmed celebrant and requester */}
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
                               <a
-                                href={`tel:${b.requester_mobile}`}
+                                href={`tel:${isMyRequest ? b.responder_mobile : b.requester_mobile}`}
                                 className="btn btn-call btn-sm"
-                                style={{ padding: '0.55rem 0.4rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
-                                title="Call Parish or Convent directly"
                               >
-                                📞 Call
+                                📞 Call {isMyRequest ? 'Priest' : 'Parish'}
                               </a>
-
-                              {/* 2. WhatsApp */}
                               <a
-                                href={getWhatsAppLink(b.requester_mobile, `Praised be Jesus Christ! I saw your ministry request for ${b.service_type || 'Holy Mass'} at ${b.location} on ${date} (${time}) on BookaPriest.`)}
+                                href={getWhatsAppLink(isMyRequest ? b.responder_mobile : b.requester_mobile, `Praised be Jesus Christ! Regarding our confirmed booking for ${b.service_type || 'Holy Mass'} at ${b.location} on ${date} (${time}).`)}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="wa-btn"
-                                style={{ padding: '0.55rem 0.4rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
-                                title="Send WhatsApp Message"
                               >
                                 💬 WhatsApp
                               </a>
+                            </div>
+                          </div>
+                        )}
 
-                              {/* 3. Opt-In Slot */}
+                        {/* CASE B: OPEN TAB - MY REQUEST: REVIEW CANDIDATES WHO OFFERED */}
+                        {!isConfirmed && isMyRequest && (
+                          <div className="applicants-box">
+                            <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#0F172A', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span>👨‍⚖️ Priests Willing to Come ({(b.applicants || []).length})</span>
+                            </div>
+
+                            {(b.applicants || []).length === 0 ? (
+                              <p style={{ fontSize: '0.8rem', color: '#94A3B8', marginTop: '0.35rem' }}>
+                                Waiting for available priests to opt-in for this ministry.
+                              </p>
+                            ) : (
+                              (b.applicants || []).map(cand => (
+                                <div className="applicant-card" key={cand.priest_id}>
+                                  <div>
+                                    <div className="applicant-name">Fr. {cand.priest_name}</div>
+                                    <div className="applicant-sub">
+                                      {cand.clergy_type === 'religious' ? cand.religious_order : cand.diocese_province}
+                                      {cand.residence_name ? ` • 📍 ${cand.residence_name}` : ''}
+                                      {cand.distance_km !== null ? ` (${cand.distance_km} km away)` : ''}
+                                    </div>
+                                  </div>
+                                  <button
+                                    className="btn-confirm-priest"
+                                    onClick={() => handleConfirmApplicant(b.id, cand.priest_id, cand.priest_name)}
+                                  >
+                                    ✓ Choose Fr. {cand.priest_name.split(' ')[0]}
+                                  </button>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+
+                        {/* CASE C: OPEN TAB - I AM A PRIEST: OPT IN / OFFER MINISTRY */}
+                        {!isConfirmed && !isMyRequest && user.is_verified === 1 && user.clergy_type !== 'convent' && (
+                          <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid #F1F5F9' }}>
+                            {hasOffered ? (
+                              <div style={{ background: '#FEF9C3', color: '#854D0E', padding: '0.55rem 0.85rem', borderRadius: 'var(--radius-sm)', fontSize: '0.84rem', fontWeight: 600, textAlign: 'center' }}>
+                                ✓ You have opted-in for this ministry. Awaiting parish/convent selection.
+                              </div>
+                            ) : (
                               <button
                                 className="btn btn-primary btn-sm"
-                                onClick={() => handleAcceptBooking(b.id)}
-                                style={{ padding: '0.55rem 0.4rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
-                                title="Accept and lock this liturgical service"
+                                onClick={() => handleOfferMinistry(b.id)}
+                                style={{ width: '100%', padding: '0.65rem' }}
                               >
-                                ✍️ Opt-In
+                                ✍️ Opt-In to Celebrate this Ministry
                               </button>
-                            </div>
-                          )}
-
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
-            )}
+            </div>
           </>
         )}
 
@@ -1117,37 +1202,192 @@ export default function App() {
         <div className="modal-overlay">
           <div className="modal-container">
             <div className="modal-header">
-              <h3 className="modal-title">🗓️ Set Your Unavailable Dates</h3>
+              <h3 className="modal-title">🗓️ Unavailable Dates</h3>
               <button className="modal-close" onClick={() => setShowAvailabilityModal(false)}>&times;</button>
             </div>
             <form onSubmit={handleSetUnavailableDates}>
-              <div className="modal-body">
-                <p style={{ fontSize: '0.88rem', color: '#64748B', marginBottom: '1rem', lineHeight: '1.4' }}>
-                  You are available for ministry by default. Use this to block out dates in advance when you will be away, travelling, or unavailable.
+              <div className="modal-body" style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+                <p style={{ fontSize: '0.85rem', color: '#64748B', marginBottom: '0.75rem', lineHeight: '1.4' }}>
+                  Click on the calendar to select a <strong>Start Date</strong> and <strong>End Date</strong> range, or enter below. Click any blocked date to remove it.
                 </p>
-                <div className="form-group">
-                  <label className="form-label">UNAVAILABLE DATE</label>
-                  <input
-                    type="date"
-                    className="form-input"
-                    value={availDate}
-                    onChange={(e) => setAvailDate(e.target.value)}
-                    required
-                  />
+
+                {/* --- GOOGLE CALENDAR MONTH VIEW --- */}
+                {(() => {
+                  const { monthName, days } = getCalendarDays(calMonthOffset);
+                  const todayStr = new Date().toISOString().split('T')[0];
+                  const blockedDates = new Set(myUnavailableSlots.map(s => s.date));
+
+                  const handleDayClick = (dateStr) => {
+                    if (!dateStr) return;
+                    if (blockedDates.has(dateStr)) {
+                      handleClearUnavailableDate(dateStr);
+                      return;
+                    }
+                    if (!availStartDate || (availStartDate && availEndDate)) {
+                      setAvailStartDate(dateStr);
+                      setAvailEndDate('');
+                    } else if (availStartDate && !availEndDate) {
+                      if (dateStr < availStartDate) {
+                        setAvailEndDate(availStartDate);
+                        setAvailStartDate(dateStr);
+                      } else {
+                        setAvailEndDate(dateStr);
+                      }
+                    }
+                  };
+
+                  return (
+                    <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 'var(--radius-md)', padding: '0.75rem', marginBottom: '1rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                      {/* Month Navigation */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}
+                          onClick={() => setCalMonthOffset(prev => prev - 1)}
+                        >
+                          ◀ Prev
+                        </button>
+                        <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.98rem' }}>
+                          📅 {monthName}
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: '0.25rem 0.6rem', fontSize: '0.85rem' }}
+                          onClick={() => setCalMonthOffset(prev => prev + 1)}
+                        >
+                          Next ▶
+                        </button>
+                      </div>
+
+                      {/* Day of Week Header */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', textAlign: 'center', fontWeight: 700, fontSize: '0.72rem', color: '#64748B', marginBottom: '0.35rem' }}>
+                        {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map(dw => (
+                          <div key={dw} style={{ padding: '0.2rem' }}>{dw}</div>
+                        ))}
+                      </div>
+
+                      {/* Days Grid */}
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.25rem' }}>
+                        {days.map((item, idx) => {
+                          if (!item) return <div key={`empty-${idx}`} style={{ minHeight: '38px' }} />;
+                          const { day, dateStr } = item;
+                          const isPast = dateStr < todayStr;
+                          const isBlocked = blockedDates.has(dateStr);
+                          const isStart = dateStr === availStartDate;
+                          const isEnd = dateStr === availEndDate;
+                          const inRange = availStartDate && availEndDate && dateStr >= availStartDate && dateStr <= availEndDate;
+
+                          let bg = '#F8FAFC';
+                          let color = '#1E293B';
+                          let border = '1px solid #E2E8F0';
+                          let fontWeight = 500;
+
+                          if (isBlocked) {
+                            bg = '#FEE2E2';
+                            color = '#991B1B';
+                            border = '1px solid #F87171';
+                            fontWeight = 700;
+                          } else if (isStart || isEnd) {
+                            bg = '#1E3A8A';
+                            color = '#FFFFFF';
+                            border = '1px solid #1E3A8A';
+                            fontWeight = 800;
+                          } else if (inRange) {
+                            bg = '#DBEAFE';
+                            color = '#1E3A8A';
+                            border = '1px solid #93C5FD';
+                          }
+
+                          return (
+                            <button
+                              type="button"
+                              key={dateStr}
+                              onClick={() => handleDayClick(dateStr)}
+                              disabled={isPast}
+                              title={isBlocked ? 'Blocked (Click to unblock)' : dateStr}
+                              style={{
+                                background: bg,
+                                color: isPast ? '#CBD5E1' : color,
+                                border,
+                                borderRadius: '6px',
+                                minHeight: '38px',
+                                padding: '0.2rem',
+                                cursor: isPast ? 'not-allowed' : 'pointer',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: '0.85rem',
+                                fontWeight,
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <span>{day}</span>
+                              {isBlocked && (
+                                <span style={{ fontSize: '0.62rem', color: '#DC2626', lineHeight: 1 }}>Busy ✕</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Legend */}
+                      <div style={{ display: 'flex', gap: '1rem', marginTop: '0.6rem', fontSize: '0.72rem', color: '#64748B', justifyContent: 'center' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <span style={{ width: 10, height: 10, background: '#1E3A8A', borderRadius: 2 }} /> Selected
+                        </span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <span style={{ width: 10, height: 10, background: '#DBEAFE', borderRadius: 2 }} /> In Range
+                        </span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <span style={{ width: 10, height: 10, background: '#FEE2E2', border: '1px solid #F87171', borderRadius: 2 }} /> Unavailable / Busy
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* --- RANGE DATE SELECTION (NO TIMING NEEDED) --- */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                  {/* FROM DATE */}
+                  <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 'var(--radius-md)', padding: '0.75rem' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#1E3A8A', letterSpacing: '0.05em', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <span>🛫</span> FROM DATE
+                    </div>
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={availStartDate}
+                      onChange={(e) => {
+                        setAvailStartDate(e.target.value);
+                        if (!availEndDate) setAvailEndDate(e.target.value);
+                      }}
+                      required
+                      style={{ background: '#FFFFFF', padding: '0.55rem', fontSize: '0.92rem' }}
+                    />
+                  </div>
+
+                  {/* TO DATE */}
+                  <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 'var(--radius-md)', padding: '0.75rem' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#1E3A8A', letterSpacing: '0.05em', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <span>🛬</span> TO DATE
+                    </div>
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={availEndDate || availStartDate}
+                      min={availStartDate}
+                      onChange={(e) => setAvailEndDate(e.target.value)}
+                      style={{ background: '#FFFFFF', padding: '0.55rem', fontSize: '0.92rem' }}
+                    />
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">REASON / NOTE (OPTIONAL)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. Annual Retreat, Family Visit, Travelling, etc."
-                    value={availNotes}
-                    onChange={(e) => setAvailNotes(e.target.value)}
-                  />
-                </div>
+
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
                   <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowAvailabilityModal(false)}>Cancel</button>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={formSubmitting}>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={formSubmitting || !availStartDate}>
                     {formSubmitting ? 'Saving...' : 'Mark as Unavailable'}
                   </button>
                 </div>
@@ -1258,14 +1498,45 @@ export default function App() {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">CELEBRATION DATE & TIME</label>
+                  <label className="form-label">CHOOSE CELEBRATION DATE</label>
                   <input
-                    type="datetime-local"
+                    type="date"
                     className="form-input"
-                    value={bookingDatetime}
-                    onChange={(e) => setBookingDatetime(e.target.value)}
+                    value={bookingDate}
+                    onChange={(e) => setBookingDate(e.target.value)}
                     required
+                    style={{ background: '#FFFFFF' }}
                   />
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">FROM TIME</label>
+                    <select
+                      className="form-input"
+                      value={bookingTimeStart}
+                      onChange={(e) => setBookingTimeStart(e.target.value)}
+                      style={{ background: '#FFFFFF', color: '#0F172A', fontWeight: 600, fontSize: '0.95rem' }}
+                    >
+                      {TIME_SLOTS_15MIN.map(slot => (
+                        <option key={`start-${slot.value}`} value={slot.value}>{slot.label}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">TO TIME</label>
+                    <select
+                      className="form-input"
+                      value={bookingTimeEnd}
+                      onChange={(e) => setBookingTimeEnd(e.target.value)}
+                      style={{ background: '#FFFFFF', color: '#0F172A', fontWeight: 600, fontSize: '0.95rem' }}
+                    >
+                      {TIME_SLOTS_15MIN.map(slot => (
+                        <option key={`end-${slot.value}`} value={slot.value}>{slot.label}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
                 <div className="form-group">
                   <label className="form-label">LITURGICAL LANGUAGE</label>

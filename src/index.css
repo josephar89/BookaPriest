@@ -615,6 +615,54 @@ h1, h2, h3, h4, h5, h6 {
   gap: 0.5rem;
 }
 
+.applicants-box {
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-md);
+  padding: 0.85rem;
+  margin-top: 0.6rem;
+}
+
+.applicant-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.85rem;
+  margin-top: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.applicant-name {
+  font-weight: 700;
+  color: #0F172A;
+  font-size: 0.88rem;
+}
+
+.applicant-sub {
+  font-size: 0.78rem;
+  color: #64748B;
+}
+
+.btn-confirm-priest {
+  background: #16A34A;
+  color: #FFFFFF;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.45rem 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.btn-confirm-priest:hover {
+  background: #15803D;
+}
+
 .priest-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
