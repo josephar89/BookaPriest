@@ -784,21 +784,27 @@ export default function App() {
             {user.is_verified === 1 && user.clergy_type !== 'convent' && (
               <div className="quick-status-card">
                 <div className="quick-status-info">
-                  <h4>⚡ Priest Quick Availability Status</h4>
+                  <h4>🕊️ Your Ministry Availability</h4>
                   <p>
-                    {user.residence_name ? `📍 ${user.residence_name}` : 'Residence not set'} | Radius: {user.max_travel_km} km
+                    {user.residence_name ? `📍 ${user.residence_name}` : 'Residence not set'} • Travel radius: {user.max_travel_km} km
                   </p>
                 </div>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
                   <button className="btn btn-success btn-sm" onClick={() => setShowAvailabilityModal(true)}>
-                    🟢 Go Available for Mass
+                    🟢 Set Available Dates
                   </button>
-                  <button className="btn btn-danger btn-sm" onClick={handleQuickMarkBusy} title="Instantly hides you if booked over external phone call">
-                    🔴 1-Tap Quick Mark Busy
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleQuickMarkBusy}
+                    title="Mark yourself offline or busy when you are already engaged"
+                    style={{ borderColor: '#CBD5E1', color: '#475569' }}
+                  >
+                    ⚪ Mark as Busy / Offline
                   </button>
                 </div>
               </div>
             )}
+
 
             {/* Marketplace Dual-Mode Switcher */}
             <div className="mode-switcher">
