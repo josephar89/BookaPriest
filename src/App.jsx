@@ -807,10 +807,10 @@ export default function App() {
                 onClick={() => setActiveMode('roster')}
               >
                 <div className="mode-tab-title">
-                  🛵 Live Priest Roster
+                  🔍 Find Available Priests
                 </div>
                 <div className="mode-tab-subtitle">
-                  Browse available priests nearby & call directly
+                  Priests nearby ready to take up ministry
                 </div>
               </div>
 
@@ -819,31 +819,36 @@ export default function App() {
                 onClick={() => setActiveMode('broadcast')}
               >
                 <div className="mode-tab-title">
-                  📢 Parish Mass Requests ({bookings.filter(b => b.status === 'pending').length})
+                  📖 Ministry Requests ({bookings.filter(b => b.status === 'pending').length})
                 </div>
                 <div className="mode-tab-subtitle">
-                  Urgent Mass requests posted by parish priests
+                  Parishes & Convents needing a priest
                 </div>
               </div>
             </div>
 
-            {/* --- MODE 1: LIVE PRIEST ROSTER ("Bike-Taxi" Style) --- */}
+            {/* --- MODE 1: AVAILABLE PRIESTS --- */}
             {activeMode === 'roster' && (
               <div>
                 <div className="dashboard-header">
                   <div className="dashboard-title">
-                    <h2>Available Priests Roster</h2>
-                    <p>Verified priests available for Holy Mass, sorted by closest proximity to you</p>
+                    <h2>Available Priests</h2>
+                    <p>Verified priests nearby ready for Holy Mass, Recollections, and Retreats</p>
                   </div>
                 </div>
 
                 {availablePriests.length === 0 ? (
                   <div className="no-data">
-                    <div className="no-data-icon">🛵</div>
-                    <p>No priests have marked themselves available for this time yet.</p>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Are you free? Tap "Go Available for Mass" above to let parishes find you!</p>
+                    <div className="no-data-icon">⛪</div>
+                    <p>No priests are currently listed as available for this date.</p>
+                    {user.clergy_type !== 'convent' && (
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        Are you free, Father? Tap <strong>"🟢 Go Available for Mass"</strong> above to help parishes and convents find you!
+                      </p>
+                    )}
                   </div>
                 ) : (
+
                   <div className="roster-grid">
                     {availablePriests.map((slot) => {
                       const isOwnSlot = slot.priest_id === user.id;
@@ -923,12 +928,12 @@ export default function App() {
               <div>
                 <div className="dashboard-header">
                   <div className="dashboard-title">
-                    <h2>Parish Mass Requests</h2>
-                    <p>Parishes needing substitute cover. Opt-in to celebrate.</p>
+                    <h2>Ministry Requests</h2>
+                    <p>Parishes & Convents needing a priest. Tap to review details or opt-in to celebrate.</p>
                   </div>
                   {user.is_verified === 1 && (
                     <button className="btn btn-primary" onClick={() => setShowRequestModal(true)}>
-                      ➕ Post Mass Request
+                      ➕ Post Ministry Request
                     </button>
                   )}
                 </div>
@@ -936,10 +941,14 @@ export default function App() {
                 <div className="roster-grid">
                   {bookings.filter(b => b.status === 'pending').length === 0 ? (
                     <div className="no-data" style={{ gridColumn: '1 / -1' }}>
-                      <div className="no-data-icon">📅</div>
-                      <p>No open parish Mass requests right now.</p>
+                      <div className="no-data-icon">📖</div>
+                      <p>No open ministry requests right now.</p>
+                      <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                        Parishes and Convents can tap <strong>"➕ Post Ministry Request"</strong> to request a priest for Mass or Recollections.
+                      </p>
                     </div>
                   ) : (
+
                     bookings.filter(b => b.status === 'pending').map((b) => {
                       const { date, time } = formatDateTime(b.datetime);
                       const isOwn = b.requester_id === user.id;
