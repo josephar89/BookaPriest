@@ -292,10 +292,11 @@ export default function App() {
       });
       const data = await res.json();
       if (res.ok) {
-        showFeedback('success', 'You are now marked available on the live roster!');
+        showFeedback('success', 'Your availability has been saved! Parishes and convents can now find you.');
         setShowAvailabilityModal(false);
         loadDashboardData();
       } else {
+
         showFeedback('error', data.error || 'Failed to set availability.');
       }
     } catch (err) {
@@ -1143,8 +1144,9 @@ export default function App() {
                 </div>
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
                   <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowAvailabilityModal(false)}>Cancel</button>
-                  <button type="submit" className="btn btn-success" style={{ flex: 1 }} disabled={formSubmitting}>Go Live on Roster</button>
+                  <button type="submit" className="btn btn-success" style={{ flex: 1 }} disabled={formSubmitting}>Save Availability</button>
                 </div>
+
               </div>
             </form>
           </div>
