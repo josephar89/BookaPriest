@@ -1,36 +1,53 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
 
 :root {
-  /* HSL Color System */
-  --bg-primary: hsl(222, 47%, 7%);
-  --bg-secondary: hsl(217, 33%, 12%);
-  --bg-tertiary: hsl(215, 25%, 17%);
+  /* Papal Flag (Vatican City) Color System: Gold/Yellow (Giallo) & Pure White (Bianco) */
+  --bg-primary: #0f131a;
+  --bg-secondary: #181d27;
+  --bg-tertiary: #232a38;
   
-  --text-primary: hsl(210, 40%, 98%);
-  --text-secondary: hsl(215, 20%, 75%);
-  --text-muted: hsl(215, 16%, 57%);
+  --text-primary: #ffffff;
+  --text-secondary: #e2e8f0;
+  --text-muted: #94a3b8;
   
-  --accent-gold: hsl(38, 92%, 55%);
-  --accent-gold-rgb: 245, 158, 11;
-  --accent-purple: hsl(263, 90%, 65%);
-  --accent-purple-hover: hsl(263, 85%, 55%);
-  --accent-purple-rgb: 139, 92, 246;
-  --accent-green: hsl(142, 70%, 45%);
-  --accent-green-hover: hsl(142, 65%, 40%);
-  --accent-red: hsl(0, 72%, 51%);
-  --accent-blue: hsl(217, 91%, 60%);
+  /* Papal Yellow / Gold (Pantone Yellow 109 C / Vatican Gold) */
+  --papal-yellow: #FFE000;
+  --papal-gold: #F5B800;
+  --papal-gold-hover: #E0A500;
+  --papal-gold-rgb: 245, 184, 0;
   
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-hover: rgba(255, 255, 255, 0.16);
-  --border-focus: var(--accent-purple);
+  /* Papal White (Alabaster White / Silver) */
+  --papal-white: #FFFFFF;
+  --papal-white-soft: #F8FAFC;
+  --papal-white-rgb: 255, 255, 255;
+  
+  /* Papal Key Red (The traditional red cord binding St. Peter's keys) */
+  --papal-red: #DC2626;
+  --papal-red-hover: #B91C1C;
+  --papal-red-rgb: 220, 38, 38;
+
+  /* Aliases for system compatibility */
+  --accent-gold: var(--papal-gold);
+  --accent-gold-rgb: var(--papal-gold-rgb);
+  --accent-purple: var(--papal-gold);
+  --accent-purple-hover: var(--papal-gold-hover);
+  --accent-purple-rgb: var(--papal-gold-rgb);
+  --accent-green: #10B981;
+  --accent-green-hover: #059669;
+  --accent-red: var(--papal-red);
+  --accent-blue: #38BDF8;
+  
+  --border-color: rgba(255, 224, 0, 0.15);
+  --border-hover: rgba(255, 224, 0, 0.35);
+  --border-focus: var(--papal-yellow);
   
   --radius-sm: 6px;
   --radius-md: 12px;
   --radius-lg: 18px;
   
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.7);
   
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -94,15 +111,16 @@ h1, h2, h3, h4, h5, h6 {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(15, 23, 42, 0.85);
+  background: rgba(24, 29, 39, 0.92);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 2px solid var(--papal-gold);
   padding: 0.85rem 1.5rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
   transition: var(--transition-normal);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
 .brand-section {
@@ -113,24 +131,27 @@ h1, h2, h3, h4, h5, h6 {
 
 .brand-logo {
   font-family: 'Outfit', sans-serif;
-  font-size: 1.5rem;
+  font-size: 1.55rem;
   font-weight: 700;
   letter-spacing: -0.03em;
-  background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-purple) 100%);
+  background: linear-gradient(135deg, #FFE000 0%, #FFFFFF 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .brand-badge {
-  font-size: 0.65rem;
-  padding: 0.15rem 0.4rem;
+  font-size: 0.68rem;
+  padding: 0.2rem 0.5rem;
   border-radius: var(--radius-sm);
-  background: rgba(var(--accent-gold-rgb), 0.15);
-  border: 1px solid rgba(var(--accent-gold-rgb), 0.3);
-  color: var(--accent-gold);
+  background: #FFE000;
+  border: 1px solid #F5B800;
+  color: #1a1a1a;
   text-transform: uppercase;
-  font-weight: 700;
-  letter-spacing: 0.05em;
+  font-weight: 800;
+  letter-spacing: 0.06em;
 }
 
 .nav-user {
@@ -222,15 +243,20 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .btn-primary {
-  background-color: var(--accent-purple);
-  color: var(--text-primary);
-  box-shadow: 0 4px 12px rgba(var(--accent-purple-rgb), 0.25);
+  background: linear-gradient(135deg, #FFE000 0%, #F5B800 100%);
+  color: #111827;
+  font-weight: 700;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 14px rgba(245, 184, 0, 0.35);
 }
 
 .btn-primary:hover {
-  background-color: var(--accent-purple-hover);
+  background: linear-gradient(135deg, #FFF04D 0%, #E0A500 100%);
+  color: #000000;
   transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(245, 184, 0, 0.45);
 }
+
 
 .btn-secondary {
   background-color: var(--bg-secondary);
@@ -304,8 +330,8 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   justify-content: center;
   padding: 1.25rem;
-  background: radial-gradient(circle at 10% 20%, rgba(var(--accent-purple-rgb), 0.08) 0%, transparent 45%),
-              radial-gradient(circle at 90% 80%, rgba(245, 158, 11, 0.05) 0%, transparent 45%),
+  background: radial-gradient(circle at 15% 25%, rgba(255, 224, 0, 0.08) 0%, transparent 45%),
+              radial-gradient(circle at 85% 75%, rgba(255, 255, 255, 0.05) 0%, transparent 45%),
               var(--bg-primary);
 }
 
@@ -313,6 +339,7 @@ h1, h2, h3, h4, h5, h6 {
   width: 100%;
   max-width: 520px;
   animation: fadeIn var(--transition-normal) forwards;
+  border-top: 3px solid var(--papal-gold);
 }
 
 .auth-header {
@@ -321,12 +348,17 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .auth-header h1 {
-  font-size: 2.1rem;
+  font-size: 2.2rem;
   margin-bottom: 0.35rem;
-  background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-purple) 100%);
+  background: linear-gradient(135deg, #FFE000 0%, #FFFFFF 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
+
 
 .auth-header p {
   color: var(--text-secondary);
@@ -466,10 +498,11 @@ h1, h2, h3, h4, h5, h6 {
 
 .mode-tab.active {
   background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid rgba(var(--accent-purple-rgb), 0.35);
-  box-shadow: var(--shadow-sm);
+  color: #FFFFFF;
+  border: 1.5px solid var(--papal-gold);
+  box-shadow: 0 0 16px rgba(245, 184, 0, 0.25);
 }
+
 
 .mode-tab-title {
   font-family: 'Outfit', sans-serif;
