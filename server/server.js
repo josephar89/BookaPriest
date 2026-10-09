@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
@@ -9,7 +10,8 @@ const __dirname = path.dirname(__filename);
 const distPath = path.resolve(__dirname, '../dist');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : (process.env.NODE_ENV === 'production' ? 8080 : 3001);
+
 
 // Middleware
 app.use(cors());
@@ -398,18 +400,23 @@ app.post('/api/bookings/complete', authenticate, requireVerification, (req, res)
   }
 });
 
+// Health check endpoint for Cloud Run container liveness probe
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', service: 'BookaPriest API', timestamp: new Date().toISOString() });
+});
+
 // Serve frontend static build files (for Production / Cloud Run)
 app.use(express.static(distPath));
 
-// Health check endpoint for Cloud Run
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', service: 'BookaPriest API', timestamp: new Date().toISOString() });
+// SPA catch-all fallback (all non-API routes serve index.html) - Express 5 compatible
+app.use((req, res, next) => {
+  if (req.method === 'GET' && !req.path.startsWith('/api')) {
+    return res.sendFile(path.join(distPath, 'index.html'));
+  }
+  next();
 });
 
-// SPA catch-all fallback (all non-API routes serve index.html)
-app.get('*', (req, res) => {
-  res.sendFile(path.join(distPath, 'index.html'));
-});
+
 
 // Start server - bind to 0.0.0.0 for containerized environments (Cloud Run)
 const server = app.listen(PORT, '0.0.0.0', () => {
