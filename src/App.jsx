@@ -980,29 +980,46 @@ export default function App() {
                             </div>
                             <div className="priest-meta-item">
                               <span>👤</span>
-                              <strong>Requested By:</strong> {b.requester_clergy_type === 'convent' ? 'Sr. ' : 'Fr. '}{b.requester_name} ({b.requester_order || b.requester_diocese})
+                              <strong>Requested By:</strong> {b.requester_name.startsWith('Sr.') || b.requester_name.startsWith('Fr.') ? b.requester_name : (b.requester_clergy_type === 'convent' ? `Sr. ${b.requester_name}` : `Fr. ${b.requester_name}`)} ({b.requester_order || b.requester_diocese})
                             </div>
-                            {b.honorarium && (
-                              <div className="priest-meta-item" style={{ color: 'var(--accent-gold)' }}>
-                                <span>💰</span>
-                                <strong>Honorarium:</strong> ₹ {b.honorarium}
-                              </div>
-                            )}
                           </div>
 
                           {!isOwn && user.is_verified === 1 && (
-                            <div className="priest-actions">
-                              <a href={`tel:${b.requester_mobile}`} className="btn btn-call btn-sm">
-                                📞 Call Parish
+                            <div className="request-actions-3col" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.45rem', marginTop: 'auto', paddingTop: '0.85rem', borderTop: '1px solid #F1F5F9' }}>
+                              {/* 1. Phone Call */}
+                              <a
+                                href={`tel:${b.requester_mobile}`}
+                                className="btn btn-call btn-sm"
+                                style={{ padding: '0.55rem 0.4rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+                                title="Call Parish or Convent directly"
+                              >
+                                📞 Call
                               </a>
+
+                              {/* 2. WhatsApp */}
+                              <a
+                                href={getWhatsAppLink(b.requester_mobile, `Praised be Jesus Christ! I saw your ministry request for ${b.service_type || 'Holy Mass'} at ${b.location} on ${date} (${time}) on BookaPriest.`)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="wa-btn"
+                                style={{ padding: '0.55rem 0.4rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+                                title="Send WhatsApp Message"
+                              >
+                                💬 WhatsApp
+                              </a>
+
+                              {/* 3. Opt-In Slot */}
                               <button
                                 className="btn btn-primary btn-sm"
                                 onClick={() => handleAcceptBooking(b.id)}
+                                style={{ padding: '0.55rem 0.4rem', fontSize: '0.8rem', whiteSpace: 'nowrap' }}
+                                title="Accept and lock this liturgical service"
                               >
-                                Opt-In Slot
+                                ✍️ Opt-In
                               </button>
                             </div>
                           )}
+
                         </div>
                       );
                     })
@@ -1173,29 +1190,18 @@ export default function App() {
                     required
                   />
                 </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">LITURGICAL LANGUAGE</label>
-                    <select
-                      className="form-input"
-                      value={confirmLanguage}
-                      onChange={(e) => setConfirmLanguage(e.target.value)}
-                      style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
-                    >
-                      {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">HONORARIUM (INR)</label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      placeholder="1000"
-                      value={confirmHonorarium}
-                      onChange={(e) => setConfirmHonorarium(e.target.value)}
-                    />
-                  </div>
+                <div className="form-group">
+                  <label className="form-label">LITURGICAL LANGUAGE</label>
+                  <select
+                    className="form-input"
+                    value={confirmLanguage}
+                    onChange={(e) => setConfirmLanguage(e.target.value)}
+                    style={{ background: '#FFFFFF', color: '#0F172A' }}
+                  >
+                    {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
                 </div>
+
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
                   <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowDirectConfirmModal(null)}>Cancel</button>
                   <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={formSubmitting}>Confirm & Lock Slot</button>
@@ -1248,29 +1254,18 @@ export default function App() {
                     required
                   />
                 </div>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">LITURGICAL LANGUAGE</label>
-                    <select
-                      className="form-input"
-                      value={bookingLanguage}
-                      onChange={(e) => setBookingLanguage(e.target.value)}
-                      style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
-                    >
-                      {LANGUAGES.map(lang => <option key={lang} value={lang}>{lang}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">HONORARIUM (INR, OPTIONAL)</label>
-                    <input
-                      type="number"
-                      className="form-input"
-                      placeholder="1000"
-                      value={bookingHonorarium}
-                      onChange={(e) => setBookingHonorarium(e.target.value)}
-                    />
-                  </div>
+                <div className="form-group">
+                  <label className="form-label">LITURGICAL LANGUAGE</label>
+                  <select
+                    className="form-input"
+                    value={bookingLanguage}
+                    onChange={(e) => setBookingLanguage(e.target.value)}
+                    style={{ background: '#FFFFFF', color: '#0F172A' }}
+                  >
+                    {LANGUAGES.map(lang => <option key={lang} value={lang}>{lang}</option>)}
+                  </select>
                 </div>
+
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
                   <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowRequestModal(false)}>Cancel</button>
                   <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={formSubmitting}>Broadcast Request</button>
