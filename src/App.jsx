@@ -1323,7 +1323,7 @@ export default function App() {
                   )}
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.65rem' }}>
-                  {/* 1. PRIEST (Fr.) */}
+                  {/* 1. PRIEST (Fr.) - Male / Priest */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1335,7 +1335,7 @@ export default function App() {
                       flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '6px',
+                      gap: '8px',
                       padding: '0.85rem 0.5rem',
                       borderRadius: '10px',
                       border: regTitle === 'Fr.' ? '2px solid var(--accent-gold)' : '1.5px solid #E2E8F0',
@@ -1346,24 +1346,17 @@ export default function App() {
                       transition: 'all 0.2s ease'
                     }}
                   >
-                    <svg width="26" height="26" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M18 18 C18 24 30 24 30 18" />
-                      <path d="M18 16.5 C16 16.5 16 19 18 19.5" />
-                      <path d="M30 16.5 C32 16.5 32 19 30 19.5" />
-                      <path d="M18 16 C16.5 13 18 8 24 8 C30 8 31.5 13 30 16" />
-                      <path d="M18 12.5 C20 13.5 22 13 24 12 C26 13 28 13.5 30 12.5" />
-                      <path d="M20 23.5 L19.5 26.5 C19.5 28 28.5 28 28.5 26.5 L28 23.5" />
-                      <rect x="22.2" y="24" width="3.6" height="3" rx="0.5" fill="none" stroke="currentColor" strokeWidth="2" />
-                      <path d="M19.5 26.5 C15 27 10 30 10 37" />
-                      <path d="M28.5 26.5 C33 27 38 30 38 37" />
-                      <line x1="24" y1="27.5" x2="24" y2="37" />
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      {/* Standard Male / Priest Silhouette */}
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
                     </svg>
-                    <span style={{ fontSize: '0.85rem', fontWeight: regTitle === 'Fr.' ? 700 : 600 }}>
+                    <span style={{ fontSize: '0.86rem', fontWeight: regTitle === 'Fr.' ? 700 : 600 }}>
                       Fr. (Priest)
                     </span>
                   </button>
 
-                  {/* 2. SISTER (Sr.) */}
+                  {/* 2. SISTER (Sr.) - Female / Sister */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1375,7 +1368,7 @@ export default function App() {
                       flexDirection: 'column',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      gap: '6px',
+                      gap: '8px',
                       padding: '0.85rem 0.5rem',
                       borderRadius: '10px',
                       border: regTitle === 'Sr.' ? '2px solid var(--accent-gold)' : '1.5px solid #E2E8F0',
@@ -1386,16 +1379,14 @@ export default function App() {
                       transition: 'all 0.2s ease'
                     }}
                   >
-                    <svg width="26" height="26" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                      <ellipse cx="24" cy="22.5" rx="4.8" ry="6" />
-                      <path d="M19.2 18 C21 16.8 27 16.8 28.8 18" />
-                      <path d="M17.5 19 C18 14 20.5 13 24 13 C27.5 13 30 14 30.5 19" />
-                      <path d="M24 7.5 C16.5 7.5 14 13 14 23 C14 30 10 37 10 40 L16 38 C16.5 35 17.5 31 18.5 29" />
-                      <path d="M24 7.5 C31.5 7.5 34 13 34 23 C34 30 38 37 38 40 L32 38 C31.5 35 30.5 31 29.5 29" />
-                      <path d="M19 28 C21 31.5 27 31.5 29 28" />
-                      <path d="M18.5 34 C21.5 36.5 26.5 36.5 29.5 34" />
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      {/* Standard Female / Sister Silhouette */}
+                      <path d="M19 21v-2a4 4 0 0 0-3-3.87" />
+                      <path d="M5 21v-2a4 4 0 0 1 3-3.87" />
+                      <circle cx="12" cy="7" r="4" />
+                      <path d="M9 14h6a3 3 0 0 1 3 3v4H6v-4a3 3 0 0 1 3-3z" />
                     </svg>
-                    <span style={{ fontSize: '0.85rem', fontWeight: regTitle === 'Sr.' ? 700 : 600 }}>
+                    <span style={{ fontSize: '0.86rem', fontWeight: regTitle === 'Sr.' ? 700 : 600 }}>
                       Sr. (Sister)
                     </span>
                   </button>
@@ -4920,7 +4911,7 @@ export default function App() {
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}>
-              {/* 1. PRIEST (Fr.): Traced from Reference - Priest with Hair, Ears, Face, Roman Collar, and Cassock */}
+              {/* 1. PRIEST (Fr.) - Male */}
               <button
                 type="button"
                 className={`clerical-status-btn ${(showProfileModal ? editTitle : regTitle) === 'Fr.' ? 'selected' : ''}`}
@@ -4932,22 +4923,14 @@ export default function App() {
                   setShowTitlePickerModal(false);
                 }}
               >
-                <svg width="28" height="28" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M18 18 C18 24 30 24 30 18" />
-                  <path d="M18 16.5 C16 16.5 16 19 18 19.5" />
-                  <path d="M30 16.5 C32 16.5 32 19 30 19.5" />
-                  <path d="M18 16 C16.5 13 18 8 24 8 C30 8 31.5 13 30 16" />
-                  <path d="M18 12.5 C20 13.5 22 13 24 12 C26 13 28 13.5 30 12.5" />
-                  <path d="M20 23.5 L19.5 26.5 C19.5 28 28.5 28 28.5 26.5 L28 23.5" />
-                  <rect x="22.2" y="24" width="3.6" height="3" rx="0.5" fill="none" stroke="currentColor" strokeWidth="2" />
-                  <path d="M19.5 26.5 C15 27 10 30 10 37" />
-                  <path d="M28.5 26.5 C33 27 38 30 38 37" />
-                  <line x1="24" y1="27.5" x2="24" y2="37" />
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
                 </svg>
                 <span>Fr. (Priest)</span>
               </button>
 
-              {/* 2. SISTER (Sr.): Traced from Reference - Traditional Habit with Veil framing face & flowing wimple */}
+              {/* 2. SISTER (Sr.) - Female */}
               <button
                 type="button"
                 className={`clerical-status-btn ${(showProfileModal ? editTitle : regTitle) === 'Sr.' ? 'selected' : ''}`}
@@ -4959,14 +4942,11 @@ export default function App() {
                   setShowTitlePickerModal(false);
                 }}
               >
-                <svg width="28" height="28" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <ellipse cx="24" cy="22.5" rx="4.8" ry="6" />
-                  <path d="M19.2 18 C21 16.8 27 16.8 28.8 18" />
-                  <path d="M17.5 19 C18 14 20.5 13 24 13 C27.5 13 30 14 30.5 19" />
-                  <path d="M24 7.5 C16.5 7.5 14 13 14 23 C14 30 10 37 10 40 L16 38 C16.5 35 17.5 31 18.5 29" />
-                  <path d="M24 7.5 C31.5 7.5 34 13 34 23 C34 30 38 37 38 40 L32 38 C31.5 35 30.5 31 29.5 29" />
-                  <path d="M19 28 C21 31.5 27 31.5 29 28" />
-                  <path d="M18.5 34 C21.5 36.5 26.5 36.5 29.5 34" />
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M19 21v-2a4 4 0 0 0-3-3.87" />
+                  <path d="M5 21v-2a4 4 0 0 1 3-3.87" />
+                  <circle cx="12" cy="7" r="4" />
+                  <path d="M9 14h6a3 3 0 0 1 3 3v4H6v-4a3 3 0 0 1 3-3z" />
                 </svg>
                 <span>Sr. (Sister)</span>
               </button>
