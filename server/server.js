@@ -15,7 +15,8 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : (process.env.NO
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ limit: '5mb', extended: true }));
 
 // Helper middleware to authenticate users using the simple Authorization header: "Bearer <user_id>"
 const authenticate = (req, res, next) => {
@@ -43,6 +44,24 @@ const requireVerification = (req, res, next) => {
   next();
 };
 
+// Helper to check if a user is an ordained priest (Fr.)
+const isPriestUser = (user) => {
+  if (!user) return false;
+  const title = (user.title || '').trim();
+  const cType = (user.clergy_type || '').trim().toLowerCase();
+  if (title === 'Fr.') return true;
+  if (title === 'Sr.' || title === 'Br.') return false;
+  return cType === 'religious' || cType === 'diocesan' || cType === 'priest';
+};
+
+// Helper middleware to ensure the user is an ordained priest (Fr.)
+const requirePriest = (req, res, next) => {
+  if (!isPriestUser(req.user)) {
+    return res.status(403).json({ error: 'Only ordained priests (Fr.) can accept or offer liturgical celebration ministry.' });
+  }
+  next();
+};
+
 // Helper middleware to ensure the user is an administrator
 const requireAdmin = (req, res, next) => {
   if (req.user.is_admin !== 1) {
@@ -55,7 +74,7 @@ const requireAdmin = (req, res, next) => {
 
 app.post('/api/auth/register', (req, res) => {
   const {
-    name, mobile, email, password,
+    name, title, congregation_abbr, mobile, email, password,
     diocese_province, clergy_type, religious_order,
     residence_name, residence_address,
     latitude, longitude, max_travel_km, transport_mode
@@ -66,10 +85,17 @@ app.post('/api/auth/register', (req, res) => {
   }
 
   // Validate mobile format (+91 or numbers with at least 10 digits)
-  const cleanedMobile = mobile.replace(/[^0-9+]/g, '');
-  if (cleanedMobile.length < 10) {
-    return res.status(400).json({ error: 'Invalid mobile number. Please provide a valid phone number.' });
+  let digits = mobile.replace(/\D/g, '');
+  if (digits.length > 10 && digits.startsWith('91')) {
+    digits = digits.slice(2);
+  } else if (digits.length > 10 && digits.startsWith('0')) {
+    digits = digits.slice(1);
   }
+  digits = digits.slice(0, 10);
+  if (digits.length !== 10) {
+    return res.status(400).json({ error: 'Please provide a valid 10-digit mobile phone number.' });
+  }
+  const cleanedMobile = `+91${digits}`;
 
   // Check unique constraints
   if (db.getUserByMobile(cleanedMobile)) {
@@ -83,6 +109,8 @@ app.post('/api/auth/register', (req, res) => {
   try {
     const newUser = db.createUser({
       name,
+      title: title || (clergy_type === 'convent' || clergy_type === 'convent_sister' ? 'Sr.' : 'Fr.'),
+      congregation_abbr: congregation_abbr || '',
       mobile: cleanedMobile,
       email: email || '',
       password,
@@ -94,7 +122,8 @@ app.post('/api/auth/register', (req, res) => {
       latitude,
       longitude,
       max_travel_km: max_travel_km || 25,
-      transport_mode: transport_mode || 'own_bike'
+      transport_mode: transport_mode || 'own_bike',
+      profile_photo: req.body.profile_photo || null
     });
 
     const { password_hash, ...userResponse } = newUser;
@@ -132,12 +161,14 @@ app.post('/api/auth/login', (req, res) => {
   return res.json({ message: 'Login successful.', user: userResponse });
 });
 
-// Update Priest Profile (GPS location, travel radius, transport mode)
-app.put('/api/users/profile', authenticate, (req, res) => {
+// Update User Profile (Photo, Name, Congregation, Contacts, Address, Location)
+app.put('/api/users/profile', authenticate, async (req, res) => {
   const {
+    name, title, congregation_abbr, mobile, email, clergy_type,
+    religious_order, diocese_province,
     residence_name, residence_address,
     latitude, longitude, max_travel_km, transport_mode,
-    religious_order, diocese_province
+    profile_photo
   } = req.body;
 
   const user = db.getUserById(req.user.id);
@@ -145,18 +176,51 @@ app.put('/api/users/profile', authenticate, (req, res) => {
     return res.status(404).json({ error: 'User not found.' });
   }
 
-  if (residence_name !== undefined) user.residence_name = residence_name;
-  if (residence_address !== undefined) user.residence_address = residence_address;
-  if (latitude !== undefined) user.latitude = parseFloat(latitude);
-  if (longitude !== undefined) user.longitude = parseFloat(longitude);
-  if (max_travel_km !== undefined) user.max_travel_km = parseInt(max_travel_km);
-  if (transport_mode !== undefined) user.transport_mode = transport_mode;
-  if (religious_order !== undefined) user.religious_order = religious_order;
-  if (diocese_province !== undefined) user.diocese_province = diocese_province;
+  // Validate mobile if changed
+  if (mobile && mobile !== user.mobile) {
+    const cleanedMobile = mobile.replace(/[^0-9+]/g, '');
+    if (cleanedMobile.length < 10) {
+      return res.status(400).json({ error: 'Invalid mobile number.' });
+    }
+    const existingMobileUser = db.getUserByMobile(cleanedMobile);
+    if (existingMobileUser && existingMobileUser.id !== user.id) {
+      return res.status(400).json({ error: 'This mobile number is already registered by another account.' });
+    }
+  }
 
-  db.save();
-  const { password_hash, ...userResponse } = user;
-  return res.json({ message: 'Profile updated successfully.', user: userResponse });
+  // Validate email if changed
+  if (email && email !== user.email) {
+    const existingEmailUser = db.getUserByEmail(email);
+    if (existingEmailUser && existingEmailUser.id !== user.id) {
+      return res.status(400).json({ error: 'This email is already registered by another account.' });
+    }
+  }
+
+  const updates = {};
+  if (name !== undefined && name.trim()) updates.name = name.trim();
+  if (title !== undefined && title.trim()) updates.title = title.trim();
+  if (congregation_abbr !== undefined) updates.congregation_abbr = congregation_abbr.trim();
+  if (mobile !== undefined && mobile.trim()) updates.mobile = mobile.replace(/[^0-9+]/g, '');
+  if (email !== undefined) updates.email = email.trim();
+  if (clergy_type !== undefined) updates.clergy_type = clergy_type;
+  if (religious_order !== undefined) updates.religious_order = religious_order;
+  if (diocese_province !== undefined) updates.diocese_province = diocese_province;
+  if (residence_name !== undefined) updates.residence_name = residence_name;
+  if (residence_address !== undefined) updates.residence_address = residence_address;
+  if (latitude !== undefined) updates.latitude = latitude !== null ? parseFloat(latitude) : null;
+  if (longitude !== undefined) updates.longitude = longitude !== null ? parseFloat(longitude) : null;
+  if (max_travel_km !== undefined) updates.max_travel_km = parseInt(max_travel_km);
+  if (transport_mode !== undefined) updates.transport_mode = transport_mode;
+  if (profile_photo !== undefined) updates.profile_photo = profile_photo;
+
+  try {
+    const updated = await db.updateUser(user.id, updates);
+    const { password_hash, ...userResponse } = updated;
+    return res.json({ message: 'Profile updated successfully!', user: userResponse });
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    return res.status(500).json({ error: 'Failed to update profile.' });
+  }
 });
 
 // --- Admin Routes ---
@@ -190,6 +254,70 @@ app.post('/api/users/verify', authenticate, requireAdmin, (req, res) => {
   });
 });
 
+// Direct Admin Onboarding (Registers and auto-verifies clergy or sisters on their behalf)
+app.post('/api/admin/onboard-user', authenticate, requireAdmin, async (req, res) => {
+  const {
+    name, title, congregation_abbr, mobile, email, password,
+    diocese_province, clergy_type, religious_order, residence_name, residence_address,
+    pincode, latitude, longitude, max_travel_km, transport_mode, profile_photo
+  } = req.body;
+
+  if (!name || !mobile) {
+    return res.status(400).json({ error: 'Name and mobile number are required.' });
+  }
+
+  let digits = mobile.replace(/\D/g, '');
+  if (digits.length > 10 && digits.startsWith('91')) {
+    digits = digits.slice(2);
+  } else if (digits.length > 10 && digits.startsWith('0')) {
+    digits = digits.slice(1);
+  }
+  digits = digits.slice(0, 10);
+  if (digits.length !== 10) {
+    return res.status(400).json({ error: 'Please provide a valid 10-digit mobile number.' });
+  }
+  const cleanedMobile = `+91${digits}`;
+
+  if (db.getUserByMobile(cleanedMobile)) {
+    return res.status(400).json({ error: 'An account with this mobile number already exists.' });
+  }
+
+  const assignedPassword = password && password.trim() ? password.trim() : 'Jesus@123';
+
+  try {
+    const newUser = await db.createUser({
+      name: name.trim(),
+      title: title || (clergy_type === 'convent' || clergy_type === 'convent_sister' ? 'Sr.' : 'Fr.'),
+      congregation_abbr: congregation_abbr || '',
+      mobile: cleanedMobile,
+      email: email || '',
+      password: assignedPassword,
+      diocese_province: diocese_province || '',
+      clergy_type: clergy_type || 'diocesan',
+      religious_order: religious_order || '',
+      residence_name: residence_name || '',
+      residence_address: residence_address || '',
+      latitude,
+      longitude,
+      max_travel_km: max_travel_km || 25,
+      transport_mode: transport_mode || 'own_bike',
+      profile_photo: profile_photo || null,
+      is_verified: 1 // Auto-verified by Administrator!
+    });
+
+    const { password_hash, ...userResponse } = newUser;
+    return res.status(201).json({
+      message: `${userResponse.title} ${userResponse.name} registered and verified successfully!`,
+      user: userResponse,
+      initialPassword: assignedPassword
+    });
+  } catch (error) {
+    console.error('Admin direct onboarding error:', error);
+    return res.status(500).json({ error: 'Failed to onboard user.' });
+  }
+});
+
+
 // --- Availability Roster Routes ("Bike-Taxi" Mode) ---
 
 // Get live available priests sorted by distance to caller
@@ -212,7 +340,7 @@ app.get('/api/availability', authenticate, (req, res) => {
 });
 
 // Priest sets availability ("Go Available on this date")
-app.post('/api/availability', authenticate, requireVerification, (req, res) => {
+app.post('/api/availability', authenticate, requireVerification, requirePriest, (req, res) => {
   const { date, time_start, time_end, languages, notes } = req.body;
 
   if (!date) {
@@ -247,7 +375,7 @@ app.get('/api/availability/my-status', authenticate, (req, res) => {
 });
 
 // 1-Tap Toggle: instantly switches priest between Available and Busy
-app.post('/api/availability/toggle-status', authenticate, requireVerification, async (req, res) => {
+app.post('/api/availability/toggle-status', authenticate, requireVerification, requirePriest, async (req, res) => {
   const { date } = req.body;
 
   try {
@@ -397,7 +525,7 @@ app.post('/api/bookings/confirm-call', authenticate, requireVerification, (req, 
 });
 
 // Offer Ministry for an open request (Available Priest expresses willingness; request stays open)
-app.post('/api/bookings/offer', authenticate, requireVerification, async (req, res) => {
+app.post('/api/bookings/offer', authenticate, requireVerification, requirePriest, async (req, res) => {
   const { bookingId } = req.body;
 
   if (!bookingId) {

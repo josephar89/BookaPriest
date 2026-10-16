@@ -89,6 +89,23 @@ class RelationalDatabase {
 
   async syncFromTurso() {
     try {
+      // Ensure optional columns exist in Turso if not already created
+      try {
+        await tursoClient.execute('ALTER TABLE users ADD COLUMN profile_photo TEXT');
+      } catch (e) {
+        // Column likely already exists
+      }
+      try {
+        await tursoClient.execute("ALTER TABLE users ADD COLUMN title TEXT DEFAULT 'Fr.'");
+      } catch (e) {
+        // Column likely already exists
+      }
+      try {
+        await tursoClient.execute('ALTER TABLE users ADD COLUMN congregation_abbr TEXT');
+      } catch (e) {
+        // Column likely already exists
+      }
+
       const usersRs = await tursoClient.execute('SELECT * FROM users');
       const slotsRs = await tursoClient.execute('SELECT * FROM availability_slots');
       const bookingsRs = await tursoClient.execute('SELECT * FROM bookings');
@@ -96,11 +113,14 @@ class RelationalDatabase {
       this.data.users = usersRs.rows.map(r => ({
         ...r,
         id: Number(r.id),
+        title: r.title || (r.clergy_type === 'convent' || r.clergy_type === 'convent_sister' ? 'Sr.' : 'Fr.'),
+        congregation_abbr: r.congregation_abbr || '',
         is_verified: Number(r.is_verified),
         is_admin: Number(r.is_admin),
         max_travel_km: Number(r.max_travel_km || 25),
         latitude: r.latitude !== null ? Number(r.latitude) : null,
-        longitude: r.longitude !== null ? Number(r.longitude) : null
+        longitude: r.longitude !== null ? Number(r.longitude) : null,
+        profile_photo: r.profile_photo || null
       }));
 
       this.data.availability_slots = slotsRs.rows.map(r => ({
@@ -183,14 +203,24 @@ class RelationalDatabase {
 
   getUserByMobile(mobile) {
     if (!mobile) return null;
-    return this.data.users.find(u => u.mobile === mobile) || null;
+    const cleanSearch = String(mobile).replace(/\D/g, '');
+    const last10 = cleanSearch.length >= 10 ? cleanSearch.slice(-10) : cleanSearch;
+    return this.data.users.find(u => {
+      if (!u.mobile) return false;
+      const cleanUser = String(u.mobile).replace(/\D/g, '');
+      const userLast10 = cleanUser.length >= 10 ? cleanUser.slice(-10) : cleanUser;
+      return userLast10 === last10;
+    }) || null;
   }
 
   async createUser(user) {
     const nextId = this.data.users.reduce((max, u) => u.id > max ? u.id : max, 0) + 1;
+    const defaultTitle = user.title || (user.clergy_type === 'convent' || user.clergy_type === 'convent_sister' ? 'Sr.' : 'Fr.');
     const newUser = {
       id: nextId,
       name: user.name,
+      title: defaultTitle,
+      congregation_abbr: user.congregation_abbr || '',
       mobile: user.mobile,
       email: user.email || '',
       diocese_province: user.diocese_province || '',
@@ -202,7 +232,8 @@ class RelationalDatabase {
       longitude: user.longitude ? parseFloat(user.longitude) : null,
       max_travel_km: user.max_travel_km ? parseInt(user.max_travel_km) : 25,
       transport_mode: user.transport_mode || 'own_bike',
-      is_verified: 0,
+      profile_photo: user.profile_photo || null,
+      is_verified: user.is_verified !== undefined ? Number(user.is_verified) : 0,
       is_admin: 0,
       password_hash: hashPassword(user.password),
       created_at: new Date().toISOString()
@@ -214,20 +245,65 @@ class RelationalDatabase {
     if (tursoClient) {
       tursoClient.execute({
         sql: `INSERT INTO users (
-          id, name, mobile, email, password_hash, clergy_type, religious_order,
+          id, name, title, congregation_abbr, mobile, email, password_hash, clergy_type, religious_order,
           diocese_province, residence_name, residence_address, latitude, longitude,
-          max_travel_km, transport_mode, is_verified, is_admin, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          max_travel_km, transport_mode, profile_photo, is_verified, is_admin, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
-          newUser.id, newUser.name, newUser.mobile, newUser.email, newUser.password_hash,
+          newUser.id, newUser.name, newUser.title, newUser.congregation_abbr, newUser.mobile, newUser.email, newUser.password_hash,
           newUser.clergy_type, newUser.religious_order, newUser.diocese_province,
           newUser.residence_name, newUser.residence_address, newUser.latitude, newUser.longitude,
-          newUser.max_travel_km, newUser.transport_mode, newUser.is_verified, newUser.is_admin, newUser.created_at
+          newUser.max_travel_km, newUser.transport_mode, newUser.profile_photo, newUser.is_verified, newUser.is_admin, newUser.created_at
         ]
       }).catch(err => console.error('Turso background insert user failed:', err));
     }
 
     return newUser;
+  }
+
+  async updateUser(userId, updates) {
+    const user = this.data.users.find(u => u.id === parseInt(userId));
+    if (!user) return null;
+
+    Object.keys(updates).forEach(key => {
+      if (updates[key] !== undefined) {
+        user[key] = updates[key];
+      }
+    });
+
+    this.saveLocal();
+
+    if (tursoClient) {
+      try {
+        const fields = [];
+        const args = [];
+        const allowedColumns = [
+          'name', 'title', 'congregation_abbr', 'mobile', 'email', 'clergy_type', 'religious_order',
+          'diocese_province', 'residence_name', 'residence_address',
+          'latitude', 'longitude', 'max_travel_km', 'transport_mode',
+          'profile_photo', 'is_verified'
+        ];
+
+        for (const col of allowedColumns) {
+          if (updates[col] !== undefined) {
+            fields.push(`${col} = ?`);
+            args.push(updates[col]);
+          }
+        }
+
+        if (fields.length > 0) {
+          args.push(user.id);
+          tursoClient.execute({
+            sql: `UPDATE users SET ${fields.join(', ')} WHERE id = ?`,
+            args
+          }).catch(err => console.error('Turso background update user failed:', err));
+        }
+      } catch (err) {
+        console.error('Turso update query error:', err);
+      }
+    }
+
+    return user;
   }
 
   async verifyUser(userId, isVerified) {
@@ -254,9 +330,9 @@ class RelationalDatabase {
     const { date, lat, lon } = filter;
     const todayStr = date || new Date().toISOString().split('T')[0];
 
-    // Get all verified priests (excluding sisters and unverified accounts)
+    // Get all verified priests (only Fr., excluding sisters, brothers, and unverified accounts)
     const verifiedPriests = this.data.users.filter(
-      u => u.is_verified === 1 && u.clergy_type !== 'convent' && u.is_admin !== 1
+      u => u.is_verified === 1 && (u.title ? u.title === 'Fr.' : (u.clergy_type !== 'convent' && u.clergy_type !== 'convent_sister')) && u.is_admin !== 1
     );
 
     // Build roster: by default every verified priest is available unless explicitly marked 'busy' or 'booked'
@@ -286,7 +362,9 @@ class RelationalDatabase {
         time_end: slot ? slot.time_end : '20:00',
         languages: slot && slot.languages ? slot.languages : ['English', 'Tamil'],
         status: isBusy ? 'busy' : 'available',
+        priest_title: priest.title || 'Fr.',
         priest_name: priest.name,
+        congregation_abbr: priest.congregation_abbr || '',
         priest_mobile: priest.mobile,
         clergy_type: priest.clergy_type,
         religious_order: priest.religious_order,
@@ -296,6 +374,7 @@ class RelationalDatabase {
         max_travel_km: priest.max_travel_km,
         priest_latitude: priest.latitude,
         priest_longitude: priest.longitude,
+        profile_photo: priest.profile_photo || null,
         distance_km
       };
     }).filter(p => p.status === 'available'); // Only show currently available priests on public list
@@ -522,12 +601,15 @@ class RelationalDatabase {
         }
         return {
           priest_id: priestUser.id,
+          priest_title: priestUser.title || 'Fr.',
           priest_name: priestUser.name,
+          congregation_abbr: priestUser.congregation_abbr || '',
           priest_mobile: priestUser.mobile,
           clergy_type: priestUser.clergy_type,
           religious_order: priestUser.religious_order,
           diocese_province: priestUser.diocese_province,
           residence_name: priestUser.residence_name,
+          profile_photo: priestUser.profile_photo || null,
           distance_km: pDistance,
           offered_at: typeof app === 'object' ? app.offered_at : new Date().toISOString()
         };
@@ -536,16 +618,22 @@ class RelationalDatabase {
       return {
         ...b,
         applicants,
+        requester_title: requester ? (requester.title || (requester.clergy_type === 'convent' || requester.clergy_type === 'convent_sister' ? 'Sr.' : 'Fr.')) : '',
         requester_name: requester ? requester.name : 'Unknown',
+        requester_congregation_abbr: requester ? (requester.congregation_abbr || '') : '',
         requester_mobile: requester ? requester.mobile : '',
         requester_clergy_type: requester ? requester.clergy_type : 'diocesan',
         requester_order: requester ? requester.religious_order : '',
         requester_diocese: requester ? requester.diocese_province : '',
+        requester_photo: requester ? requester.profile_photo : null,
+        responder_title: responder ? (responder.title || 'Fr.') : null,
         responder_name: responder ? responder.name : null,
+        responder_congregation_abbr: responder ? (responder.congregation_abbr || '') : '',
         responder_mobile: responder ? responder.mobile : null,
         responder_clergy_type: responder ? responder.clergy_type : null,
         responder_order: responder ? responder.religious_order : null,
         responder_diocese: responder ? responder.diocese_province : null,
+        responder_photo: responder ? responder.profile_photo : null,
         distance_km
       };
     });

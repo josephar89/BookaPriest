@@ -333,20 +333,21 @@ h1, h2, h3, h4, h5, h6 {
 
 .form-label {
   display: block;
-  font-size: 0.78rem;
+  font-size: 0.84rem;
   font-weight: 700;
   margin-bottom: 0.45rem;
-  color: #475569;
-  letter-spacing: 0.03em;
+  color: #334155;
+  letter-spacing: 0.01em;
 }
 
 .form-input {
   width: 100%;
+  min-height: 50px;
   background-color: #FFFFFF;
   border: 1.5px solid #CBD5E1;
   border-radius: var(--radius-md);
-  padding: 0.75rem 0.95rem;
-  font-size: 0.92rem;
+  padding: 0.85rem 1rem;
+  font-size: 1rem; /* 16px to prevent iOS auto-zoom */
   color: #0F172A;
   font-family: inherit;
   transition: all var(--transition-fast);
@@ -361,6 +362,92 @@ h1, h2, h3, h4, h5, h6 {
 
 .form-input::placeholder {
   color: #94A3B8;
+  font-size: 0.92rem;
+}
+
+/* Single continuous input box with inline fixed uneditable prefix */
+.input-prefix-group {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 50px;
+  background-color: #FFFFFF;
+  border: 1.5px solid #CBD5E1;
+  border-radius: var(--radius-md);
+  padding: 0 1rem;
+  transition: all var(--transition-fast);
+}
+
+.input-prefix-group:focus-within {
+  border-color: #0F172A;
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.1);
+}
+
+.input-prefix-badge {
+  display: inline-flex;
+  align-items: center;
+  color: #0F172A;
+  font-weight: 700;
+  font-size: 1rem;
+  user-select: none;
+  white-space: nowrap;
+  padding-right: 0.45rem;
+}
+
+.input-prefix-group .form-input-inline {
+  flex: 1;
+  border: none;
+  outline: none;
+  padding: 0.85rem 0.2rem;
+  font-size: 1rem; /* 16px */
+  color: #0F172A;
+  font-family: inherit;
+  background: transparent;
+  width: 100%;
+}
+
+.input-prefix-group .form-input-inline::placeholder {
+  color: #94A3B8;
+  font-size: 0.92rem;
+}
+
+/* Modern input group with right-side action button (e.g. GPS target icon) */
+.input-action-group {
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 100%;
+}
+
+.input-action-group .form-input {
+  padding-right: 2.8rem;
+}
+
+.input-action-btn {
+  position: absolute;
+  right: 0.4rem;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: #0284C7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-size: 1.15rem;
+}
+
+.input-action-btn:hover {
+  background: #F0F9FF;
+  color: #0369A1;
+}
+
+.input-action-btn.active {
+  color: var(--accent-green);
+  background: #F0FDF4;
 }
 
 .gps-btn {
@@ -845,3 +932,174 @@ h1, h2, h3, h4, h5, h6 {
 .no-data-icon {
   font-size: 2.25rem;
 }
+
+/* --- Profile Top Bar & Avatar Component Styles --- */
+.user-profile-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-full);
+  padding: 0.35rem 0.85rem 0.35rem 0.45rem;
+  cursor: pointer;
+  transition: var(--transition-normal);
+}
+
+.user-profile-btn:hover {
+  background: #F1F5F9;
+  border-color: var(--papal-gold);
+  box-shadow: var(--shadow-sm);
+}
+
+.avatar-badge {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #E2E8F0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #0F172A;
+  border: 2px solid var(--papal-gold);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.avatar-badge img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-lg {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  border: 3px solid var(--papal-gold);
+  object-fit: cover;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #0F172A;
+  background: #F1F5F9;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  margin: 0 auto;
+}
+
+.avatar-lg img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-upload-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(15, 23, 42, 0.75);
+  color: #FFFFFF;
+  font-size: 0.68rem;
+  text-align: center;
+  padding: 0.2rem 0;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.avatar-upload-overlay:hover {
+  background: rgba(15, 23, 42, 0.9);
+}
+
+.profile-summary-card {
+  background: #FFFFFF;
+  border: 1px solid #E2E8F0;
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  border-left: 5px solid var(--papal-gold);
+}
+
+.profile-summary-left {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.profile-meta-chips {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.35rem;
+}
+
+.profile-chip {
+  font-size: 0.75rem;
+  background: #F1F5F9;
+  color: #334155;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-full);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid #E2E8F0;
+}
+
+/* Clerical Status Selection Buttons */
+.clerical-status-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px 20px;
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 12px;
+  border: 1.5px solid #e2e8f0;
+  background: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  width: 100%;
+  font-family: inherit;
+}
+
+.clerical-status-btn svg {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  color: inherit;
+  transition: all 0.2s ease-in-out;
+}
+
+.clerical-status-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+.clerical-status-btn.selected {
+  background: #fefce8;
+  border-color: #ca8a04;
+  color: #854d0e;
+  box-shadow: 0 4px 12px rgba(202, 138, 4, 0.15);
+}
+
+.clerical-status-btn.selected svg,
+.clerical-status-btn.selected .material-symbols-outlined {
+  color: #ca8a04;
+}
+
