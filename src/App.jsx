@@ -29,6 +29,7 @@ export default function App() {
   const [regLongitude, setRegLongitude] = useState(null);
   const [regMaxTravelKm, setRegMaxTravelKm] = useState(20);
   const [regTransportMode, setRegTransportMode] = useState('own_bike');
+  const [regAgreed, setRegAgreed] = useState(false);
 
   // Application Modes & Views
   // 'broadcast': Do you need to book a priest?
@@ -107,6 +108,27 @@ export default function App() {
     if (!str) return '';
     const match = str.match(/\(([^)]+)\)/);
     return match ? match[1].trim() : '';
+  };
+
+  // Helper to render standard Male / Female generic silhouette icon when no photo is uploaded
+  const renderDefaultAvatar = (title, clergyType, size = 20) => {
+    const isFemale = title === 'Sr.' || clergyType === 'convent';
+    if (isFemale) {
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Sister Avatar">
+          <path d="M19 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M5 21v-2a4 4 0 0 1 3-3.87" />
+          <circle cx="12" cy="7" r="4" />
+          <path d="M9 14h6a3 3 0 0 1 3 3v4H6v-4a3 3 0 0 1 3-3z" />
+        </svg>
+      );
+    }
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Priest Avatar">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
+    );
   };
 
   // Helper to extract 10 digits and auto-format as "XXXXX XXXXX" for readable Indian mobile numbers
@@ -463,15 +485,46 @@ export default function App() {
               }
             }
 
-            // Auto-populate 6-digit postal PIN code
+            // Extract PIN code from postcode or address or full display_name
+            let detectedPin = '';
             if (addr.postcode) {
-              const cleanPin = String(addr.postcode).replace(/\D/g, '').slice(0, 6);
-              if (cleanPin.length === 6) {
-                if (target === 'edit') {
-                  setEditPincode(cleanPin);
-                } else {
-                  setRegPincode(cleanPin);
+              const matched = String(addr.postcode).match(/\b\d{6}\b/);
+              if (matched) detectedPin = matched[0];
+            }
+            if (!detectedPin && geoData.display_name) {
+              const matched = geoData.display_name.match(/\b\d{6}\b/);
+              if (matched) detectedPin = matched[0];
+            }
+
+            // Fallback: query Nominatim with zoom 14 if postcode wasn't returned at zoom 18
+            if (!detectedPin) {
+              try {
+                const fallbackRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=14&addressdetails=1`, {
+                  headers: { 'Accept-Language': 'en' }
+                });
+                if (fallbackRes.ok) {
+                  const fallbackData = await fallbackRes.json();
+                  const fbPostcode = fallbackData.address?.postcode;
+                  if (fbPostcode) {
+                    const matched = String(fbPostcode).match(/\b\d{6}\b/);
+                    if (matched) detectedPin = matched[0];
+                  }
+                  if (!detectedPin && fallbackData.display_name) {
+                    const matched = fallbackData.display_name.match(/\b\d{6}\b/);
+                    if (matched) detectedPin = matched[0];
+                  }
                 }
+              } catch (e) {
+                // Ignore fallback error
+              }
+            }
+
+            // Automatically fill the Postal PIN code field
+            if (detectedPin && detectedPin.length === 6) {
+              if (target === 'edit') {
+                setEditPincode(detectedPin);
+              } else {
+                setRegPincode(detectedPin);
               }
             }
           }
@@ -564,6 +617,10 @@ export default function App() {
       showFeedback('error', 'Password is required.');
       return;
     }
+    if (!regAgreed) {
+      showFeedback('error', 'Please confirm that you have read and agreed to the Privacy & Authenticity policy.');
+      return;
+    }
     setFormSubmitting(true);
     try {
       // Ensure pin code is incorporated into canonical address
@@ -591,7 +648,7 @@ export default function App() {
           longitude: regLongitude,
           max_travel_km: regTitle === 'Fr.' ? regMaxTravelKm : 25,
           transport_mode: regTransportMode,
-          profile_photo: regProfilePhoto
+          profile_photo: null
         })
       });
       const data = await res.json();
@@ -1169,8 +1226,8 @@ export default function App() {
       <div className="auth-page">
         <div className="glass-card auth-card">
           <div className="auth-header">
-            <h1>BookaPriest</h1>
-            <p>Priest Booking & Liturgical Coordination Platform</p>
+            <h1>Book a Priest</h1>
+            <p>Connecting Priests, Parishes & Religious Communities</p>
           </div>
 
           {errorMsg && <div className="error-alert">{errorMsg}</div>}
@@ -1242,74 +1299,9 @@ export default function App() {
             </form>
           ) : (
             <form onSubmit={handleRegister} autoComplete="off">
-              {/* Ecclesiastical Trust & Canonical Security Notice */}
-              <div
-                style={{
-                  background: 'linear-gradient(135deg, #F8FAFC 0%, #FEFCE8 100%)',
-                  border: '1px solid #FEF08A',
-                  borderLeft: '4px solid var(--accent-gold)',
-                  borderRadius: '8px',
-                  padding: '0.75rem 0.9rem',
-                  marginBottom: '1.25rem',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '0.65rem'
-                }}
-              >
-                <div style={{ color: 'var(--accent-gold)', marginTop: '2px', flexShrink: 0 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                    <path d="M9 12l2 2 4-4" />
-                  </svg>
-                </div>
-                <div style={{ fontSize: '0.78rem', color: '#334155', lineHeight: 1.5, flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '3px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.82rem' }}>
-                        Privacy & Authenticity Guarantee
-                      </span>
-                      <span style={{ fontSize: '0.65rem', background: '#FEF08A', color: '#854D0E', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
-                        Verified Catholic Forum
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowPrivacyPage(true)}
-                      title="Read privacy policy & website credentials"
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: '#0284C7',
-                        cursor: 'pointer',
-                        padding: 0,
-                        fontSize: '0.74rem',
-                        fontWeight: 600,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '3px'
-                      }}
-                    >
-                      <span
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '16px',
-                          height: '16px',
-                          borderRadius: '50%',
-                          background: '#E0F2FE',
-                          color: '#0369A1',
-                          fontSize: '0.68rem',
-                          fontWeight: 700
-                        }}
-                      >
-                        i
-                      </span>
-                      <span>Details & Policy →</span>
-                    </button>
-                  </div>
-                  Managed exclusively by and for Catholic clergy & religious. Your personal details are <strong>100% confidential</strong> and never shared publicly.
-                </div>
+              {/* Section 1: Clerical Identity */}
+              <div className="auth-section-divider">
+                <span>1. Clerical Identity</span>
               </div>
 
               {/* Direct 1-Click Clerical Status Selector */}
@@ -1393,36 +1385,46 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Name Input with Live Automatic Name Preview & Clickable Prefix */}
+              {/* Name Input */}
               <div className="form-group">
                 <label className="form-label">
                   <span>Name *</span>
                 </label>
-                <div className="input-prefix-group" style={{ cursor: 'text' }}>
-                  <span
-                    className="input-prefix-badge"
-                    onClick={() => setShowTitlePickerModal(true)}
-                    title="Tap to toggle title (Fr. / Sr.)"
-                    style={{ cursor: 'pointer', paddingRight: '0.45rem', userSelect: 'none', color: regTitle ? '#0F172A' : '#94A3B8', fontWeight: 700 }}
-                  >
-                    {regTitle || 'Select Title'} <span style={{ fontSize: '0.72rem', color: '#64748B', marginLeft: '1px' }}>▾</span>
-                  </span>
+                {regTitle ? (
+                  <div className="input-prefix-group" style={{ cursor: 'text', paddingLeft: '1rem', paddingRight: '1rem' }}>
+                    <span
+                      style={{
+                        userSelect: 'none',
+                        color: '#0F172A',
+                        fontWeight: 700,
+                        fontSize: '1rem',
+                        fontFamily: 'inherit',
+                        marginRight: '4px',
+                        display: 'inline-flex',
+                        alignItems: 'center'
+                      }}
+                    >
+                      {regTitle}
+                    </span>
+                    <input
+                      type="text"
+                      className="form-input-inline"
+                      placeholder="Enter your name..."
+                      value={regName}
+                      onChange={(e) => setRegName(e.target.value)}
+                      style={{ paddingLeft: 0, paddingRight: 0 }}
+                      required
+                    />
+                  </div>
+                ) : (
                   <input
                     type="text"
-                    className="form-input-inline"
-                    placeholder={regTitle ? "Enter your name..." : "Choose title above or type your name..."}
+                    className="form-input"
+                    placeholder="Enter your name..."
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
                     required
                   />
-                </div>
-                {regTitle && regName.trim() && (
-                  <div style={{ marginTop: '0.4rem', fontSize: '0.82rem', color: '#166534', background: '#F0FDF4', padding: '0.4rem 0.75rem', borderRadius: '4px', border: '1px solid #BBF7D0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <span>✨</span>
-                    <span>
-                      Display Name Preview: <strong>{formatEcclesiasticalName(regTitle, regName, (regTitle === 'Fr.' && regClergyType === 'diocesan') ? '' : regCongregationAbbr)}</strong>
-                    </span>
-                  </div>
                 )}
               </div>
 
@@ -1440,10 +1442,10 @@ export default function App() {
                       }}
                       style={{
                         display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'flex-start',
-                        textAlign: 'left',
-                        padding: '0.75rem 0.85rem',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '0.85rem 0.5rem',
                         borderRadius: '10px',
                         border: regClergyType === 'diocesan' ? '2px solid var(--accent-gold)' : '1.5px solid #E2E8F0',
                         background: regClergyType === 'diocesan' ? '#FEFCE8' : '#FFFFFF',
@@ -1453,18 +1455,13 @@ export default function App() {
                         transition: 'all 0.2s ease'
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', marginBottom: '3px' }}>
-                        <span style={{ fontSize: '1.05rem' }}>🏛️</span>
-                        <span style={{ fontSize: '0.84rem', fontWeight: 700, color: regClergyType === 'diocesan' ? '#854D0E' : '#0F172A' }}>
-                          Diocesan Priest
-                        </span>
-                        {regClergyType === 'diocesan' && (
-                          <span style={{ marginLeft: 'auto', color: 'var(--accent-gold)', fontSize: '0.85rem', fontWeight: 800 }}>✓</span>
-                        )}
-                      </div>
-                      <span style={{ fontSize: '0.72rem', color: '#64748B', lineHeight: '1.3' }}>
-                        Affiliated to a Diocese / Archdiocese
+                      <span style={{ fontSize: '1.1rem' }}>🏛️</span>
+                      <span style={{ fontSize: '0.88rem', fontWeight: 700, color: regClergyType === 'diocesan' ? '#854D0E' : '#0F172A' }}>
+                        Diocesan Priest
                       </span>
+                      {regClergyType === 'diocesan' && (
+                        <span style={{ color: 'var(--accent-gold)', fontSize: '0.85rem', fontWeight: 800 }}>✓</span>
+                      )}
                     </button>
 
                     {/* Religious Option */}
@@ -1473,10 +1470,10 @@ export default function App() {
                       onClick={() => setRegClergyType('religious')}
                       style={{
                         display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'flex-start',
-                        textAlign: 'left',
-                        padding: '0.75rem 0.85rem',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '8px',
+                        padding: '0.85rem 0.5rem',
                         borderRadius: '10px',
                         border: regClergyType === 'religious' ? '2px solid var(--accent-gold)' : '1.5px solid #E2E8F0',
                         background: regClergyType === 'religious' ? '#FEFCE8' : '#FFFFFF',
@@ -1486,18 +1483,13 @@ export default function App() {
                         transition: 'all 0.2s ease'
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', marginBottom: '3px' }}>
-                        <span style={{ fontSize: '1.05rem' }}>⛪</span>
-                        <span style={{ fontSize: '0.84rem', fontWeight: 700, color: regClergyType === 'religious' ? '#854D0E' : '#0F172A' }}>
-                          Religious Priest
-                        </span>
-                        {regClergyType === 'religious' && (
-                          <span style={{ marginLeft: 'auto', color: 'var(--accent-gold)', fontSize: '0.85rem', fontWeight: 800 }}>✓</span>
-                        )}
-                      </div>
-                      <span style={{ fontSize: '0.72rem', color: '#64748B', lineHeight: '1.3' }}>
-                        Congregation / Order (e.g. SJ, SDB, OFM)
+                      <span style={{ fontSize: '1.1rem' }}>⛪</span>
+                      <span style={{ fontSize: '0.88rem', fontWeight: 700, color: regClergyType === 'religious' ? '#854D0E' : '#0F172A' }}>
+                        Religious Priest
                       </span>
+                      {regClergyType === 'religious' && (
+                        <span style={{ color: 'var(--accent-gold)', fontSize: '0.85rem', fontWeight: 800 }}>✓</span>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -1522,11 +1514,11 @@ export default function App() {
               {regTitle === 'Fr.' && regClergyType === 'religious' && (
                 <div className="form-row">
                   <div className="form-group" style={{ flex: 2 }}>
-                    <label className="form-label">Congregation Name</label>
+                    <label className="form-label">Congregation *</label>
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="e.g. Order of Friars Minor Capuchin"
+                      placeholder="e.g. Capuchins, Jesuits, Salesians"
                       value={regOrder}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -1538,18 +1530,14 @@ export default function App() {
                     />
                   </div>
                   <div className="form-group" style={{ flex: 1 }}>
-                    <label className="form-label">Abbreviation (Suffix)</label>
+                    <label className="form-label">Suffix (optional)</label>
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="e.g. OFM Cap, SJ, SDB"
+                      placeholder="OFM Cap, SJ, SDB"
                       value={regCongregationAbbr}
                       onChange={(e) => setRegCongregationAbbr(e.target.value)}
-                      required
                     />
-                    <span style={{ fontSize: '0.7rem', color: '#64748B', display: 'block', marginTop: '0.25rem', lineHeight: '1.3' }}>
-                      e.g. OFM Cap, SJ, SDB (appears after your name)
-                    </span>
                   </div>
                 </div>
               )}
@@ -1558,11 +1546,11 @@ export default function App() {
               {regTitle === 'Sr.' && (
                 <div className="form-row">
                   <div className="form-group" style={{ flex: 2 }}>
-                    <label className="form-label">Congregation / Order Name *</label>
+                    <label className="form-label">Congregation *</label>
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="e.g. Congregation of the Immaculate Conception, Franciscan Sisters"
+                      placeholder="e.g. Franciscan Sisters, CIC, FMM"
                       value={regOrder}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -1574,77 +1562,29 @@ export default function App() {
                     />
                   </div>
                   <div className="form-group" style={{ flex: 1 }}>
-                    <label className="form-label">Letters after Name</label>
+                    <label className="form-label">Suffix (optional)</label>
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="e.g. CIC, FMM, SJC"
+                      placeholder="CIC, FMM, SJC"
                       value={regCongregationAbbr}
                       onChange={(e) => setRegCongregationAbbr(e.target.value)}
-                      required
                     />
-                    <span style={{ fontSize: '0.74rem', color: '#64748B', display: 'block', marginTop: '0.25rem', lineHeight: '1.3' }}>
-                      e.g. Sr. Maria, <strong>CIC</strong>
-                    </span>
                   </div>
                 </div>
               )}
 
+              {/* Section 2: Contact & Location */}
+              <div className="auth-section-divider">
+                <span>2. Contact & Location</span>
+              </div>
+
               {/* Contact Information Group */}
               <div className="form-row">
-                <div className="form-group" style={{ position: 'relative' }}>
-                  <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <div className="form-group">
+                  <label className="form-label">
                     <span>WhatsApp Mobile *</span>
-                    <button
-                      type="button"
-                      onClick={() => setShowPhoneInfoTip(!showPhoneInfoTip)}
-                      title="Why WhatsApp Mobile?"
-                      style={{
-                        background: '#E2E8F0',
-                        color: '#475569',
-                        border: 'none',
-                        borderRadius: '50%',
-                        width: '18px',
-                        height: '18px',
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        padding: 0,
-                        lineHeight: 1
-                      }}
-                    >
-                      i
-                    </button>
                   </label>
-                  {showPhoneInfoTip && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '1.9rem',
-                        left: '0',
-                        zIndex: 50,
-                        background: '#0F172A',
-                        color: '#FFFFFF',
-                        padding: '0.6rem 0.8rem',
-                        borderRadius: '6px',
-                        fontSize: '0.75rem',
-                        lineHeight: '1.4',
-                        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.25)',
-                        maxWidth: '260px'
-                      }}
-                    >
-                      <span>Used for verification of authenticity and primary contact of the booked priest.</span>
-                      <div
-                        onClick={() => setShowPhoneInfoTip(false)}
-                        style={{ color: 'var(--accent-gold)', marginTop: '0.4rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.7rem', textAlign: 'right' }}
-                      >
-                        Got it ✕
-                      </div>
-                    </div>
-                  )}
                   <div className="input-prefix-group">
                     <span className="input-prefix-badge" style={{ color: '#475569', fontWeight: 700 }}>+91</span>
                     <input
@@ -1656,10 +1596,6 @@ export default function App() {
                       maxLength={11}
                       required
                     />
-                  </div>
-                  <div style={{ marginTop: '0.35rem', fontSize: '0.76rem', color: '#166534', display: 'flex', alignItems: 'center', gap: '4px', lineHeight: '1.35' }}>
-                    <span style={{ fontSize: '0.85rem' }}>💡</span>
-                    <span><strong>No OTP required!</strong> Used for your Mass booking alerts on WhatsApp.</span>
                   </div>
                 </div>
                 <div className="form-group">
@@ -1674,64 +1610,20 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Grouped Convent / Residence Location Section */}
-              <div
-                style={{
-                  background: '#F8FAFC',
-                  border: '1px solid #E2E8F0',
-                  borderRadius: '12px',
-                  padding: '1rem',
-                  marginBottom: '1rem'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.85rem' }}>
-                  <span style={{ fontSize: '1.05rem' }}>
-                    {regTitle === 'Sr.' ? '🕊️' : (regTitle === 'Fr.' && regClergyType === 'diocesan' ? '🏛️' : '⛪')}
-                  </span>
-                  <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#0F172A' }}>
-                    {regTitle === 'Sr.'
-                      ? 'Convent Location & Community Details'
-                      : (regTitle === 'Fr.' && regClergyType === 'diocesan'
-                          ? 'Church / Parish Location'
-                          : 'Residence / Community Location')}
-                  </span>
-                </div>
-
-                <div className="form-group" style={{ marginBottom: '0.85rem' }}>
-                  <label className="form-label">
-                    {regTitle === 'Sr.'
-                      ? 'Convent Name (optional)'
-                      : (regTitle === 'Fr.' && regClergyType === 'diocesan'
-                          ? 'Parish / Church Name (optional)'
-                          : 'Residence / Community Name (optional)')}
-                  </label>
-                  <input
-                    type="text"
-                    id="reg_community_residence_name"
-                    name="community_residence_name_field"
-                    className="form-input"
-                    autoComplete="none"
-                    placeholder={
-                      regTitle === 'Sr.'
-                        ? 'e.g. Child Jesus Convent, St. Joseph’s Convent'
-                        : (regTitle === 'Fr.' && regClergyType === 'diocesan'
-                            ? 'e.g. Holy Family Church, St. Mary’s Basilica'
-                            : 'e.g. Gnanalaya Capuchin Ashram, Don Bosco Bhavan')
-                    }
-                    value={regResidenceName}
-                    onChange={(e) => setRegResidenceName(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group" style={{ marginBottom: '0.85rem' }}>
-                  <label className="form-label">
+                <div className="form-group">
+                  <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>
                       {regTitle === 'Sr.'
-                        ? 'Convent Street Address / Area'
+                        ? 'Convent Address (optional)'
                         : (regTitle === 'Fr.' && regClergyType === 'diocesan'
-                            ? 'Church Street Address / Area'
-                            : 'Community Street Address / Locality')}
+                            ? 'Parish Address (optional)'
+                            : 'Residence Address (optional)')}
                     </span>
+                    {regLatitude && (
+                      <span style={{ color: '#166534', fontSize: '0.74rem', fontWeight: 600 }}>
+                        ✓ GPS Pin Set
+                      </span>
+                    )}
                   </label>
                   <div className="input-action-group">
                     <input
@@ -1745,147 +1637,51 @@ export default function App() {
                     />
                     <button
                       type="button"
+                      className={`input-action-btn ${regLatitude ? 'active' : ''}`}
                       onClick={() => handleDetectGPS('reg')}
                       disabled={gpsDetecting}
-                      title={regLatitude ? "GPS coordinates captured. Tap to update." : "Click to automatically detect current GPS location"}
-                      style={{
-                        background: regLatitude ? '#F0FDF4' : '#FFFFFF',
-                        border: `1.5px solid ${regLatitude ? '#86EFAC' : '#CBD5E1'}`,
-                        color: regLatitude ? '#15803D' : '#475569',
-                        borderRadius: '8px',
-                        padding: '0.35rem 0.65rem',
-                        fontSize: '0.74rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        flexShrink: 0,
-                        whiteSpace: 'nowrap',
-                        transition: 'all 0.2s ease'
-                      }}
+                      title={regLatitude ? "GPS Location Captured (Tap to update)" : "Get current GPS location"}
+                      style={{ padding: '0.35rem' }}
                     >
                       {gpsDetecting ? (
-                        <>
-                          <span style={{ fontSize: '0.85rem', animation: 'spin 1s linear infinite' }}>⏳</span>
-                          <span>Locating...</span>
-                        </>
-                      ) : regLatitude ? (
-                        <>
-                          <span style={{ fontSize: '0.82rem', color: '#16A34A' }}>✓</span>
-                          <span>GPS Pin Saved</span>
-                        </>
+                        <span style={{ fontSize: '0.9rem', animation: 'pulse 1s infinite' }}>⏳</span>
                       ) : (
-                        <>
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                            <circle cx="12" cy="10" r="3" />
-                          </svg>
-                          <span>Pin Location</span>
-                        </>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill={regLatitude ? "#DCFCE7" : "none"} stroke={regLatitude ? "#16A34A" : "#0F172A"} />
+                          <circle cx="12" cy="10" r="3" stroke={regLatitude ? "#16A34A" : "#0F172A"} fill={regLatitude ? "#16A34A" : "none"} />
+                          <ellipse cx="12" cy="22" rx="6" ry="1.5" stroke={regLatitude ? "#16A34A" : "#94A3B8"} strokeWidth="1.5" fill="none" />
+                        </svg>
                       )}
                     </button>
                   </div>
                 </div>
 
                 {/* Mandatory Postal PIN Code */}
-                <div className="form-group" style={{ marginBottom: 0 }}>
+                <div className="form-group">
                   <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>Postal PIN Code *</span>
-                    {regPincode.replace(/\D/g, '').length === 6 ? (
+                    {regPincode.replace(/\D/g, '').length === 6 && (
                       <span style={{ color: '#16A34A', fontSize: '0.74rem', fontWeight: 600 }}>
-                        ✓ Valid 6-Digit PIN Code
-                      </span>
-                    ) : (
-                      <span style={{ color: '#64748B', fontSize: '0.72rem' }}>
-                        Required for Mass proximity matching
+                        ✓ Valid PIN Code
                       </span>
                     )}
                   </label>
-                  <div className="input-prefix-group">
-                    <span className="input-prefix-badge" style={{ color: '#475569', fontWeight: 700, fontSize: '0.8rem' }}>
-                      PIN
-                    </span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
-                      className="form-input-inline"
-                      placeholder="e.g. 560036, 600004, 682001"
-                      value={regPincode}
-                      onChange={(e) => setRegPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      required
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    className="form-input"
+                    placeholder="Enter your Postal Pincode"
+                    value={regPincode}
+                    onChange={(e) => setRegPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    required
+                  />
                 </div>
-              </div>
 
-              {/* Optional Profile Photo Card */}
-              <div className="form-group" style={{ background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: '10px', padding: '0.85rem 1rem', marginTop: '0.2rem', marginBottom: '1rem' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-                    <div
-                      style={{
-                        width: '46px',
-                        height: '46px',
-                        borderRadius: '50%',
-                        background: regProfilePhoto ? 'transparent' : '#E2E8F0',
-                        border: '2px solid #CBD5E1',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        overflow: 'hidden',
-                        flexShrink: 0
-                      }}
-                    >
-                      {regProfilePhoto ? (
-                        <img src={regProfilePhoto} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      ) : (
-                        <span style={{ fontSize: '1.25rem' }}>📸</span>
-                      )}
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0F172A', lineHeight: 1.2 }}>
-                        Clerical Photo <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 400 }}>(optional)</span>
-                      </div>
-                      <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '2px' }}>
-                        {regProfilePhoto ? '✓ Photo attached' : 'You can also add or change this anytime later'}
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <label
-                      htmlFor="reg-photo-upload"
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '0.4rem 0.75rem',
-                        background: regProfilePhoto ? '#FEFCE8' : '#FFFFFF',
-                        border: `1px solid ${regProfilePhoto ? '#CA8A04' : '#CBD5E1'}`,
-                        color: regProfilePhoto ? '#854D0E' : '#334155',
-                        borderRadius: '6px',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {regProfilePhoto ? 'Change Photo' : 'Upload Photo'}
-                    </label>
-                    <input
-                      id="reg-photo-upload"
-                      type="file"
-                      accept="image/*"
-                      style={{ display: 'none' }}
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          compressImage(e.target.files[0], (base64) => setRegProfilePhoto(base64));
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
+              {/* Section 3: Security & Agreement */}
+              <div className="auth-section-divider">
+                <span>3. Security & Account</span>
               </div>
 
               <div className="form-group">
@@ -1923,21 +1719,12 @@ export default function App() {
                     )}
                   </button>
                 </div>
-                {/* Live Password Strength / Requirement Indicator */}
-                <div style={{ marginTop: '0.4rem', fontSize: '0.74rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                {/* Live Password Strength Indicator */}
+                <div style={{ marginTop: '0.35rem', fontSize: '0.73rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                   <span
                     style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: '14px',
-                      height: '14px',
-                      borderRadius: '50%',
-                      background: regPassword.length >= 6 ? '#DCFCE7' : '#F1F5F9',
                       color: regPassword.length >= 6 ? '#16A34A' : '#94A3B8',
-                      fontSize: '0.65rem',
-                      fontWeight: 800,
-                      transition: 'all 0.2s ease'
+                      fontWeight: 700
                     }}
                   >
                     {regPassword.length >= 6 ? '✓' : '•'}
@@ -1945,14 +1732,119 @@ export default function App() {
                   <span
                     style={{
                       color: regPassword.length >= 6 ? '#16A34A' : '#64748B',
-                      fontWeight: regPassword.length >= 6 ? 600 : 500,
-                      transition: 'all 0.2s ease'
+                      fontWeight: regPassword.length >= 6 ? 600 : 500
                     }}
                   >
-                    {regPassword.length >= 6
-                      ? 'Password length meets canonical security requirement (6+ chars)'
-                      : 'Must be at least 6 characters'}
+                    {regPassword.length >= 6 ? 'Meets security standard (6+ characters)' : 'Minimum 6 characters'}
                   </span>
+                </div>
+              </div>
+
+              {/* Privacy & Authenticity Guarantee Card with Agreement Checkbox */}
+              <div
+                style={{
+                  background: 'linear-gradient(135deg, #F8FAFC 0%, #FEFCE8 100%)',
+                  border: '1px solid #FEF08A',
+                  borderLeft: '4px solid var(--accent-gold)',
+                  borderRadius: '8px',
+                  padding: '0.85rem 0.95rem',
+                  margin: '1rem 0 0.85rem 0'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
+                  <div style={{ color: 'var(--accent-gold)', marginTop: '2px', flexShrink: 0 }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      <path d="M9 12l2 2 4-4" />
+                    </svg>
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#334155', lineHeight: 1.5, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '3px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.82rem' }}>
+                          Privacy & Authenticity Guarantee
+                        </span>
+                        <span style={{ fontSize: '0.65rem', background: '#FEF08A', color: '#854D0E', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                          Verified Catholic Forum
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <a
+                          href="https://wa.me/919444000000?text=Praise%20be%20Jesus!%20I%20am%20registering%20on%20BookaPriest%20and%20would%20like%20assistance%20completing%20my%20details."
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Contact support on WhatsApp"
+                          style={{
+                            color: '#15803D',
+                            textDecoration: 'none',
+                            fontWeight: 600,
+                            fontSize: '0.74rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            background: '#DCFCE7',
+                            padding: '2px 8px',
+                            borderRadius: '12px',
+                            border: '1px solid #BBF7D0'
+                          }}
+                        >
+                          💬 Need help?
+                        </a>
+                        <button
+                          type="button"
+                          onClick={() => setShowPrivacyPage(true)}
+                          title="Read privacy policy & website credentials"
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#0284C7',
+                            cursor: 'pointer',
+                            padding: 0,
+                            fontSize: '0.74rem',
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px'
+                          }}
+                        >
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '16px',
+                              height: '16px',
+                              borderRadius: '50%',
+                              background: '#E0F2FE',
+                              color: '#0369A1',
+                              fontSize: '0.68rem',
+                              fontWeight: 700
+                            }}
+                          >
+                            i
+                          </span>
+                          <span>Details & Policy →</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      Managed exclusively by and for Catholic clergy & religious. Your personal details are <strong>100% confidential</strong> and never shared publicly.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Agreement Checkbox */}
+                <div style={{ marginTop: '0.75rem', paddingTop: '0.65rem', borderTop: '1px dashed #E2E8F0' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer', fontSize: '0.8rem', color: '#0F172A', fontWeight: 600, userSelect: 'none' }}>
+                    <input
+                      type="checkbox"
+                      checked={regAgreed}
+                      onChange={(e) => setRegAgreed(e.target.checked)}
+                      style={{ width: '16px', height: '16px', accentColor: '#CA8A04', cursor: 'pointer' }}
+                      required
+                    />
+                    <span>I have read and understood the privacy policy and terms</span>
+                  </label>
                 </div>
               </div>
 
@@ -1969,14 +1861,18 @@ export default function App() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '8px',
-                  boxShadow: '0 4px 14px rgba(15, 23, 42, 0.2)'
+                  boxShadow: regAgreed && !formSubmitting ? '0 4px 14px rgba(15, 23, 42, 0.2)' : 'none',
+                  opacity: regAgreed && !formSubmitting ? 1 : 0.45,
+                  cursor: regAgreed && !formSubmitting ? 'pointer' : 'not-allowed',
+                  transition: 'all 0.2s ease'
                 }}
-                disabled={formSubmitting}
+                disabled={!regAgreed || formSubmitting}
+                title={!regAgreed ? 'Please read and check the agreement box above to proceed' : 'Submit Registration'}
               >
                 {formSubmitting ? (
                   <>
                     <span style={{ fontSize: '1rem', animation: 'spin 1s linear infinite' }}>⏳</span>
-                    <span>Registering Clergy Profile...</span>
+                    <span>Submitting Registration...</span>
                   </>
                 ) : (
                   <>
@@ -1984,80 +1880,12 @@ export default function App() {
                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                     </svg>
-                    <span>Complete Clergy Registration</span>
+                    <span>Submit Registration</span>
                   </>
                 )}
               </button>
 
-              <div style={{ textAlign: 'center', marginTop: '0.5rem', fontSize: '0.72rem', color: '#64748B' }}>
-                🔒 Information is private & verified under canonical forum standards
-              </div>
-
-              {/* WhatsApp Registration Assistance Card for Non-Tech Clergy & Sisters */}
-              <div
-                style={{
-                  background: '#F0FDF4',
-                  border: '1px solid #BBF7D0',
-                  borderRadius: '10px',
-                  padding: '0.85rem 1rem',
-                  marginTop: '1.25rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '0.75rem'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                  <div
-                    style={{
-                      width: '36px',
-                      height: '36px',
-                      borderRadius: '50%',
-                      background: '#25D366',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#FFFFFF',
-                      fontSize: '1.2rem',
-                      flexShrink: 0
-                    }}
-                  >
-                    💬
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#166534', lineHeight: 1.2 }}>
-                      Need Help Registering?
-                    </div>
-                    <div style={{ fontSize: '0.72rem', color: '#15803D', marginTop: '2px' }}>
-                      Message our support team directly on WhatsApp
-                    </div>
-                  </div>
-                </div>
-                <a
-                  href="https://wa.me/919444000000?text=Praise%20be%20Jesus!%20I%20am%20registering%20on%20BookaPriest%20and%20would%20like%20assistance%20completing%20my%20details."
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    background: '#25D366',
-                    color: '#FFFFFF',
-                    padding: '0.45rem 0.85rem',
-                    borderRadius: '8px',
-                    fontSize: '0.76rem',
-                    fontWeight: 700,
-                    textDecoration: 'none',
-                    boxShadow: '0 2px 6px rgba(37, 211, 102, 0.3)',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0
-                  }}
-                >
-                  WhatsApp Us ↗
-                </a>
-              </div>
-
-              <div className="auth-footer" style={{ marginTop: '1rem' }}>
+              <div className="auth-footer" style={{ marginTop: '1rem', textAlign: 'center' }}>
                 Already registered?{' '}
                 <span className="auth-link" onClick={() => setAuthMode('login')}>
                   Sign In
@@ -2077,7 +1905,7 @@ export default function App() {
       {/* Header */}
       <header className="navbar">
         <div className="brand-section">
-          <span className="brand-logo">BookaPriest</span>
+          <span className="brand-logo">Book a Priest</span>
           <span className="brand-badge">India</span>
         </div>
 
@@ -2092,7 +1920,7 @@ export default function App() {
               {user.profile_photo ? (
                 <img src={user.profile_photo} alt={user.name} />
               ) : (
-                <span>{user.title || (user.clergy_type === 'convent' ? 'Sr.' : 'Fr.')}</span>
+                renderDefaultAvatar(user.title, user.clergy_type, 20)
               )}
             </div>
             <div className="user-tag" style={{ textAlign: 'left' }}>
@@ -2947,9 +2775,7 @@ export default function App() {
                               {b.requester_photo ? (
                                 <img src={b.requester_photo} alt={b.requester_name} />
                               ) : (
-                                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>
-                                  {b.requester_title === 'Sr.' || b.requester_clergy_type === 'convent' ? 'Sr.' : 'Fr.'}
-                                </span>
+                                renderDefaultAvatar(b.requester_title, b.requester_clergy_type, 18)
                               )}
                             </div>
                             <div style={{ flex: 1, minWidth: 0 }}>
@@ -3128,7 +2954,7 @@ export default function App() {
                                         {cand.profile_photo ? (
                                           <img src={cand.profile_photo} alt={cand.priest_name} />
                                         ) : (
-                                          <span style={{ fontSize: '0.78rem' }}>{cand.priest_title || 'Fr.'}</span>
+                                          renderDefaultAvatar(cand.priest_title || 'Fr.', cand.clergy_type, 18)
                                         )}
                                       </div>
                                       <div>
@@ -3385,7 +3211,7 @@ export default function App() {
                                   {b.responder_photo ? (
                                     <img src={b.responder_photo} alt={b.responder_name} />
                                   ) : (
-                                    <span style={{ fontSize: '0.8rem' }}>{b.responder_title || 'Fr.'}</span>
+                                    renderDefaultAvatar(b.responder_title || 'Fr.', b.responder_clergy_type || 'diocesan', 20)
                                   )}
                                 </div>
                                 <div>
@@ -3485,7 +3311,7 @@ export default function App() {
                                         {cand.profile_photo ? (
                                           <img src={cand.profile_photo} alt={cand.priest_name} />
                                         ) : (
-                                          <span style={{ fontSize: '0.75rem' }}>{cand.priest_title || 'Fr.'}</span>
+                                          renderDefaultAvatar(cand.priest_title || 'Fr.', cand.clergy_type, 18)
                                         )}
                                       </div>
                                       <div>
@@ -3943,9 +3769,7 @@ export default function App() {
                     {editProfilePhoto ? (
                       <img src={editProfilePhoto} alt="Profile" />
                     ) : (
-                      <span style={{ fontSize: '1.75rem', fontWeight: 800, fontFamily: 'Outfit', letterSpacing: '-0.02em', color: '#0F172A' }}>
-                        {(editTitle || (editClergyType === 'convent' ? 'Sr.' : 'Fr.')).replace('.', '')}
-                      </span>
+                      renderDefaultAvatar(editTitle, editClergyType, 44)
                     )}
                     <label
                       className="avatar-upload-overlay"
@@ -3994,24 +3818,25 @@ export default function App() {
                   )}
                 </div>
 
-                {/* Name Input with Clickable Integrated Title Prefix */}
+                {/* Name Input with Seamless Non-Editable Prefix */}
                 <div className="form-group">
                   <label className="form-label">
                     <span>NAME *</span>
-                    <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 'normal', marginLeft: '6px' }}>
-                      (Tap title badge to switch Fr. / Sr.)
-                    </span>
                   </label>
-                  <div className="input-prefix-group" style={{ cursor: 'text' }}>
+                  <div className="input-prefix-group" style={{ cursor: 'text', paddingLeft: '1rem', paddingRight: '1rem' }}>
                     <span
-                      className="input-prefix-badge"
-                      onClick={() => {
-                        setShowTitlePickerModal(true);
+                      style={{
+                        userSelect: 'none',
+                        color: '#0F172A',
+                        fontWeight: 700,
+                        fontSize: '1rem',
+                        fontFamily: 'inherit',
+                        marginRight: '4px',
+                        display: 'inline-flex',
+                        alignItems: 'center'
                       }}
-                      title="Tap to switch clerical status (Fr. / Sr.)"
-                      style={{ cursor: 'pointer', paddingRight: '0.45rem', userSelect: 'none', color: '#0F172A', fontWeight: 800 }}
                     >
-                      {editTitle || 'Fr.'} <span style={{ fontSize: '0.72rem', color: '#64748B', marginLeft: '1px' }}>▾</span>
+                      {editTitle || 'Fr.'}
                     </span>
                     <input
                       type="text"
@@ -4019,6 +3844,7 @@ export default function App() {
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
                       placeholder="Enter your name..."
+                      style={{ paddingLeft: 0, paddingRight: 0 }}
                       required
                     />
                   </div>
@@ -4171,7 +3997,13 @@ export default function App() {
 
                 <div className="form-group">
                   <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>ADDRESS</span>
+                    <span>
+                      {editTitle === 'Sr.'
+                        ? 'CONVENT ADDRESS'
+                        : (editTitle === 'Fr.' && editClergyType === 'diocesan'
+                            ? 'PARISH ADDRESS'
+                            : 'RESIDENCE ADDRESS')}
+                    </span>
                     {editLatitude && (
                       <span style={{ color: '#166534', fontSize: '0.74rem', fontWeight: 600 }}>
                         ✓ GPS Pin Set
@@ -4208,35 +4040,27 @@ export default function App() {
                 </div>
 
                 {/* Postal PIN Code Field */}
+                {/* Postal PIN Code Field */}
                 <div className="form-group">
                   <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>POSTAL PIN CODE *</span>
-                    {editPincode && editPincode.replace(/\D/g, '').length === 6 ? (
+                    {editPincode && editPincode.replace(/\D/g, '').length === 6 && (
                       <span style={{ color: '#166534', fontSize: '0.74rem', fontWeight: 600 }}>
                         ✓ Valid 6-Digit PIN
                       </span>
-                    ) : (
-                      <span style={{ color: '#64748B', fontSize: '0.72rem' }}>
-                        Required for ministry distance & location tracking
-                      </span>
                     )}
                   </label>
-                  <div className="input-prefix-group">
-                    <span className="input-prefix-badge" style={{ color: '#475569', fontWeight: 700, fontSize: '0.8rem' }}>
-                      PIN
-                    </span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={6}
-                      className="form-input-inline"
-                      placeholder="e.g. 560036, 600010, 682001"
-                      value={editPincode}
-                      onChange={(e) => setEditPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                      required
-                    />
-                  </div>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    className="form-input"
+                    placeholder="Enter your Postal Pincode"
+                    value={editPincode}
+                    onChange={(e) => setEditPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    required
+                  />
                 </div>
 
                 {/* Location & Clerical Status Accuracy Advisory Note */}

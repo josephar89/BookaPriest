@@ -17,7 +17,10 @@
       "transport_mode": "own_bike",
       "is_verified": 1,
       "is_admin": 1,
-      "created_at": "2026-05-21T16:25:29.402Z"
+      "created_at": "2026-05-21T16:25:29.402Z",
+      "profile_photo": null,
+      "title": "Fr.",
+      "congregation_abbr": ""
     },
     {
       "id": 2,
@@ -36,7 +39,10 @@
       "transport_mode": "own_bike",
       "is_verified": 1,
       "is_admin": 0,
-      "created_at": "2026-05-21T16:31:52.180Z"
+      "created_at": "2026-05-21T16:31:52.180Z",
+      "profile_photo": null,
+      "title": "Fr.",
+      "congregation_abbr": ""
     },
     {
       "id": 3,
@@ -55,7 +61,10 @@
       "transport_mode": "own_bike",
       "is_verified": 1,
       "is_admin": 0,
-      "created_at": "2026-05-21T16:31:57.669Z"
+      "created_at": "2026-05-21T16:31:57.669Z",
+      "profile_photo": null,
+      "title": "Fr.",
+      "congregation_abbr": ""
     },
     {
       "id": 4,
@@ -74,7 +83,10 @@
       "transport_mode": "own_bike",
       "is_verified": 1,
       "is_admin": 0,
-      "created_at": "2026-05-21T18:29:49.408Z"
+      "created_at": "2026-05-21T18:29:49.408Z",
+      "profile_photo": null,
+      "title": "Fr.",
+      "congregation_abbr": ""
     },
     {
       "id": 5,
@@ -93,7 +105,10 @@
       "transport_mode": "own_bike",
       "is_verified": 1,
       "is_admin": 0,
-      "created_at": "2026-10-09T08:13:25.940Z"
+      "created_at": "2026-10-09T08:13:25.940Z",
+      "profile_photo": null,
+      "title": "Fr.",
+      "congregation_abbr": ""
     },
     {
       "id": 6,
@@ -112,7 +127,10 @@
       "transport_mode": "own_bike",
       "is_verified": 1,
       "is_admin": 0,
-      "created_at": "2026-10-09T09:09:14.595Z"
+      "created_at": "2026-10-09T09:09:14.595Z",
+      "profile_photo": null,
+      "title": "Fr.",
+      "congregation_abbr": ""
     },
     {
       "id": 7,
@@ -131,7 +149,10 @@
       "transport_mode": "own_bike",
       "is_verified": 1,
       "is_admin": 0,
-      "created_at": "2026-10-09T11:35:45.823Z"
+      "created_at": "2026-10-09T11:35:45.823Z",
+      "profile_photo": null,
+      "title": "Fr.",
+      "congregation_abbr": ""
     },
     {
       "id": 8,
@@ -150,7 +171,76 @@
       "transport_mode": "own_bike",
       "is_verified": 1,
       "is_admin": 0,
-      "created_at": "2026-10-09T15:28:24.626Z"
+      "created_at": "2026-10-09T15:28:24.626Z",
+      "profile_photo": null,
+      "title": "Fr.",
+      "congregation_abbr": ""
+    },
+    {
+      "id": 9,
+      "name": "Philomina Mary",
+      "mobile": "+919840112233",
+      "email": "sister.philo@stanne.org",
+      "password_hash": "a109e36947ad56de1dca1cc49f0ef8ac9ad9a7b1aa0df41fb3c4cb73c1ff01ea",
+      "clergy_type": "convent",
+      "religious_order": "Sisters of St. Anne (SAT)",
+      "diocese_province": "Archdiocese of Madras-Mylapore",
+      "residence_name": "St. Anne's Convent Chapel",
+      "residence_address": "Perambur, Chennai - 600011",
+      "latitude": 13.1118,
+      "longitude": 80.2435,
+      "max_travel_km": 25,
+      "transport_mode": "own_bike",
+      "is_verified": 1,
+      "is_admin": 0,
+      "created_at": "2026-10-16T10:00:00.000Z",
+      "profile_photo": null,
+      "title": "Sr.",
+      "congregation_abbr": "SAT"
+    },
+    {
+      "id": 10,
+      "name": "Maria Stella",
+      "mobile": "+919840223344",
+      "email": "stella@fmm.org",
+      "password_hash": "a109e36947ad56de1dca1cc49f0ef8ac9ad9a7b1aa0df41fb3c4cb73c1ff01ea",
+      "clergy_type": "convent",
+      "religious_order": "Franciscan Missionaries of Mary (FMM)",
+      "diocese_province": "Archdiocese of Madras-Mylapore",
+      "residence_name": "Rosary Convent",
+      "residence_address": "Mylapore, Chennai - 600004",
+      "latitude": 13.0335,
+      "longitude": 80.2676,
+      "max_travel_km": 25,
+      "transport_mode": "own_bike",
+      "is_verified": 1,
+      "is_admin": 0,
+      "created_at": "2026-10-16T11:00:00.000Z",
+      "profile_photo": null,
+      "title": "Sr.",
+      "congregation_abbr": "FMM"
+    },
+    {
+      "id": 11,
+      "name": "John Britto",
+      "mobile": "+919840334455",
+      "email": "britto@shrine.in",
+      "password_hash": "a109e36947ad56de1dca1cc49f0ef8ac9ad9a7b1aa0df41fb3c4cb73c1ff01ea",
+      "clergy_type": "diocesan",
+      "religious_order": "",
+      "diocese_province": "Archdiocese of Madras-Mylapore",
+      "residence_name": "Lourdes Shrine",
+      "residence_address": "Villivakkam, Chennai - 600049",
+      "latitude": 13.1077,
+      "longitude": 80.2057,
+      "max_travel_km": 25,
+      "transport_mode": "own_bike",
+      "is_verified": 1,
+      "is_admin": 0,
+      "created_at": "2026-10-16T11:30:00.000Z",
+      "profile_photo": null,
+      "title": "Fr.",
+      "congregation_abbr": ""
     }
   ],
   "bookings": [
@@ -203,7 +293,205 @@
       "notes": "Vestments and chalice arranged in sacristy.",
       "status": "pending",
       "created_at": "2026-10-09T11:37:37.113Z",
+      "applicants": [
+        {
+          "priest_id": 8,
+          "offered_at": "2026-10-16T12:15:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "requester_id": 7,
+      "responder_id": 2,
+      "booking_type": "direct_booking",
+      "service_type": "Concelebration (Feasts & Events)",
+      "datetime": "2026-10-19T07:00:00.000Z",
+      "location": "St. Thomas Cathedral Basilica, Santhome",
+      "latitude": 13.0335,
+      "longitude": 80.2785,
+      "language": "Tamil & English",
+      "honorarium": "Standard Stipend",
+      "notes": "Patronal Feast concelebration with the Provincial.",
+      "status": "accepted",
+      "created_at": "2026-10-16T18:45:35.018Z",
       "applicants": []
+    },
+    {
+      "id": 13,
+      "requester_id": 7,
+      "responder_id": 8,
+      "booking_type": "direct_booking",
+      "service_type": "Solemn Feast Mass",
+      "datetime": "2026-10-18T06:00:00.000Z",
+      "location": "St. Thomas Cathedral Basilica, Santhome",
+      "latitude": 13.0335,
+      "longitude": 80.2785,
+      "language": "Tamil & English",
+      "honorarium": "Standard Stipend",
+      "notes": "Concelebrated Solemn High Mass with Diocesan Clergy.",
+      "status": "accepted",
+      "created_at": "2026-10-16T18:48:26.120Z",
+      "applicants": []
+    },
+    {
+      "id": 4,
+      "requester_id": 10,
+      "responder_id": null,
+      "booking_type": "open_request",
+      "service_type": "Monthly Recollection",
+      "datetime": "2026-10-28T09:30:00",
+      "datetime_end": "2026-10-28T12:30:00",
+      "location": "Rosary Convent Chapel, Mylapore",
+      "latitude": 13.0335,
+      "longitude": 80.2676,
+      "language": "English",
+      "honorarium": "1000",
+      "notes": "Half day recollection talk for 18 community sisters followed by Benediction.",
+      "status": "pending",
+      "created_at": "2026-10-16T12:30:00.000Z",
+      "applicants": []
+    },
+    {
+      "id": 5,
+      "requester_id": 11,
+      "responder_id": null,
+      "booking_type": "open_request",
+      "service_type": "Solemn Feast Mass",
+      "datetime": "2026-11-01T07:00:00",
+      "datetime_end": "2026-11-01T08:15:00",
+      "location": "Lourdes Shrine, Villivakkam",
+      "latitude": 13.1077,
+      "longitude": 80.2057,
+      "language": "Tamil",
+      "honorarium": "1000",
+      "notes": "All Saints Day celebration Mass. Choir and lectors prepared.",
+      "status": "pending",
+      "created_at": "2026-10-16T13:00:00.000Z",
+      "applicants": []
+    },
+    {
+      "id": 6,
+      "requester_id": 9,
+      "responder_id": 8,
+      "booking_type": "open_request",
+      "service_type": "Holy Mass",
+      "datetime": "2026-10-22T06:30:00",
+      "datetime_end": "2026-10-22T07:30:00",
+      "location": "St. Anne's Convent, Perambur",
+      "latitude": 13.1118,
+      "longitude": 80.2435,
+      "language": "Tamil",
+      "honorarium": "500",
+      "notes": "Thursday community Eucharistic celebration.",
+      "status": "accepted",
+      "created_at": "2026-10-15T10:00:00.000Z",
+      "confirmed_at": "2026-10-15T11:45:00.000Z",
+      "applicants": [
+        {
+          "priest_id": 8,
+          "offered_at": "2026-10-15T10:30:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "requester_id": 8,
+      "responder_id": null,
+      "booking_type": "open_request",
+      "service_type": "Sunday Holy Mass",
+      "datetime": "2026-11-08T07:00:00",
+      "datetime_end": "2026-11-08T08:00:00",
+      "location": "Don Bosco Shrine, Kilpauk",
+      "latitude": 13.0827,
+      "longitude": 80.2407,
+      "language": "English",
+      "honorarium": "1000",
+      "notes": "Parish priest travelling for Salesian provincial council meetings. Need a priest to celebrate Sunday Holy Mass.",
+      "status": "pending",
+      "created_at": "2026-10-16T14:00:00.000Z",
+      "applicants": [
+        {
+          "priest_id": 6,
+          "offered_at": "2026-10-16T14:15:00.000Z"
+        },
+        {
+          "priest_id": 11,
+          "offered_at": "2026-10-16T14:30:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "requester_id": 9,
+      "responder_id": 2,
+      "booking_type": "direct_booking",
+      "service_type": "Holy Mass & Adoration",
+      "datetime": "2026-10-16T20:45:35.015Z",
+      "datetime_end": "2026-10-16T21:45:35.015Z",
+      "location": "St. Anne’s Convent Chapel, Royapettah",
+      "latitude": 13.0524,
+      "longitude": 80.2508,
+      "language": "Tamil",
+      "honorarium": "Standard Stipend",
+      "notes": "Community annual feast day celebration. Vestments available in sacristy.",
+      "status": "accepted",
+      "applicants": [],
+      "created_at": "2026-10-16T18:45:35.016Z"
+    },
+    {
+      "id": 9,
+      "requester_id": 10,
+      "responder_id": 2,
+      "booking_type": "direct_booking",
+      "service_type": "Holy Mass",
+      "datetime": "2026-10-17T04:30:00.000Z",
+      "datetime_end": "2026-10-17T05:30:00.000Z",
+      "location": "Little Sisters of the Poor Chapel, Chetpet",
+      "latitude": 13.0732,
+      "longitude": 80.2412,
+      "language": "English",
+      "honorarium": "Standard Stipend",
+      "notes": "Morning community mass for elderly residents.",
+      "status": "accepted",
+      "applicants": [],
+      "created_at": "2026-10-16T18:45:35.017Z"
+    },
+    {
+      "id": 11,
+      "requester_id": 9,
+      "responder_id": 8,
+      "booking_type": "direct_booking",
+      "service_type": "Holy Mass & Adoration",
+      "datetime": "2026-10-16T20:48:26.113Z",
+      "datetime_end": "2026-10-16T21:48:26.113Z",
+      "location": "Auxilium Convent Chapel, George Town",
+      "latitude": 13.0885,
+      "longitude": 80.2825,
+      "language": "Tamil",
+      "honorarium": "Standard Stipend",
+      "notes": "Community patronal feast mass. Vestments and mass kit ready in sacristy.",
+      "status": "accepted",
+      "applicants": [],
+      "created_at": "2026-10-16T18:48:26.114Z"
+    },
+    {
+      "id": 12,
+      "requester_id": 10,
+      "responder_id": 8,
+      "booking_type": "direct_booking",
+      "service_type": "Holy Mass",
+      "datetime": "2026-10-17T04:30:00.000Z",
+      "datetime_end": "2026-10-17T05:30:00.000Z",
+      "location": "St. Joseph Convent, Perambur",
+      "latitude": 13.1095,
+      "longitude": 80.2435,
+      "language": "English",
+      "honorarium": "Standard Stipend",
+      "notes": "First Friday community celebration with boarders.",
+      "status": "accepted",
+      "applicants": [],
+      "created_at": "2026-10-16T18:48:26.116Z"
     }
   ],
   "availability_slots": [
@@ -248,7 +536,7 @@
       "notes": "Unavailable / Personal Leave",
       "status": "busy",
       "created_at": "2026-10-09T19:56:14.074Z",
-      "updated_at": "2026-10-09T19:56:23.841Z"
+      "updated_at": null
     },
     {
       "id": 8,
@@ -261,7 +549,8 @@
       ],
       "notes": "Unavailable / Personal Leave",
       "status": "busy",
-      "created_at": "2026-10-09T19:56:23.841Z"
+      "created_at": "2026-10-09T19:56:23.841Z",
+      "updated_at": null
     },
     {
       "id": 9,
@@ -274,7 +563,8 @@
       ],
       "notes": "Unavailable / Personal Leave",
       "status": "busy",
-      "created_at": "2026-10-09T19:56:23.841Z"
+      "created_at": "2026-10-09T19:56:23.841Z",
+      "updated_at": null
     },
     {
       "id": 10,
@@ -287,7 +577,8 @@
       ],
       "notes": "Unavailable / Personal Leave",
       "status": "busy",
-      "created_at": "2026-10-09T19:56:31.206Z"
+      "created_at": "2026-10-09T19:56:31.206Z",
+      "updated_at": null
     },
     {
       "id": 11,
@@ -299,8 +590,9 @@
         "English"
       ],
       "notes": "Unavailable / Personal Leave",
-      "status": "busy",
-      "created_at": "2026-10-09T19:58:07.119Z"
+      "status": "booked",
+      "created_at": "2026-10-09T19:58:07.119Z",
+      "updated_at": null
     },
     {
       "id": 12,
@@ -313,7 +605,8 @@
       ],
       "notes": "Unavailable / Personal Leave",
       "status": "busy",
-      "created_at": "2026-10-09T19:58:07.119Z"
+      "created_at": "2026-10-09T19:58:07.119Z",
+      "updated_at": null
     },
     {
       "id": 13,
@@ -326,7 +619,8 @@
       ],
       "notes": "Unavailable / Personal Leave",
       "status": "busy",
-      "created_at": "2026-10-09T19:58:07.119Z"
+      "created_at": "2026-10-09T19:58:07.119Z",
+      "updated_at": null
     },
     {
       "id": 14,
@@ -339,7 +633,8 @@
       ],
       "notes": "Unavailable / Personal Leave",
       "status": "busy",
-      "created_at": "2026-10-09T19:58:07.119Z"
+      "created_at": "2026-10-09T19:58:07.119Z",
+      "updated_at": null
     },
     {
       "id": 15,
@@ -352,7 +647,8 @@
       ],
       "notes": "Unavailable / Personal Leave",
       "status": "busy",
-      "created_at": "2026-10-09T19:58:07.119Z"
+      "created_at": "2026-10-09T19:58:07.119Z",
+      "updated_at": null
     },
     {
       "id": 16,
@@ -365,7 +661,8 @@
       ],
       "notes": "Unavailable / Personal Leave",
       "status": "busy",
-      "created_at": "2026-10-09T19:58:19.269Z"
+      "created_at": "2026-10-09T19:58:19.269Z",
+      "updated_at": null
     },
     {
       "id": 17,
@@ -378,7 +675,8 @@
       ],
       "notes": "Unavailable / Personal Leave",
       "status": "busy",
-      "created_at": "2026-10-09T19:58:19.269Z"
+      "created_at": "2026-10-09T19:58:19.269Z",
+      "updated_at": null
     },
     {
       "id": 18,
@@ -391,7 +689,8 @@
       ],
       "notes": "Unavailable / Personal Leave",
       "status": "busy",
-      "created_at": "2026-10-09T19:58:19.270Z"
+      "created_at": "2026-10-09T19:58:19.270Z",
+      "updated_at": null
     },
     {
       "id": 19,
@@ -404,7 +703,8 @@
       ],
       "notes": "Unavailable / Personal Leave",
       "status": "busy",
-      "created_at": "2026-10-09T19:58:19.270Z"
+      "created_at": "2026-10-09T19:58:19.270Z",
+      "updated_at": null
     },
     {
       "id": 20,
@@ -417,7 +717,8 @@
       ],
       "notes": "Unavailable / Personal Leave",
       "status": "busy",
-      "created_at": "2026-10-09T19:58:19.270Z"
+      "created_at": "2026-10-09T19:58:19.270Z",
+      "updated_at": null
     },
     {
       "id": 21,
@@ -430,7 +731,8 @@
       ],
       "notes": "Unavailable / Personal Leave",
       "status": "busy",
-      "created_at": "2026-10-09T20:01:05.733Z"
+      "created_at": "2026-10-09T20:01:05.733Z",
+      "updated_at": null
     }
   ]
 }
