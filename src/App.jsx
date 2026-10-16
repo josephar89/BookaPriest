@@ -12,7 +12,7 @@ export default function App() {
   const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Register Form States (Diocesan & Religious Clergy)
-  const [regTitle, setRegTitle] = useState(''); // mandatory choice: 'Fr.', 'Br.', 'Sr.'
+  const [regTitle, setRegTitle] = useState(''); // mandatory choice: 'Fr.' or 'Sr.'
   const [regName, setRegName] = useState('');
   const [regCongregationAbbr, setRegCongregationAbbr] = useState('');
   const [regMobile, setRegMobile] = useState('');
@@ -258,17 +258,6 @@ export default function App() {
     'Society of the Divine Word (SVD)',
     'Vincentians / Congregation of the Mission (CM)',
     'Other Religious Congregation'
-  ];
-
-  const BROTHERS_CONGREGATIONS = [
-    'Order of Friars Minor Capuchin (OFM Cap)',
-    'Montfort Brothers of St. Gabriel (SG)',
-    'Christian Brothers (CFC)',
-    'Franciscan Brothers of the Blessed Sacrament (OSF)',
-    'Salesians of Don Bosco (SDB)',
-    'Society of Jesus / Jesuit Brother (SJ)',
-    'Society of the Divine Word (SVD)',
-    'Other Religious Brothers Congregation'
   ];
 
   const SISTERS_CONGREGATIONS = [
@@ -539,7 +528,7 @@ export default function App() {
   const handleRegister = async (e) => {
     e.preventDefault();
     if (!regTitle) {
-      showFeedback('error', 'Please choose your clerical status (Fr., Br., or Sr.).');
+      showFeedback('error', 'Please choose your clerical status (Fr. or Sr.).');
       return;
     }
     if (!regName.trim()) {
@@ -556,7 +545,7 @@ export default function App() {
         return;
       }
     } else {
-      // Br. or Sr.
+      // Sr. (Sister)
       if (!regOrder.trim()) {
         showFeedback('error', 'Please enter your Congregation Name.');
         return;
@@ -592,7 +581,7 @@ export default function App() {
           mobile: getCanonicalMobile(regMobile),
           email: regEmail,
           password: regPassword,
-          clergy_type: regTitle === 'Fr.' ? regClergyType : (regTitle === 'Br.' ? 'religious' : 'convent'),
+          clergy_type: regTitle === 'Fr.' ? regClergyType : 'convent',
           religious_order: (regTitle === 'Fr.' && regClergyType === 'diocesan') ? null : regOrder,
           diocese_province: (regTitle === 'Fr.' && regClergyType === 'diocesan') ? regDiocese : '',
           residence_name: regResidenceName,
@@ -623,10 +612,10 @@ export default function App() {
   // Open Profile Edit Modal populated with current user values
   const openProfileModal = () => {
     if (!user) return;
-    const initialTitle = user.title || (user.name?.startsWith('Br.') ? 'Br.' : (user.clergy_type === 'convent' || user.clergy_type === 'convent_sister' ? 'Sr.' : 'Fr.'));
+    const initialTitle = user.title || (user.clergy_type === 'convent' || user.clergy_type === 'convent_sister' ? 'Sr.' : 'Fr.');
     setEditTitle(initialTitle);
     // Clean raw name in input box so user edits clean given name
-    const rawClean = (user.name || '').replace(/^(Rev\.\s*|Fr\.\s*|Br\.\s*|Sr\.\s*)+/i, '');
+    const rawClean = (user.name || '').replace(/^(Rev\.\s*|Fr\.\s*|Sr\.\s*)+/i, '');
     const abbr = user.congregation_abbr || '';
     const cleanNoAbbr = abbr ? rawClean.replace(new RegExp(`\\s+${abbr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'), '').trim() : rawClean.trim();
     setEditName(cleanNoAbbr);
@@ -675,7 +664,7 @@ export default function App() {
           congregation_abbr: (editTitle === 'Fr.' && editClergyType === 'diocesan') ? '' : editCongregationAbbr.trim(),
           mobile: getCanonicalMobile(editMobile),
           email: editEmail,
-          clergy_type: editTitle === 'Fr.' ? editClergyType : (editTitle === 'Br.' ? 'religious' : 'convent'),
+          clergy_type: editTitle === 'Fr.' ? editClergyType : 'convent',
           religious_order: (editTitle === 'Fr.' && editClergyType === 'diocesan') ? null : editOrder,
           diocese_province: (editTitle === 'Fr.' && editClergyType === 'diocesan') ? editDiocese : '',
           residence_name: editResidenceName,
@@ -986,7 +975,7 @@ export default function App() {
           mobile: `+91${cleanMob.slice(-10)}`,
           email: '',
           password: onboardPassword || 'Jesus@123',
-          clergy_type: onboardTitle === 'Sr.' ? 'convent' : (onboardTitle === 'Br.' ? 'religious' : onboardClergyType),
+          clergy_type: onboardTitle === 'Sr.' ? 'convent' : onboardClergyType,
           religious_order: (onboardTitle === 'Fr.' && onboardClergyType === 'diocesan') ? null : onboardOrder,
           diocese_province: (onboardTitle === 'Fr.' && onboardClergyType === 'diocesan') ? onboardDiocese : '',
           residence_name: onboardResidenceName,
@@ -1154,7 +1143,7 @@ export default function App() {
                 <span>⛪</span> Canonical Vetting & Authenticity
               </h3>
               <p style={{ margin: 0 }}>
-                Every profile registered as a Priest (Fr.), Sister (Sr.), or Brother (Br.) is cross-checked against diocesan directories or religious congregational registries to preserve sacred liturgical trust and protect communities from unauthorized ministry.
+                Every profile registered as a Priest (Fr.) or Sister (Sr.) is cross-checked against diocesan directories or religious congregational registries to preserve sacred liturgical trust and protect communities from unauthorized ministry.
               </p>
             </div>
           </div>
@@ -1329,11 +1318,11 @@ export default function App() {
                   <span>Select Your Clerical Status *</span>
                   {regTitle && (
                     <span style={{ fontSize: '0.72rem', color: '#16A34A', fontWeight: 600 }}>
-                      ✓ Selected: {regTitle === 'Fr.' ? 'Priest' : regTitle === 'Sr.' ? 'Sister' : 'Brother'}
+                      ✓ Selected: {regTitle === 'Fr.' ? 'Priest (Fr.)' : 'Sister (Sr.)'}
                     </span>
                   )}
                 </label>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.65rem' }}>
                   {/* 1. PRIEST (Fr.) */}
                   <button
                     type="button"
@@ -1347,7 +1336,7 @@ export default function App() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '6px',
-                      padding: '0.75rem 0.4rem',
+                      padding: '0.85rem 0.5rem',
                       borderRadius: '10px',
                       border: regTitle === 'Fr.' ? '2px solid var(--accent-gold)' : '1.5px solid #E2E8F0',
                       background: regTitle === 'Fr.' ? '#FEFCE8' : '#FFFFFF',
@@ -1357,7 +1346,7 @@ export default function App() {
                       transition: 'all 0.2s ease'
                     }}
                   >
-                    <svg width="24" height="24" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="26" height="26" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M18 18 C18 24 30 24 30 18" />
                       <path d="M18 16.5 C16 16.5 16 19 18 19.5" />
                       <path d="M30 16.5 C32 16.5 32 19 30 19.5" />
@@ -1369,7 +1358,7 @@ export default function App() {
                       <path d="M28.5 26.5 C33 27 38 30 38 37" />
                       <line x1="24" y1="27.5" x2="24" y2="37" />
                     </svg>
-                    <span style={{ fontSize: '0.8rem', fontWeight: regTitle === 'Fr.' ? 700 : 600 }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: regTitle === 'Fr.' ? 700 : 600 }}>
                       Fr. (Priest)
                     </span>
                   </button>
@@ -1387,7 +1376,7 @@ export default function App() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '6px',
-                      padding: '0.75rem 0.4rem',
+                      padding: '0.85rem 0.5rem',
                       borderRadius: '10px',
                       border: regTitle === 'Sr.' ? '2px solid var(--accent-gold)' : '1.5px solid #E2E8F0',
                       background: regTitle === 'Sr.' ? '#FEFCE8' : '#FFFFFF',
@@ -1397,7 +1386,7 @@ export default function App() {
                       transition: 'all 0.2s ease'
                     }}
                   >
-                    <svg width="24" height="24" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="26" height="26" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                       <ellipse cx="24" cy="22.5" rx="4.8" ry="6" />
                       <path d="M19.2 18 C21 16.8 27 16.8 28.8 18" />
                       <path d="M17.5 19 C18 14 20.5 13 24 13 C27.5 13 30 14 30.5 19" />
@@ -1406,46 +1395,8 @@ export default function App() {
                       <path d="M19 28 C21 31.5 27 31.5 29 28" />
                       <path d="M18.5 34 C21.5 36.5 26.5 36.5 29.5 34" />
                     </svg>
-                    <span style={{ fontSize: '0.8rem', fontWeight: regTitle === 'Sr.' ? 700 : 600 }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: regTitle === 'Sr.' ? 700 : 600 }}>
                       Sr. (Sister)
-                    </span>
-                  </button>
-
-                  {/* 3. BROTHER (Br.) */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRegTitle('Br.');
-                      setRegClergyType('religious');
-                    }}
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      padding: '0.75rem 0.4rem',
-                      borderRadius: '10px',
-                      border: regTitle === 'Br.' ? '2px solid var(--accent-gold)' : '1.5px solid #E2E8F0',
-                      background: regTitle === 'Br.' ? '#FEFCE8' : '#FFFFFF',
-                      color: regTitle === 'Br.' ? '#854D0E' : '#334155',
-                      boxShadow: regTitle === 'Br.' ? '0 4px 12px rgba(202, 138, 4, 0.15)' : 'none',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    <svg width="24" height="24" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                      <ellipse cx="24" cy="22" rx="4.8" ry="5.8" />
-                      <path d="M20 18.5 C21.5 17.5 26.5 17.5 28 18.5" />
-                      <path d="M24 8 C16 8 15 15 15 23 C15 26 16.5 28 19 29.5" />
-                      <path d="M24 8 C32 8 33 15 33 23 C33 26 31.5 28 29 29.5" />
-                      <path d="M19 29.5 C21 31 27 31 29 29.5" />
-                      <path d="M18 31 C15 32 10 34 10 39" />
-                      <path d="M30 31 C33 32 38 34 38 39" />
-                      <path d="M14 36 C18 38 30 38 34 36" />
-                    </svg>
-                    <span style={{ fontSize: '0.8rem', fontWeight: regTitle === 'Br.' ? 700 : 600 }}>
-                      Br. (Brother)
                     </span>
                   </button>
                 </div>
@@ -1460,7 +1411,7 @@ export default function App() {
                   <span
                     className="input-prefix-badge"
                     onClick={() => setShowTitlePickerModal(true)}
-                    title="Tap to change title (Fr. / Sr. / Br.)"
+                    title="Tap to toggle title (Fr. / Sr.)"
                     style={{ cursor: 'pointer', paddingRight: '0.45rem', userSelect: 'none', color: regTitle ? '#0F172A' : '#94A3B8', fontWeight: 700 }}
                   >
                     {regTitle || 'Select Title'} <span style={{ fontSize: '0.72rem', color: '#64748B', marginLeft: '1px' }}>▾</span>
@@ -1612,43 +1563,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* BRANCH 2: BROTHER (Br.) -> Religious Congregation + Abbreviation */}
-              {regTitle === 'Br.' && (
-                <div className="form-row">
-                  <div className="form-group" style={{ flex: 2 }}>
-                    <label className="form-label">Congregation Name</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="e.g. Order of Friars Minor Capuchin, Montfort Brothers"
-                      value={regOrder}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setRegOrder(val);
-                        const autoAbbr = extractAbbr(val);
-                        if (autoAbbr) setRegCongregationAbbr(autoAbbr);
-                      }}
-                      required
-                    />
-                  </div>
-                  <div className="form-group" style={{ flex: 1 }}>
-                    <label className="form-label">Abbreviation (Suffix)</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="e.g. OFM Cap, SG, CFC"
-                      value={regCongregationAbbr}
-                      onChange={(e) => setRegCongregationAbbr(e.target.value)}
-                      required
-                    />
-                    <span style={{ fontSize: '0.7rem', color: '#64748B', display: 'block', marginTop: '0.25rem', lineHeight: '1.3' }}>
-                      e.g. OFM Cap, SG, CFC (appears after your name)
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {/* BRANCH 3: SISTER (Sr.) -> Congregation + Abbreviation */}
+              {/* BRANCH 2: SISTER (Sr.) -> Congregation + Abbreviation */}
               {regTitle === 'Sr.' && (
                 <div className="form-row">
                   <div className="form-group" style={{ flex: 2 }}>
@@ -1761,7 +1676,7 @@ export default function App() {
                   <input
                     type="email"
                     className="form-input"
-                    placeholder={regTitle === 'Sr.' ? 'sister@gmail.com' : regTitle === 'Br.' ? 'brother@gmail.com' : 'father@gmail.com'}
+                    placeholder={regTitle === 'Sr.' ? 'sister@gmail.com' : 'father@gmail.com'}
                     value={regEmail}
                     onChange={(e) => setRegEmail(e.target.value)}
                   />
@@ -4093,17 +4008,16 @@ export default function App() {
                   <label className="form-label">
                     <span>NAME *</span>
                     <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 'normal', marginLeft: '6px' }}>
-                      (Tap title badge to change Fr. / Sr. / Br.)
+                      (Tap title badge to switch Fr. / Sr.)
                     </span>
                   </label>
                   <div className="input-prefix-group" style={{ cursor: 'text' }}>
                     <span
                       className="input-prefix-badge"
                       onClick={() => {
-                        // Cycle through or open title picker
                         setShowTitlePickerModal(true);
                       }}
-                      title="Tap to change clerical status (Fr. / Sr. / Br.)"
+                      title="Tap to switch clerical status (Fr. / Sr.)"
                       style={{ cursor: 'pointer', paddingRight: '0.45rem', userSelect: 'none', color: '#0F172A', fontWeight: 800 }}
                     >
                       {editTitle || 'Fr.'} <span style={{ fontSize: '0.72rem', color: '#64748B', marginLeft: '1px' }}>▾</span>
@@ -4192,38 +4106,7 @@ export default function App() {
                   </div>
                 )}
 
-                {/* BRANCH 2: BROTHER (Br.) -> Congregation + Abbreviation */}
-                {editTitle === 'Br.' && (
-                  <div className="form-row">
-                    <div className="form-group" style={{ flex: 2 }}>
-                      <label className="form-label">CONGREGATION NAME</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        value={editOrder}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setEditOrder(val);
-                          const autoAbbr = extractAbbr(val);
-                          if (autoAbbr) setEditCongregationAbbr(autoAbbr);
-                        }}
-                        placeholder="e.g. Order of Friars Minor Capuchin, Montfort Brothers"
-                      />
-                    </div>
-                    <div className="form-group" style={{ flex: 1 }}>
-                      <label className="form-label">ABBREV. SUFFIX</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="e.g. OFM Cap, SG"
-                        value={editCongregationAbbr}
-                        onChange={(e) => setEditCongregationAbbr(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* BRANCH 3: SISTER (Sr.) -> Congregation + Abbreviation */}
+                {/* BRANCH 2: SISTER (Sr.) -> Congregation + Abbreviation */}
                 {editTitle === 'Sr.' && (
                   <div className="form-row">
                     <div className="form-group" style={{ flex: 2 }}>
@@ -4276,7 +4159,7 @@ export default function App() {
                     <input
                       type="email"
                       className="form-input"
-                      placeholder={editTitle === 'Sr.' ? 'sister@gmail.com' : editTitle === 'Br.' ? 'brother@gmail.com' : 'father@gmail.com'}
+                      placeholder={editTitle === 'Sr.' ? 'sister@gmail.com' : 'father@gmail.com'}
                       value={editEmail}
                       onChange={(e) => setEditEmail(e.target.value)}
                     />
@@ -4494,7 +4377,7 @@ export default function App() {
                   {/* Title Toggle: Sister / Priest / Brother */}
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">CLERICAL STATUS</label>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.5rem' }}>
                       <button
                         type="button"
                         className={`btn ${onboardTitle === 'Sr.' ? 'btn-primary' : 'btn-secondary'}`}
@@ -4516,17 +4399,6 @@ export default function App() {
                         style={{ fontSize: '0.82rem', padding: '0.55rem 0.4rem', fontWeight: 700 }}
                       >
                         ✝️ Fr. (Priest)
-                      </button>
-                      <button
-                        type="button"
-                        className={`btn ${onboardTitle === 'Br.' ? 'btn-primary' : 'btn-secondary'}`}
-                        onClick={() => {
-                          setOnboardTitle('Br.');
-                          setOnboardClergyType('religious');
-                        }}
-                        style={{ fontSize: '0.82rem', padding: '0.55rem 0.4rem', fontWeight: 700 }}
-                      >
-                        🤝 Br. (Brother)
                       </button>
                     </div>
                   </div>
@@ -5097,31 +4969,6 @@ export default function App() {
                   <path d="M18.5 34 C21.5 36.5 26.5 36.5 29.5 34" />
                 </svg>
                 <span>Sr. (Sister)</span>
-              </button>
-
-              {/* 3. BROTHER (Br.): Traced from Reference - Monk/Friar with Hooded Cowl & Scapular */}
-              <button
-                type="button"
-                className={`clerical-status-btn ${(showProfileModal ? editTitle : regTitle) === 'Br.' ? 'selected' : ''}`}
-                onClick={() => {
-                  setRegTitle('Br.');
-                  setEditTitle('Br.');
-                  setRegClergyType('religious');
-                  setEditClergyType('religious');
-                  setShowTitlePickerModal(false);
-                }}
-              >
-                <svg width="28" height="28" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                  <ellipse cx="24" cy="22" rx="4.8" ry="5.8" />
-                  <path d="M20 18.5 C21.5 17.5 26.5 17.5 28 18.5" />
-                  <path d="M24 8 C16 8 15 15 15 23 C15 26 16.5 28 19 29.5" />
-                  <path d="M24 8 C32 8 33 15 33 23 C33 26 31.5 28 29 29.5" />
-                  <path d="M19 29.5 C21 31 27 31 29 29.5" />
-                  <path d="M18 31 C15 32 10 34 10 39" />
-                  <path d="M30 31 C33 32 38 34 38 39" />
-                  <path d="M14 36 C18 38 30 38 34 36" />
-                </svg>
-                <span>Br. (Brother)</span>
               </button>
             </div>
 
