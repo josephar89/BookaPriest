@@ -51,6 +51,19 @@ class RelationalDatabase {
       bookings: [],
       availability_slots: []
     };
+    if (fs.existsSync(DB_FILE)) {
+      try {
+        const fileContent = fs.readFileSync(DB_FILE, 'utf8');
+        const parsed = JSON.parse(fileContent);
+        this.data = {
+          users: parsed.users || [],
+          bookings: parsed.bookings || [],
+          availability_slots: parsed.availability_slots || []
+        };
+      } catch (e) {
+        console.error('Error parsing local db cache:', e);
+      }
+    }
     this.init();
   }
 
@@ -110,18 +123,25 @@ class RelationalDatabase {
       const slotsRs = await tursoClient.execute('SELECT * FROM availability_slots');
       const bookingsRs = await tursoClient.execute('SELECT * FROM bookings');
 
-      this.data.users = usersRs.rows.map(r => ({
-        ...r,
-        id: Number(r.id),
-        title: r.title || (r.clergy_type === 'convent' || r.clergy_type === 'convent_sister' ? 'Sr.' : 'Fr.'),
-        congregation_abbr: r.congregation_abbr || '',
-        is_verified: Number(r.is_verified),
-        is_admin: Number(r.is_admin),
-        max_travel_km: Number(r.max_travel_km || 25),
-        latitude: r.latitude !== null ? Number(r.latitude) : null,
-        longitude: r.longitude !== null ? Number(r.longitude) : null,
-        profile_photo: r.profile_photo || null
-      }));
+      // Merge Turso users with local users (keeping local test users if not in Turso)
+      const tursoUserIds = new Set(usersRs.rows.map(r => Number(r.id)));
+      const localUsersToKeep = (this.data.users || []).filter(u => !tursoUserIds.has(Number(u.id)));
+
+      this.data.users = [
+        ...usersRs.rows.map(r => ({
+          ...r,
+          id: Number(r.id),
+          title: r.title || (r.clergy_type === 'convent' || r.clergy_type === 'convent_sister' ? 'Sr.' : 'Fr.'),
+          congregation_abbr: r.congregation_abbr || '',
+          is_verified: Number(r.is_verified),
+          is_admin: Number(r.is_admin),
+          max_travel_km: Number(r.max_travel_km || 25),
+          latitude: r.latitude !== null ? Number(r.latitude) : null,
+          longitude: r.longitude !== null ? Number(r.longitude) : null,
+          profile_photo: r.profile_photo || null
+        })),
+        ...localUsersToKeep
+      ];
 
       this.data.availability_slots = slotsRs.rows.map(r => ({
         ...r,
@@ -130,18 +150,25 @@ class RelationalDatabase {
         languages: typeof r.languages === 'string' ? JSON.parse(r.languages || '[]') : r.languages
       }));
 
-      this.data.bookings = bookingsRs.rows.map(r => {
-        const localExisting = (this.data.bookings || []).find(b => b.id === Number(r.id));
-        return {
-          ...r,
-          id: Number(r.id),
-          requester_id: Number(r.requester_id),
-          responder_id: r.responder_id !== null ? Number(r.responder_id) : null,
-          latitude: r.latitude !== null ? Number(r.latitude) : null,
-          longitude: r.longitude !== null ? Number(r.longitude) : null,
-          applicants: localExisting ? (localExisting.applicants || []) : (r.applicants ? JSON.parse(r.applicants) : [])
-        };
-      });
+      // Merge Turso bookings with local bookings (keeping local test bookings if not in Turso)
+      const tursoBookingIds = new Set(bookingsRs.rows.map(r => Number(r.id)));
+      const localBookingsToKeep = (this.data.bookings || []).filter(b => !tursoBookingIds.has(Number(b.id)));
+
+      this.data.bookings = [
+        ...bookingsRs.rows.map(r => {
+          const localExisting = (this.data.bookings || []).find(b => b.id === Number(r.id));
+          return {
+            ...r,
+            id: Number(r.id),
+            requester_id: Number(r.requester_id),
+            responder_id: r.responder_id !== null ? Number(r.responder_id) : null,
+            latitude: r.latitude !== null ? Number(r.latitude) : null,
+            longitude: r.longitude !== null ? Number(r.longitude) : null,
+            applicants: localExisting ? (localExisting.applicants || []) : (r.applicants ? JSON.parse(r.applicants) : [])
+          };
+        }),
+        ...localBookingsToKeep
+      ];
 
       this.saveLocal();
       console.log(`☁️ Synced from Turso Cloud: ${this.data.users.length} users, ${this.data.availability_slots.length} slots, ${this.data.bookings.length} bookings.`);
@@ -643,6 +670,26 @@ class RelationalDatabase {
     return this.data.bookings.find(b => b.id === parseInt(id)) || null;
   }
 
+  // Check if a priest has an existing accepted/locked booking that overlaps with the given time window
+  checkPriestTimeConflict(priestId, startIso, endIso, excludeBookingId = null) {
+    const pId = parseInt(priestId);
+    const startMs = new Date(startIso).getTime();
+    // Default celebration duration is 1 hour (3600000ms) if end time is not provided
+    const endMs = endIso ? new Date(endIso).getTime() : startMs + (60 * 60 * 1000);
+
+    return this.data.bookings.find(b => {
+      if (excludeBookingId && b.id === parseInt(excludeBookingId)) return false;
+      if (b.status !== 'accepted') return false;
+      if (b.responder_id !== pId) return false;
+
+      const bStartMs = new Date(b.datetime).getTime();
+      const bEndMs = b.datetime_end ? new Date(b.datetime_end).getTime() : bStartMs + (60 * 60 * 1000);
+
+      // Overlap condition: startA < endB && endA > startB
+      return startMs < bEndMs && endMs > bStartMs;
+    }) || null;
+  }
+
   async createBooking(booking) {
     const nextId = this.data.bookings.reduce((max, b) => b.id > max ? b.id : max, 0) + 1;
     const newBooking = {
@@ -709,6 +756,16 @@ class RelationalDatabase {
     const pId = parseInt(priestId);
     if (!booking.applicants) booking.applicants = [];
 
+    // Check if priest already has an accepted/locked celebration clashing with this request's time
+    const conflict = this.checkPriestTimeConflict(pId, booking.datetime, booking.datetime_end, booking.id);
+    if (conflict) {
+      const conflictDate = conflict.datetime.split('T')[0];
+      const conflictTime = conflict.datetime.split('T')[1]?.slice(0, 5) || '';
+      return {
+        error: `Schedule conflict: You are already confirmed for ${conflict.service_type || 'another celebration'} on ${conflictDate} at ${conflictTime}.`
+      };
+    }
+
     const alreadyApplied = booking.applicants.some(
       a => (typeof a === 'object' ? a.priest_id : a) === pId
     );
@@ -726,6 +783,28 @@ class RelationalDatabase {
     return { success: true, booking };
   }
 
+  // Priest withdraws their tentative offer before confirmation
+  async withdrawBookingOffer(bookingId, priestId) {
+    const booking = this.data.bookings.find(b => b.id === parseInt(bookingId));
+    if (!booking) return { error: 'Booking request not found.' };
+    if (booking.status !== 'pending') return { error: 'Cannot withdraw from an already confirmed celebration.' };
+
+    const pId = parseInt(priestId);
+    if (!booking.applicants) booking.applicants = [];
+
+    const initialLength = booking.applicants.length;
+    booking.applicants = booking.applicants.filter(
+      a => (typeof a === 'object' ? a.priest_id : a) !== pId
+    );
+
+    if (booking.applicants.length === initialLength) {
+      return { error: 'You have not offered for this ministry.' };
+    }
+
+    this.saveLocal();
+    return { success: true, booking };
+  }
+
   // Requester chooses and confirms a specific priest among those who offered
   async confirmApplicant(bookingId, requesterId, chosenPriestId) {
     const booking = this.data.bookings.find(b => b.id === parseInt(bookingId));
@@ -738,8 +817,20 @@ class RelationalDatabase {
     }
 
     const pId = parseInt(chosenPriestId);
+
+    // Verify priest has not since locked another clashing slot
+    const conflict = this.checkPriestTimeConflict(pId, booking.datetime, booking.datetime_end, booking.id);
+    if (conflict) {
+      const conflictDate = conflict.datetime.split('T')[0];
+      const conflictTime = conflict.datetime.split('T')[1]?.slice(0, 5) || '';
+      return {
+        error: `Cannot confirm: Father is already locked for ${conflict.service_type || 'another celebration'} on ${conflictDate} at ${conflictTime}.`
+      };
+    }
+
     booking.responder_id = pId;
     booking.status = 'accepted';
+    booking.confirmed_at = new Date().toISOString();
 
     // Mark the confirmed priest as booked on this date
     const bookingDate = booking.datetime.split('T')[0];

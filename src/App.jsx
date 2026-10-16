@@ -43,6 +43,12 @@ export default function App() {
   const [pendingUsers, setPendingUsers] = useState([]);
   const [myStatus, setMyStatus] = useState('available');
   const [requestsTab, setRequestsTab] = useState('open'); // 'open' (open to opt-in) vs 'review' (priests opted in, awaiting requester to lock) vs 'accepted' (locked/confirmed)
+  const [priestRolePerspective, setPriestRolePerspective] = useState('celebrate'); // 'celebrate' (Serve: ministry needs & offers) vs 'request' (Supply: needs Father posted)
+  const [priestFilterRadius, setPriestFilterRadius] = useState(5); // 5 km default, up to 100 or 'all' km
+  const [priestSortBy, setPriestSortBy] = useState('date_asc'); // 'date_asc', 'distance_asc', 'recent_posted', 'date_desc'
+  const [priestFilterService, setPriestFilterService] = useState('all'); // 'all', 'mass', 'recollection', 'feast', etc.
+  const [priestFilterLanguage, setPriestFilterLanguage] = useState('all'); // 'all', 'Tamil', 'English', etc.
+  const [showPriestFilterDrawer, setShowPriestFilterDrawer] = useState(false);
   const [myUnavailableSlots, setMyUnavailableSlots] = useState([]);
   const [calMonthOffset, setCalMonthOffset] = useState(0); // 0 = current month, 1 = next month, etc.
 
@@ -51,6 +57,9 @@ export default function App() {
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [showDirectConfirmModal, setShowDirectConfirmModal] = useState(null); // selected priest object
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false); // Notifications & Timeline modal
+  const [showCalendarModal, setShowCalendarModal] = useState(false); // Monthly Booking Calendar Modal
+  const [calendarSelectedDate, setCalendarSelectedDate] = useState(null); // Selected date string 'YYYY-MM-DD'
   const [showTitlePickerModal, setShowTitlePickerModal] = useState(false);
   const [showPhoneInfoTip, setShowPhoneInfoTip] = useState(false);
   const [showPrivacyPage, setShowPrivacyPage] = useState(false);
@@ -197,7 +206,9 @@ export default function App() {
   const [bookingTimeEnd, setBookingTimeEnd] = useState('07:30');
   const [bookingLanguage, setBookingLanguage] = useState('Tamil');
   const [bookingHonorarium, setBookingHonorarium] = useState('');
-  const [bookingServiceType, setBookingServiceType] = useState('Holy Mass');
+  const [bookingServiceType, setBookingServiceType] = useState('Holy Mass (Parish / Convent)');
+  const [bookingServiceCategory, setBookingServiceCategory] = useState('core'); // 'core' vs 'special'
+  const [bookingCustomServiceType, setBookingCustomServiceType] = useState('');
   const [bookingNotes, setBookingNotes] = useState('');
 
   // Set Availability Form Fields (Date Range & Times)
@@ -211,16 +222,30 @@ export default function App() {
   const [confirmLocation, setConfirmLocation] = useState('');
   const [confirmLanguage, setConfirmLanguage] = useState('English');
   const [confirmHonorarium, setConfirmHonorarium] = useState('1000');
-  const [confirmServiceType, setConfirmServiceType] = useState('Holy Mass');
+  const [confirmServiceType, setConfirmServiceType] = useState('Holy Mass (Parish / Convent)');
+  const [confirmServiceCategory, setConfirmServiceCategory] = useState('core');
+  const [confirmCustomServiceType, setConfirmCustomServiceType] = useState('');
 
-  const SERVICE_TYPES = [
-    'Holy Mass (Convent / Parish)',
-    'Monthly Recollection Talk (Half Day)',
-    'Annual Retreat Preacher (3-5 Days)',
-    'Solemn Feast Day Mass / Jubilee',
-    'Confessions / Penitential Service',
-    'Special Eucharistic Adoration'
+  const CORE_SERVICES = [
+    'Holy Mass (Parish / Convent)',
+    'Substation Mass',
+    'Concelebration (Feasts & Events)',
+    'Marriage Mass',
+    'Funeral / Requiem Mass',
+    'Confession Ministry',
+    'Monthly Recollection Talk',
+    'Annual Retreat Preacher'
   ];
+
+  const SPECIAL_SERVICES = [
+    'House Blessing',
+    'Easter Blessing',
+    'Christmas Carols',
+    'Communion to Sick',
+    'Others'
+  ];
+
+  const SERVICE_TYPES = [...CORE_SERVICES, ...SPECIAL_SERVICES];
 
   const RELIGIOUS_ORDERS = [
     'Salesians of Don Bosco (SDB)',
@@ -324,6 +349,15 @@ export default function App() {
       try {
         const parsed = JSON.parse(cached);
         setUser(parsed);
+        // Default landing tab based on ecclesiastical role:
+        // - Diocesan priest: 'my_requests' (My Posts)
+        // - Religious priest: 'open' (Ministry Requests)
+        // - Sisters & Brothers: 'open' (Ministry Needs)
+        if (parsed.title === 'Fr.' && parsed.clergy_type === 'diocesan') {
+          setRequestsTab('my_requests');
+        } else {
+          setRequestsTab('open');
+        }
         loadDashboardData(parsed);
       } catch (e) {
         localStorage.removeItem('bookapriest_user');
@@ -487,7 +521,12 @@ export default function App() {
       } else {
         localStorage.setItem('bookapriest_user', JSON.stringify(data.user));
         setUser(data.user);
-        showFeedback('success', `Welcome back, Fr. ${data.user.name}!`);
+        if (data.user.title === 'Fr.' && data.user.clergy_type === 'diocesan') {
+          setRequestsTab('my_requests');
+        } else {
+          setRequestsTab('open');
+        }
+        showFeedback('success', `Welcome back, ${data.user.title || ''} ${data.user.name}!`);
         loadDashboardData(data.user);
       }
     } catch (err) {
@@ -584,7 +623,8 @@ export default function App() {
   // Open Profile Edit Modal populated with current user values
   const openProfileModal = () => {
     if (!user) return;
-    setEditTitle(user.title || (user.clergy_type === 'convent' || user.clergy_type === 'convent_sister' ? 'Sr.' : 'Fr.'));
+    const initialTitle = user.title || (user.name?.startsWith('Br.') ? 'Br.' : (user.clergy_type === 'convent' || user.clergy_type === 'convent_sister' ? 'Sr.' : 'Fr.'));
+    setEditTitle(initialTitle);
     // Clean raw name in input box so user edits clean given name
     const rawClean = (user.name || '').replace(/^(Rev\.\s*|Fr\.\s*|Br\.\s*|Sr\.\s*)+/i, '');
     const abbr = user.congregation_abbr || '';
@@ -754,6 +794,10 @@ export default function App() {
       showFeedback('error', 'Date/Time and parish location are required.');
       return;
     }
+    const resolvedConfirmService = confirmServiceType === 'Others'
+      ? (confirmCustomServiceType.trim() || 'Other Ministry')
+      : confirmServiceType;
+
     setFormSubmitting(true);
     try {
       const res = await fetch('/api/bookings/confirm-call', {
@@ -765,14 +809,15 @@ export default function App() {
           location: confirmLocation,
           language: confirmLanguage,
           honorarium: confirmHonorarium,
-          service_type: confirmServiceType,
+          service_type: resolvedConfirmService,
           notes: 'Verbal booking confirmed via phone call'
         })
       });
       const data = await res.json();
       if (res.ok) {
-        showFeedback('success', `${confirmServiceType} with Fr. ${showDirectConfirmModal.priest_name} confirmed & locked!`);
+        showFeedback('success', `${resolvedConfirmService} with Fr. ${showDirectConfirmModal.priest_name} confirmed & locked!`);
         setShowDirectConfirmModal(null);
+        setConfirmCustomServiceType('');
         loadDashboardData();
       } else {
         showFeedback('error', data.error || 'Failed to confirm booking.');
@@ -792,6 +837,10 @@ export default function App() {
       return;
     }
 
+    const resolvedBookingService = bookingServiceType === 'Others'
+      ? (bookingCustomServiceType.trim() || 'Other Ministry')
+      : bookingServiceType;
+
     // Combine selected date and time for start and end
     const toDate = bookingEndDate || bookingDate;
     const formattedDatetime = `${bookingDate}T${bookingTimeStart}:00`;
@@ -808,7 +857,7 @@ export default function App() {
           datetime_end: formattedDatetimeEnd,
           language: bookingLanguage,
           honorarium: bookingHonorarium,
-          service_type: bookingServiceType,
+          service_type: resolvedBookingService,
           notes: bookingNotes
         })
       });
@@ -844,6 +893,26 @@ export default function App() {
         loadDashboardData();
       } else {
         showFeedback('error', data.error || 'Failed to respond to ministry need.');
+      }
+    } catch (err) {
+      showFeedback('error', 'Failed to communicate with server.');
+    }
+  };
+
+  // Priest withdraws tentative offer before confirmation
+  const handleWithdrawOffer = async (bookingId) => {
+    try {
+      const res = await fetch('/api/bookings/withdraw-offer', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ bookingId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showFeedback('success', 'Your offer to celebrate has been safely withdrawn.');
+        loadDashboardData();
+      } else {
+        showFeedback('error', data.error || 'Failed to withdraw offer.');
       }
     } catch (err) {
       showFeedback('error', 'Failed to communicate with server.');
@@ -960,6 +1029,36 @@ export default function App() {
       }
     }
     return { date, time };
+  };
+
+  // Helper to determine celebration urgency (Today / Tomorrow / In N days)
+  const getCelebrationUrgency = (isoString) => {
+    if (!isoString) return null;
+    const celebrationDate = new Date(isoString);
+    if (isNaN(celebrationDate.getTime())) return null;
+
+    const now = new Date();
+    // Midnight normalized dates
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfCelebration = new Date(celebrationDate.getFullYear(), celebrationDate.getMonth(), celebrationDate.getDate());
+
+    const diffDays = Math.round((startOfCelebration - startOfToday) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) {
+      // Check if happening right now or later today
+      const diffHours = (celebrationDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+      if (diffHours < -2) {
+        return { type: 'today_completed', label: 'Today (Concluded)', badgeClass: 'urgency-completed', isPulsing: false };
+      } else if (diffHours <= 1.5 && diffHours >= -1) {
+        return { type: 'today_imminent', label: 'Happening Now / Soon', badgeClass: 'urgency-imminent', isPulsing: true };
+      }
+      return { type: 'today', label: 'Today', badgeClass: 'urgency-today', isPulsing: true };
+    } else if (diffDays === 1) {
+      return { type: 'tomorrow', label: 'Tomorrow', badgeClass: 'urgency-tomorrow', isPulsing: false };
+    } else if (diffDays >= 2 && diffDays <= 3) {
+      return { type: 'upcoming', label: `In ${diffDays} days`, badgeClass: 'urgency-upcoming', isPulsing: false };
+    }
+    return null;
   };
 
   const getWhatsAppLink = (mobileNumber, messageText) => {
@@ -2062,173 +2161,6 @@ export default function App() {
           )}
         </div>
 
-        {/* --- INSTANT CLERICAL STATUS SELECTION LAYER PROMPT --- */}
-        {showTitlePickerModal && (
-          <div
-            className="modal-overlay"
-            style={{ zIndex: 9999 }}
-            onClick={() => setShowTitlePickerModal(false)}
-          >
-            <div
-              className="modal-container"
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                maxWidth: '440px',
-                padding: '2rem 1.75rem',
-                textAlign: 'center',
-                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-                border: '2px solid var(--papal-gold)',
-                background: '#FFFFFF',
-                position: 'relative'
-              }}
-            >
-              {/* Top-Right Dismissal Button */}
-              <button
-                type="button"
-                onClick={() => setShowTitlePickerModal(false)}
-                title="Close"
-                style={{
-                  position: 'absolute',
-                  top: '1rem',
-                  right: '1rem',
-                  background: '#F1F5F9',
-                  border: 'none',
-                  borderRadius: '50%',
-                  width: '32px',
-                  height: '32px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '1.1rem',
-                  color: '#64748B',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                ✕
-              </button>
-
-              {/* Catholic Church Header Icon */}
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
-                <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#F8FAFC', border: '1.5px solid var(--papal-gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0F172A" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                    {/* Cross at Steeple */}
-                    <line x1="12" y1="2" x2="12" y2="6" stroke="var(--papal-gold)" strokeWidth="2" />
-                    <line x1="10" y1="3.5" x2="14" y2="3.5" stroke="var(--papal-gold)" strokeWidth="2" />
-                    {/* Steeple roof */}
-                    <path d="M12 6 L7 11 L17 11 Z" fill="#E2E8F0" />
-                    {/* Church Body */}
-                    <rect x="6" y="11" width="12" height="11" rx="1" />
-                    {/* Arched Doorway */}
-                    <path d="M10 22 V16 C10 14.9 10.9 14 12 14 C13.1 14 14 14.9 14 16 V22" fill="#0F172A" />
-                  </svg>
-                </div>
-              </div>
-
-              <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0F172A', marginBottom: '0.35rem' }}>
-                Choose Your Clerical Status
-              </h3>
-              <p style={{ fontSize: '0.88rem', color: '#64748B', lineHeight: '1.4', marginBottom: '1.25rem' }}>
-                Select your title to continue.
-              </p>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                {/* 1. PRIEST (Fr.): Traced from Reference - Priest with Hair, Ears, Face, Roman Collar, and Cassock */}
-                <button
-                  type="button"
-                  className={`clerical-status-btn ${regTitle === 'Fr.' ? 'selected' : ''}`}
-                  onClick={() => {
-                    setRegTitle('Fr.');
-                    if (regClergyType === 'convent') setRegClergyType('religious');
-                    setShowTitlePickerModal(false);
-                  }}
-                >
-                  <svg width="28" height="28" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    {/* Head contour & chin */}
-                    <path d="M18 18 C18 24 30 24 30 18" />
-                    {/* Hair outline & ears */}
-                    <path d="M18 16.5 C16 16.5 16 19 18 19.5" />
-                    <path d="M30 16.5 C32 16.5 32 19 30 19.5" />
-                    <path d="M18 16 C16.5 13 18 8 24 8 C30 8 31.5 13 30 16" />
-                    <path d="M18 12.5 C20 13.5 22 13 24 12 C26 13 28 13.5 30 12.5" />
-                    {/* Roman Collar Neckband */}
-                    <path d="M20 23.5 L19.5 26.5 C19.5 28 28.5 28 28.5 26.5 L28 23.5" />
-                    {/* White Roman Collar Tab opening in center */}
-                    <rect x="22.2" y="24" width="3.6" height="3" rx="0.5" fill="none" stroke="currentColor" strokeWidth="2" />
-                    {/* Cassock Shoulders & Center Seam */}
-                    <path d="M19.5 26.5 C15 27 10 30 10 37" />
-                    <path d="M28.5 26.5 C33 27 38 30 38 37" />
-                    <line x1="24" y1="27.5" x2="24" y2="37" />
-                  </svg>
-                  <span>Fr. (Priest)</span>
-                </button>
-
-                {/* 2. SISTER (Sr.): Traced from Reference - Traditional Habit with Veil framing face & flowing wimple */}
-                <button
-                  type="button"
-                  className={`clerical-status-btn ${regTitle === 'Sr.' ? 'selected' : ''}`}
-                  onClick={() => {
-                    setRegTitle('Sr.');
-                    setRegClergyType('convent');
-                    setShowTitlePickerModal(false);
-                  }}
-                >
-                  <svg width="28" height="28" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    {/* Oval Face Contour */}
-                    <ellipse cx="24" cy="22.5" rx="4.8" ry="6" />
-                    {/* Inner Headband / Wimple across forehead */}
-                    <path d="M19.2 18 C21 16.8 27 16.8 28.8 18" />
-                    <path d="M17.5 19 C18 14 20.5 13 24 13 C27.5 13 30 14 30.5 19" />
-                    {/* Traditional Flowing Veil flowing down outer sides */}
-                    <path d="M24 7.5 C16.5 7.5 14 13 14 23 C14 30 10 37 10 40 L16 38 C16.5 35 17.5 31 18.5 29" />
-                    <path d="M24 7.5 C31.5 7.5 34 13 34 23 C34 30 38 37 38 40 L32 38 C31.5 35 30.5 31 29.5 29" />
-                    {/* Wimple Collar Curve below neck */}
-                    <path d="M19 28 C21 31.5 27 31.5 29 28" />
-                    <path d="M18.5 34 C21.5 36.5 26.5 36.5 29.5 34" />
-                  </svg>
-                  <span>Sr. (Sister)</span>
-                </button>
-
-                {/* 3. BROTHER (Br.): Traced from Reference - Monk/Friar with Hooded Cowl & Scapular */}
-                <button
-                  type="button"
-                  className={`clerical-status-btn ${regTitle === 'Br.' ? 'selected' : ''}`}
-                  onClick={() => {
-                    setRegTitle('Br.');
-                    setRegClergyType('religious');
-                    setShowTitlePickerModal(false);
-                  }}
-                >
-                  <svg width="28" height="28" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    {/* Rounded Inner Face Outline */}
-                    <ellipse cx="24" cy="22" rx="4.8" ry="5.8" />
-                    {/* Hair forehead line inside hood */}
-                    <path d="M20 18.5 C21.5 17.5 26.5 17.5 28 18.5" />
-                    {/* Outer Hood / Cowl curved arch framing head */}
-                    <path d="M24 8 C16 8 15 15 15 23 C15 26 16.5 28 19 29.5" />
-                    <path d="M24 8 C32 8 33 15 33 23 C33 26 31.5 28 29 29.5" />
-                    {/* Cowl Neck fold and draped shoulders */}
-                    <path d="M19 29.5 C21 31 27 31 29 29.5" />
-                    <path d="M18 31 C15 32 10 34 10 39" />
-                    <path d="M30 31 C33 32 38 34 38 39" />
-                    {/* Draped Scapular chest fold */}
-                    <path d="M14 36 C18 38 30 38 34 36" />
-                  </svg>
-                  <span>Br. (Brother)</span>
-                </button>
-              </div>
-
-              <button
-                type="button"
-                className="btn btn-link"
-                onClick={() => setShowTitlePickerModal(false)}
-                style={{ fontSize: '0.82rem', color: '#94A3B8', textDecoration: 'none', cursor: 'pointer', background: 'none', border: 'none' }}
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
@@ -2268,8 +2200,257 @@ export default function App() {
             </div>
           </button>
 
-          <button className="btn btn-secondary btn-sm" onClick={handleSignOut}>
-            🚪 Sign Out
+          {/* Monthly Booking Calendar Quick Access Button */}
+          <div className="header-notif-wrapper">
+            <button
+              type="button"
+              className="header-notif-btn"
+              onClick={() => {
+                const todayStr = new Date().toISOString().split('T')[0];
+                setCalendarSelectedDate(todayStr);
+                setCalMonthOffset(0);
+                setShowCalendarModal(true);
+              }}
+              title="Monthly Ministry & Booking Calendar"
+              aria-label="View monthly booking calendar"
+              style={{
+                borderColor: showCalendarModal ? '#2563EB' : '#E2E8F0',
+                background: showCalendarModal ? '#EFF6FF' : '#FFFFFF',
+                color: showCalendarModal ? '#1D4ED8' : '#334155'
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+              </svg>
+              {(() => {
+                // Count confirmed bookings for this priest/user in the current or upcoming schedule
+                const confirmedCount = bookings.filter(b => (b.status === 'accepted' || b.status === 'completed') && (b.responder_id === user.id || b.requester_id === user.id)).length;
+                return confirmedCount > 0 ? (
+                  <span className="header-notif-badge" style={{ background: '#2563EB', boxShadow: '0 2px 4px rgba(37, 99, 235, 0.35)' }}>
+                    {confirmedCount}
+                  </span>
+                ) : null;
+              })()}
+            </button>
+          </div>
+
+          {/* Facebook-Style Notification Bell & Floating Dropdown Overlay */}
+          <div className="header-notif-wrapper">
+            <button
+              type="button"
+              className="header-notif-btn"
+              onClick={() => setShowNotificationsModal(!showNotificationsModal)}
+              title="Notifications & Ministry History Timeline"
+              aria-label="View notifications and history"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+              {(() => {
+                const count = bookings.filter(b => {
+                  if (b.status === 'accepted' && (b.responder_id === user.id || b.requester_id === user.id)) return true;
+                  if (b.requester_id === user.id && (b.applicants || []).length > 0) return true;
+                  return false;
+                }).length;
+                return count > 0 ? <span className="header-notif-badge">{count}</span> : null;
+              })()}
+            </button>
+
+            {/* FLOATING OVERLAY DROPDOWN */}
+            {showNotificationsModal && (
+              <>
+                <div className="notif-dropdown-backdrop" onClick={() => setShowNotificationsModal(false)}></div>
+                <div className="notif-dropdown-overlay" onClick={(e) => e.stopPropagation()}>
+                  <div className="notif-dropdown-header">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#FEF3C7', color: '#92400E', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '0.98rem', color: '#0F172A', fontWeight: 800 }}>Activity & Notifications</h4>
+                        <span style={{ fontSize: '0.74rem', color: '#64748B' }}>Live ministry requests, offers & confirmations</span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowNotificationsModal(false)}
+                      style={{ background: 'none', border: 'none', fontSize: '1.2rem', color: '#94A3B8', cursor: 'pointer', padding: '0 4px', lineHeight: 1 }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  <div className="notif-dropdown-body">
+                    {(() => {
+                      const events = [];
+
+                      bookings.forEach((b) => {
+                        const { date, time } = formatDateTime(b.datetime, b.datetime_end);
+                        const isRequester = b.requester_id === user.id;
+                        const isResponder = b.responder_id === user.id;
+
+                        // 1. Booking Created / Posted Event
+                        if (b.created_at) {
+                          events.push({
+                            id: `created-${b.id}`,
+                            timestamp: new Date(b.created_at),
+                            type: 'posted',
+                            icon: (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                              </svg>
+                            ),
+                            iconBg: isRequester ? '#EFF6FF' : '#FEF3C7',
+                            title: isRequester ? 'You posted a ministry request' : `New request from ${formatEcclesiasticalName(b.requester_title || 'Sr.', b.requester_name, b.requester_congregation_abbr)}`,
+                            subtitle: `${b.service_type || 'Holy Mass'} • ${b.location || 'Parish Chapel'} (${b.language || 'English'})`,
+                            targetDate: `${date} • ⏰ ${time}`,
+                            badge: 'Posted',
+                            badgeColor: '#475569',
+                            badgeBg: '#F1F5F9'
+                          });
+                        }
+
+                        // 2. Priest Availability Offers Events
+                        (b.applicants || []).forEach((app) => {
+                          const isMe = app.priest_id === user.id;
+                          const applicantName = formatEcclesiasticalName(app.priest_title || 'Fr.', app.priest_name, app.congregation_abbr);
+                          events.push({
+                            id: `offer-${b.id}-${app.priest_id}`,
+                            timestamp: new Date(app.offered_at || b.created_at),
+                            type: 'offer',
+                            icon: (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#92400E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="12" cy="12" r="10" />
+                                <polyline points="12 6 12 12 16 14" />
+                              </svg>
+                            ),
+                            iconBg: '#FEF3C7',
+                            title: isMe ? 'You marked availability to celebrate' : `${applicantName} offered to celebrate`,
+                            subtitle: `For ${b.service_type || 'Holy Mass'} at ${b.location || 'Parish'}`,
+                            targetDate: `${date} • ⏰ ${time}`,
+                            badge: 'Marked as available',
+                            badgeColor: '#92400E',
+                            badgeBg: '#FEF3C7'
+                          });
+                        });
+
+                        // 3. Confirmation Event
+                        if (b.status === 'accepted' || b.status === 'completed') {
+                          const celebrantName = formatEcclesiasticalName(b.responder_title || 'Fr.', b.responder_name, b.responder_congregation_abbr);
+                          const requesterName = formatEcclesiasticalName(b.requester_title || 'Sr.', b.requester_name, b.requester_congregation_abbr);
+                          events.push({
+                            id: `confirmed-${b.id}`,
+                            timestamp: new Date(b.confirmed_at || b.created_at),
+                            type: 'confirmed',
+                            icon: (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#166534" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            ),
+                            iconBg: '#DCFCE7',
+                            title: isResponder
+                              ? `Celebration confirmed with ${requesterName}!`
+                              : isRequester
+                              ? `You confirmed ${celebrantName} as Celebrant`
+                              : `Celebration locked: ${celebrantName}`,
+                            subtitle: `${b.service_type || 'Holy Mass'} at ${b.location || 'Parish'}`,
+                            targetDate: `${date} • ⏰ ${time}`,
+                            badge: 'Confirmed',
+                            badgeColor: '#166534',
+                            badgeBg: '#DCFCE7'
+                          });
+                        }
+                      });
+
+                      events.sort((a, b) => b.timestamp - a.timestamp);
+
+                      if (events.length === 0) {
+                        return (
+                          <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#64748B' }}>
+                            <span style={{ fontSize: '2rem', display: 'block', marginBottom: '0.4rem' }}>📭</span>
+                            <p style={{ margin: 0, fontWeight: 600, fontSize: '0.88rem' }}>No activity records yet.</p>
+                            <span style={{ fontSize: '0.76rem' }}>When ministry requests are posted or confirmed, your history will appear here.</span>
+                          </div>
+                        );
+                      }
+
+                      const formatTimecode = (d) => {
+                        if (!d || isNaN(d.getTime())) return '';
+                        return d.toLocaleString('en-IN', {
+                          day: 'numeric',
+                          month: 'short',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                          hour12: true
+                        });
+                      };
+
+                      return (
+                        <div>
+                          {events.map((evt) => (
+                            <div className="notif-timeline-item" key={evt.id}>
+                              <div className="notif-icon-circle" style={{ background: evt.iconBg }}>
+                                <span>{evt.icon}</span>
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.4rem', marginBottom: '0.2rem' }}>
+                                  <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#0F172A', lineHeight: '1.3' }}>
+                                    {evt.title}
+                                  </div>
+                                  <span style={{ fontSize: '0.68rem', fontWeight: 700, padding: '2px 6px', borderRadius: '9999px', background: evt.badgeBg, color: evt.badgeColor, whiteSpace: 'nowrap' }}>
+                                    {evt.badge}
+                                  </span>
+                                </div>
+
+                                <div style={{ fontSize: '0.78rem', color: '#475569', marginBottom: '0.25rem' }}>
+                                  {evt.subtitle}
+                                </div>
+
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.35rem', marginTop: '0.3rem' }}>
+                                  <span style={{ fontSize: '0.72rem', color: '#2563EB', fontWeight: 600 }}>
+                                    📅 {evt.targetDate}
+                                  </span>
+                                  <span style={{ fontSize: '0.7rem', color: '#94A3B8' }} title={evt.timestamp.toISOString()}>
+                                    ⏱️ {formatTimecode(evt.timestamp)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="notif-dropdown-footer">
+                    <span style={{ fontSize: '0.74rem', color: '#64748B' }}>
+                      Showing latest updates in chronological order
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={handleSignOut}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            <span>Sign Out</span>
           </button>
         </div>
       </header>
@@ -2277,76 +2458,6 @@ export default function App() {
       <main className="main-content">
         {errorMsg && <div className="error-alert">{errorMsg}</div>}
         {successMsg && <div className="success-alert">{successMsg}</div>}
-
-        {/* --- USUAL PROFILE SECTION ON TOP --- */}
-        <div className="profile-summary-card">
-          <div className="profile-summary-left">
-            <div
-              className="avatar-lg"
-              style={{ width: '68px', height: '68px', margin: 0, cursor: 'pointer' }}
-              onClick={openProfileModal}
-              title="Change Photo"
-            >
-              {user.profile_photo ? (
-                <img src={user.profile_photo} alt={user.name} />
-              ) : (
-                <span>{user.title === 'Sr.' || user.clergy_type === 'convent' ? '🕊️' : user.title === 'Br.' ? '🤝' : '⛪'}</span>
-              )}
-              <span className="avatar-upload-overlay" style={{ fontSize: '0.62rem' }}>Edit</span>
-            </div>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#0F172A' }}>
-                  {formatEcclesiasticalName(user)}
-                </h3>
-                <span
-                  style={{
-                    fontSize: '0.72rem',
-                    padding: '0.15rem 0.5rem',
-                    borderRadius: 'var(--radius-full)',
-                    background: user.is_verified === 1 ? '#DCFCE7' : '#FEF9C3',
-                    color: user.is_verified === 1 ? '#15803D' : '#854D0E',
-                    fontWeight: 700
-                  }}
-                >
-                  {user.is_verified === 1 ? '✓ Verified' : '⏳ Pending Approval'}
-                </span>
-              </div>
-              <div className="profile-meta-chips">
-                <span className="profile-chip">
-                  <span>📱</span> {user.mobile}
-                </span>
-                {user.email && (
-                  <span className="profile-chip">
-                    <span>✉️</span> {user.email}
-                  </span>
-                )}
-                <span className="profile-chip">
-                  <span>⛪</span> {user.religious_order || user.diocese_province || (user.clergy_type === 'convent' ? 'Convent' : 'Diocese')}
-                </span>
-                {user.residence_name && (
-                  <span className="profile-chip">
-                    <span>📍</span> {user.residence_name} {user.residence_address ? `(${user.residence_address})` : ''}
-                  </span>
-                )}
-                {user.clergy_type !== 'convent' && user.max_travel_km && (
-                  <span className="profile-chip">
-                    <span>🛵</span> Radius: {user.max_travel_km} km
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          <div>
-            <button
-              className="btn btn-secondary btn-sm"
-              onClick={openProfileModal}
-              style={{ fontWeight: 700, borderColor: 'var(--papal-gold)', background: '#FFFDF5' }}
-            >
-              ⚙️ Modify Profile & Photo
-            </button>
-          </div>
-        </div>
 
         {/* Verification Gate Banner */}
         {user.is_verified !== 1 && user.is_admin !== 1 && (
@@ -2378,277 +2489,1176 @@ export default function App() {
 
         {activeMode !== 'admin' && (
           <>
-            {/* CARD 1: DO YOU WANT TO FIND A PRIEST? */}
-            <div className="quick-status-card" style={{ marginBottom: '1.25rem', background: '#F8FAFC', borderColor: '#E2E8F0' }}>
-              <div className="quick-status-info">
-                <h4>📖 Do You Want to Find a Priest?</h4>
-                <p>
-                  Need a priest for Holy Mass, Recollection, or Retreat? Post a ministry request to broadcast to available priests.
-                </p>
-              </div>
+            {/* ========================================================================= */}
+            {/* PRIEST DASHBOARD (Fr.) - CELEBRANT-FIRST WORKFLOW                         */}
+            {/* ========================================================================= */}
+            {user.title === 'Fr.' || (!user.title && user.clergy_type !== 'convent') ? (
               <div>
-                {user.is_verified === 1 && (
-                  <button className="btn btn-primary" onClick={() => setShowRequestModal(true)}>
-                    ➕ Post a Ministry Request
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* RELEVANT MINISTRY REQUESTS WITH TWO TABS (REQUESTED VS ACCEPTED) */}
-            <div style={{ marginTop: '0.5rem' }}>
-              <div className="dashboard-header" style={{ marginBottom: '1rem', alignItems: 'flex-start' }}>
-                <div className="dashboard-title">
-                  <h2>Relevant Ministry Requests</h2>
-                  <p>Browse open liturgical needs or view confirmed celebrations to contact the priest/parish.</p>
-                </div>
-              </div>
-
-              {/* 3 Sub-Tabs: 1. Ministry Needs, 2. Priests Responded, 3. Confirmed Celebrations */}
-              {(() => {
-                const openCount = bookings.filter(b => b.status === 'pending' && (!b.applicants || b.applicants.length === 0)).length;
-                const reviewCount = bookings.filter(b => b.status === 'pending' && (b.applicants && b.applicants.length > 0)).length;
-                const confirmedCount = bookings.filter(b => b.status === 'accepted' || b.status === 'completed').length;
-
-                return (
-                  <div className="tabs" style={{ marginBottom: '1.25rem' }}>
-                    <div
-                      className={`tab ${requestsTab === 'open' ? 'active' : ''}`}
-                      onClick={() => setRequestsTab('open')}
-                    >
-                      🕊️ Ministry Needs ({openCount})
-                    </div>
-                    <div
-                      className={`tab ${requestsTab === 'review' ? 'active' : ''}`}
-                      onClick={() => setRequestsTab('review')}
-                    >
-                      🙌 Priests Responded ({reviewCount})
-                    </div>
-                    <div
-                      className={`tab ${requestsTab === 'accepted' ? 'active' : ''}`}
-                      onClick={() => setRequestsTab('accepted')}
-                    >
-                      🤝 Confirmed ({confirmedCount})
-                    </div>
-                  </div>
-                );
-              })()}
-
-              <div className="roster-grid">
+                {/* 1. CLEAN 4-TAB PRIEST DASHBOARD (SINGLE SLEEK TAB BAR) */}
                 {(() => {
-                  const filteredBookings = bookings.filter(b => {
-                    if (requestsTab === 'open') {
-                      return b.status === 'pending' && (!b.applicants || b.applicants.length === 0);
-                    }
-                    if (requestsTab === 'review') {
-                      return b.status === 'pending' && (b.applicants && b.applicants.length > 0);
-                    }
-                    return b.status === 'accepted' || b.status === 'completed';
+                  const openNeeds = bookings.filter(b => {
+                    if (b.status !== 'pending' || b.requester_id === user.id) return false;
+                    if (priestFilterRadius === 'all') return true;
+                    if (b.distance_km === null) return true;
+                    return b.distance_km <= priestFilterRadius;
                   });
+                  const myScheduled = bookings.filter(b => (b.status === 'accepted' || b.status === 'completed') && (b.responder_id === user.id || b.requester_id === user.id));
+                  const myApplications = bookings.filter(b => b.status === 'pending' && (b.applicants || []).some(a => a.priest_id === user.id));
+                  const myOwnRequests = bookings.filter(b => b.requester_id === user.id);
 
-                  if (filteredBookings.length === 0) {
-                    return (
-                      <div className="no-data" style={{ gridColumn: '1 / -1' }}>
-                        <div className="no-data-icon">
-                          {requestsTab === 'open' ? '🕊️' : requestsTab === 'review' ? '🙌' : '🤝'}
+                  return (
+                    <div>
+                      {/* SINGLE STREAMLINED 4-TAB SEGMENTED CONTROL WITH MODERN APP ICONS */}
+                      <div className="priest-dash-tabs">
+                        <div
+                          className={`priest-dash-tab ${requestsTab === 'open' ? 'active' : ''}`}
+                          onClick={() => setRequestsTab('open')}
+                        >
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                          </svg>
+                          <span>Ministry Requests</span>
+                          <span className={`priest-dash-tab-badge ${openNeeds.length > 0 ? 'badge-danger' : ''}`}>{openNeeds.length}</span>
                         </div>
-                        <p>
-                          {requestsTab === 'open'
-                            ? 'No open liturgical needs waiting for celebrants.'
-                            : requestsTab === 'review'
-                            ? 'No pending priest responses to review at the moment.'
-                            : 'No confirmed celebrations found yet.'}
-                        </p>
-                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                          {requestsTab === 'open'
-                            ? 'Parishes and Convents can click "➕ Post a Ministry Request" to share a need.'
-                            : requestsTab === 'review'
-                            ? 'When priests indicate their availability to celebrate, they will appear here for you to invite.'
-                            : 'When a priest is selected, the celebration appears here with direct contact details.'}
-                        </p>
+                        <div
+                          className={`priest-dash-tab ${requestsTab === 'review' ? 'active' : ''}`}
+                          onClick={() => setRequestsTab('review')}
+                        >
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                          </svg>
+                          <span>Awaiting</span>
+                          <span className="priest-dash-tab-badge">{myApplications.length}</span>
+                        </div>
+                        <div
+                          className={`priest-dash-tab ${requestsTab === 'accepted' ? 'active' : ''}`}
+                          onClick={() => setRequestsTab('accepted')}
+                        >
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m11 17 2 2a1 1 0 0 0 1.4 0l4.3-4.3a1 1 0 0 0 0-1.4l-2.6-2.6a1 1 0 0 0-1.4 0l-1.4 1.4" />
+                            <path d="m18 10 1.3-1.3a1 1 0 0 0 0-1.4l-2.6-2.6a1 1 0 0 0-1.4 0L14 6" />
+                            <path d="m2 14 6 6" />
+                            <path d="M7 9 2 14" />
+                            <path d="M14 6 8.7 11.3a1 1 0 0 0 0 1.4l2.6 2.6" />
+                          </svg>
+                          <span>Confirmed</span>
+                          <span className="priest-dash-tab-badge" style={{ background: '#DCFCE7', color: '#166534' }}>{myScheduled.length}</span>
+                        </div>
+                        <div
+                          className={`priest-dash-tab ${requestsTab === 'my_requests' ? 'active' : ''}`}
+                          onClick={() => setRequestsTab('my_requests')}
+                        >
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                          </svg>
+                          <span>My Posts</span>
+                          <span className="priest-dash-tab-badge" style={{ background: '#EFF6FF', color: '#1D4ED8' }}>{myOwnRequests.length}</span>
+                        </div>
                       </div>
-                    );
-                  }
 
-                  return filteredBookings.map((b) => {
-                    const { date, time } = formatDateTime(b.datetime, b.datetime_end);
-                    const isMyRequest = b.requester_id === user.id;
-                    const isConfirmed = b.status === 'accepted' || b.status === 'completed';
-                    const isConfirmedPriest = b.responder_id === user.id;
-                    const hasOffered = (b.applicants || []).some(a => a.priest_id === user.id);
-                    const applicantsCount = (b.applicants || []).length;
-
-                    return (
-                      <div className="priest-card" key={b.id} style={{ borderColor: isConfirmed ? '#BBF7D0' : applicantsCount > 0 ? '#BFDBFE' : '#E2E8F0' }}>
-                        <div className="priest-header">
-                          <div>
-                            <div className="priest-name">{date}</div>
-                            <div style={{ color: 'var(--accent-gold)', fontSize: '0.85rem' }}>⏰ {time}</div>
-                          </div>
-                          <span
-                            className={`distance-badge ${isConfirmed ? 'badge-confirmed' : ''}`}
-                            style={{
-                              background: isConfirmed ? '#DCFCE7' : applicantsCount > 0 ? '#EFF6FF' : '#F1F5F9',
-                              color: isConfirmed ? '#15803D' : applicantsCount > 0 ? '#1D4ED8' : '#475569'
-                            }}
-                          >
-                            {isConfirmed
-                              ? '🤝 Confirmed Celebrant'
-                              : applicantsCount > 0
-                              ? `🙌 ${applicantsCount} Priest${applicantsCount > 1 ? 's' : ''} Ready to Serve`
-                              : '🕊️ Awaiting Celebrant'}
-                          </span>
-                        </div>
-
-                        <div className="priest-meta-row">
-                          <div className="priest-meta-item">
-                            <span>✨</span>
-                            <strong>Service:</strong> <span style={{ color: 'var(--accent-gold)', fontWeight: '600' }}>{b.service_type || 'Holy Mass'}</span>
-                          </div>
-                          <div className="priest-meta-item">
-                            <span>⛪</span>
-                            <strong>Venue:</strong> {b.location}
-                          </div>
-                          <div className="priest-meta-item">
-                            <span>🗣️</span>
-                            <strong>Language:</strong> {b.language}
-                          </div>
-                          <div className="priest-meta-item">
-                            <span>👤</span>
-                            <strong>Requested By:</strong> {formatEcclesiasticalName(b.requester_title || (b.requester_clergy_type === 'convent' ? 'Sr.' : 'Fr.'), b.requester_name, b.requester_congregation_abbr)} ({b.requester_order || b.requester_diocese})
-                          </div>
-                          {b.distance_km !== null && (
-                            <div className="priest-meta-item">
-                              <span>📍</span>
-                              <strong>Distance:</strong> {b.distance_km} km away
+                      {/* TOP ACTION BAR: STREAMLINED COMPACT CONTROLS */}
+                      {requestsTab === 'open' ? (
+                        <div className="feed-controls-card" style={{ padding: '0.75rem 1rem' }}>
+                          {/* Primary Quick Row: Distance Pills + More Filters Toggle */}
+                          <div className="feed-controls-row" style={{ alignItems: 'center' }}>
+                            <div className="distance-slider-container">
+                              <span className="feed-control-label" style={{ fontSize: '0.74rem', letterSpacing: '0.04em', margin: 0 }}>
+                                Travel Distance:
+                              </span>
+                              <div className="distance-slider-track">
+                                <input
+                                  type="range"
+                                  min="5"
+                                  max="105"
+                                  step="5"
+                                  value={priestFilterRadius === 'all' ? 105 : priestFilterRadius}
+                                  onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    if (val > 100) {
+                                      setPriestFilterRadius('all');
+                                    } else {
+                                      setPriestFilterRadius(val);
+                                    }
+                                  }}
+                                  className="distance-range-slider"
+                                  title={priestFilterRadius === 'all' ? 'All Diocese' : `Within ${priestFilterRadius} km`}
+                                />
+                              </div>
+                              <span className="distance-slider-badge">
+                                {priestFilterRadius === 'all' ? 'All Diocese' : `≤ ${priestFilterRadius} km`}
+                              </span>
                             </div>
-                          )}
-                          {b.notes && (
-                            <div className="priest-meta-item" style={{ gridColumn: '1 / -1', fontStyle: 'italic', color: '#64748B' }}>
-                              <span>📝</span>
-                              <strong>Note:</strong> {b.notes}
-                            </div>
-                          )}
-                        </div>
 
-                        {/* CASE A: ACCEPTED / CONFIRMED TAB - DISPLAY CONTACT OPTIONS */}
-                        {isConfirmed && (
-                          <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 'var(--radius-md)', padding: '0.9rem', marginTop: 'auto' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                              <div className="avatar-badge" style={{ width: '40px', height: '40px', borderColor: '#166534' }}>
-                                {b.responder_photo ? (
-                                  <img src={b.responder_photo} alt={b.responder_name} />
-                                ) : (
-                                  <span style={{ fontSize: '0.8rem' }}>{b.responder_title || 'Fr.'}</span>
+                            {/* Secondary Action: More Filters toggle & Active indicator */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginLeft: 'auto' }}>
+                              <button
+                                type="button"
+                                className={`feed-filter-toggle-btn ${showPriestFilterDrawer ? 'active' : ''}`}
+                                onClick={() => setShowPriestFilterDrawer(!showPriestFilterDrawer)}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  padding: '0.3rem 0.7rem',
+                                  fontSize: '0.76rem',
+                                  fontWeight: 600,
+                                  borderRadius: '6px',
+                                  border: (priestFilterService !== 'all' || priestFilterLanguage !== 'all' || priestSortBy !== 'date_asc') ? '1px solid #D97706' : '1px solid #CBD5E1',
+                                  background: (priestFilterService !== 'all' || priestFilterLanguage !== 'all' || priestSortBy !== 'date_asc') ? '#FEF3C7' : '#FFFFFF',
+                                  color: (priestFilterService !== 'all' || priestFilterLanguage !== 'all' || priestSortBy !== 'date_asc') ? '#92400E' : '#475569',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                  <line x1="4" y1="21" x2="4" y2="14" />
+                                  <line x1="4" y1="10" x2="4" y2="3" />
+                                  <line x1="12" y1="21" x2="12" y2="12" />
+                                  <line x1="12" y1="8" x2="12" y2="3" />
+                                  <line x1="20" y1="21" x2="20" y2="16" />
+                                  <line x1="20" y1="12" x2="20" y2="3" />
+                                  <line x1="1" y1="14" x2="7" y2="14" />
+                                  <line x1="9" y1="8" x2="15" y2="8" />
+                                  <line x1="17" y1="16" x2="23" y2="16" />
+                                </svg>
+                                <span>Filters & Sort</span>
+                                {(priestFilterService !== 'all' || priestFilterLanguage !== 'all' || priestSortBy !== 'date_asc') && (
+                                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#D97706' }}></span>
                                 )}
-                              </div>
-                              <div>
-                                <div style={{ fontWeight: 700, color: '#166534', fontSize: '0.92rem' }}>
-                                  🤝 Confirmed Celebrant: {formatEcclesiasticalName(b.responder_title || 'Fr.', b.responder_name, b.responder_congregation_abbr)}
-                                </div>
-                                <div style={{ fontSize: '0.82rem', color: '#15803D' }}>
-                                  {b.responder_order || b.responder_diocese}
-                                </div>
-                              </div>
-                            </div>
+                                <span style={{ fontSize: '0.68rem', color: '#64748B' }}>{showPriestFilterDrawer ? '▲' : '▼'}</span>
+                              </button>
 
-                            {/* Contact buttons visible to confirmed celebrant and requester */}
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                              <a
-                                href={`tel:${isMyRequest ? b.responder_mobile : b.requester_mobile}`}
-                                className="btn btn-call btn-sm"
-                              >
-                                📞 Call {isMyRequest ? 'Priest' : 'Parish'}
-                              </a>
-                              <a
-                                href={getWhatsAppLink(isMyRequest ? b.responder_mobile : b.requester_mobile, `Praised be Jesus Christ! Regarding our confirmed celebration for ${b.service_type || 'Holy Mass'} at ${b.location} on ${date} (${time}).`)}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="wa-btn"
-                              >
-                                💬 WhatsApp
-                              </a>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* CASE B: PRIESTS RESPONDED TAB - REVIEW FATHERS WILLING TO CELEBRATE */}
-                        {!isConfirmed && (requestsTab === 'review' || isMyRequest) && (
-                          <div className="applicants-box" style={{ marginTop: 'auto' }}>
-                            <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#0F172A', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                              <span>🙌 Fathers Ready to Celebrate ({applicantsCount})</span>
-                              {isMyRequest && (
-                                <span style={{ fontSize: '0.75rem', color: '#2563EB', fontWeight: 600 }}>Select a Father for this ministry</span>
+                              {/* Reset Button (only shown when any filter is active) */}
+                              {(priestFilterRadius !== 5 || priestSortBy !== 'date_asc' || priestFilterService !== 'all' || priestFilterLanguage !== 'all') && (
+                                <button
+                                  type="button"
+                                  className="feed-reset-btn"
+                                  onClick={() => {
+                                    setPriestFilterRadius(5);
+                                    setPriestSortBy('date_asc');
+                                    setPriestFilterService('all');
+                                    setPriestFilterLanguage('all');
+                                  }}
+                                  title="Reset all filters to default"
+                                  style={{ padding: '0.24rem 0.5rem', fontSize: '0.74rem' }}
+                                >
+                                  <span>↺ Reset</span>
+                                </button>
                               )}
                             </div>
+                          </div>
 
-                            {applicantsCount === 0 ? (
-                              <p style={{ fontSize: '0.8rem', color: '#94A3B8' }}>
-                                Awaiting available priests to respond for this ministry.
-                              </p>
-                            ) : (
-                              (b.applicants || []).map(cand => (
-                                <div className="applicant-card" key={cand.priest_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F8FAFC', padding: '0.65rem 0.85rem', borderRadius: '6px', marginBottom: '0.4rem', border: '1px solid #E2E8F0' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                                    <div className="avatar-badge" style={{ width: '36px', height: '36px' }}>
-                                      {cand.profile_photo ? (
-                                        <img src={cand.profile_photo} alt={cand.priest_name} />
-                                      ) : (
-                                        <span style={{ fontSize: '0.75rem' }}>{cand.priest_title || 'Fr.'}</span>
-                                      )}
+                          {/* Expandable Secondary Filter Panel */}
+                          {showPriestFilterDrawer && (
+                            <div className="feed-filters-row" style={{ marginTop: '0.65rem', paddingTop: '0.65rem', borderTop: '1px solid #F1F5F9' }}>
+                              {/* Sort By */}
+                              <div className="feed-filter-item">
+                                <label className="feed-filter-label" htmlFor="feed-sort-select">
+                                  Sort By
+                                </label>
+                                <select
+                                  id="feed-sort-select"
+                                  className="feed-select"
+                                  value={priestSortBy}
+                                  onChange={(e) => setPriestSortBy(e.target.value)}
+                                >
+                                  <option value="date_asc">Date of Need (Earliest)</option>
+                                  <option value="distance_asc">Distance (Nearest first)</option>
+                                  <option value="recent_posted">Recently Posted</option>
+                                  <option value="date_desc">Date of Need (Furthest)</option>
+                                </select>
+                              </div>
+
+                              {/* Sacrament / Service Filter */}
+                              <div className="feed-filter-item">
+                                <label className="feed-filter-label" htmlFor="feed-service-select">
+                                  Sacrament / Ministry
+                                </label>
+                                <select
+                                  id="feed-service-select"
+                                  className="feed-select"
+                                  value={priestFilterService}
+                                  onChange={(e) => setPriestFilterService(e.target.value)}
+                                >
+                                  <option value="all">All Sacraments & Services (Default)</option>
+                                  <optgroup label="Core Masses & Sacraments">
+                                    <option value="mass">Holy Mass (Parish / Convent)</option>
+                                    <option value="substation">Substation Mass</option>
+                                    <option value="concelebration">Concelebration (Feasts & Events)</option>
+                                    <option value="marriage">Marriage Mass</option>
+                                    <option value="funeral">Funeral / Requiem Mass</option>
+                                    <option value="confession">Confession Ministry</option>
+                                    <option value="recollection">Monthly Recollection Talk</option>
+                                    <option value="retreat">Annual Retreat Preacher</option>
+                                  </optgroup>
+                                  <optgroup label="Special Events & Blessings">
+                                    <option value="house_blessing">House Blessing</option>
+                                    <option value="easter">Easter Blessing</option>
+                                    <option value="carols">Christmas Carols</option>
+                                    <option value="sick">Communion to Sick</option>
+                                    <option value="others">Others</option>
+                                  </optgroup>
+                                </select>
+                              </div>
+
+                              {/* Liturgical Language Filter */}
+                              <div className="feed-filter-item">
+                                <label className="feed-filter-label" htmlFor="feed-language-select">
+                                  Liturgical Language
+                                </label>
+                                <select
+                                  id="feed-language-select"
+                                  className="feed-select"
+                                  value={priestFilterLanguage}
+                                  onChange={(e) => setPriestFilterLanguage(e.target.value)}
+                                >
+                                  <option value="all">All Languages</option>
+                                  {LANGUAGES.map(lang => (
+                                    <option key={lang} value={lang}>{lang}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : requestsTab === 'my_requests' ? (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.15rem' }}>
+                          <span style={{ fontSize: '0.84rem', color: '#64748B' }}>
+                            Needs posted for your parish or community:
+                          </span>
+                          {user.is_verified === 1 && (
+                            <button
+                              type="button"
+                              className="btn btn-primary"
+                              onClick={() => setShowRequestModal(true)}
+                              style={{
+                                padding: '0.5rem 1.15rem',
+                                fontSize: '0.84rem',
+                                fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                borderRadius: '9999px'
+                              }}
+                            >
+                              <span>➕</span>
+                              <span>Post a Ministry Request</span>
+                            </button>
+                          )}
+                        </div>
+                      ) : <div style={{ marginBottom: '0.5rem' }} />}
+                    </div>
+                  );
+                })()}
+
+                {/* 3. PRIEST CARDS FEED */}
+                <div className="roster-grid">
+                  {(() => {
+                    let displayBookings = [];
+                    if (requestsTab === 'open') {
+                      displayBookings = bookings.filter(b => {
+                        if (b.status !== 'pending' || b.requester_id === user.id) return false;
+                        // Radius filter
+                        if (priestFilterRadius !== 'all') {
+                          if (b.distance_km !== null && b.distance_km > priestFilterRadius) return false;
+                        }
+                        // Sacrament / Service filter
+                        if (priestFilterService !== 'all') {
+                          const s = (b.service_type || '').toLowerCase();
+                          const f = priestFilterService.toLowerCase();
+                          let match = false;
+                          if (f === 'substation') match = s.includes('substation');
+                          else if (f === 'concelebration') match = s.includes('concelebration');
+                          else if (f === 'marriage') match = s.includes('marriage') || s.includes('matrimony') || s.includes('wedding');
+                          else if (f === 'funeral') match = s.includes('funeral') || s.includes('requiem') || s.includes('burial');
+                          else if (f === 'festival') match = s.includes('festival') || s.includes('feast') || s.includes('jubilee');
+                          else if (f === 'confession') match = s.includes('confession') || s.includes('penitential');
+                          else if (f === 'recollection') match = s.includes('recollection');
+                          else if (f === 'carols') match = s.includes('carol') || s.includes('christmas');
+                          else if (f === 'easter') match = s.includes('easter');
+                          else if (f === 'house_blessing') match = s.includes('house blessing') || s.includes('home blessing');
+                          else if (f === 'sick') match = s.includes('sick') || s.includes('communion to') || s.includes('viaticum') || s.includes('anointing');
+                          else if (f === 'retreat') match = s.includes('retreat');
+                          else if (f === 'mass') match = s.includes('holy mass') || (s.includes('mass') && !s.includes('substation') && !s.includes('marriage') && !s.includes('funeral') && !s.includes('festival'));
+                          else if (f === 'others') {
+                            const knownKeys = ['substation', 'concelebration', 'marriage', 'matrimony', 'funeral', 'requiem', 'festival', 'feast', 'confession', 'recollection', 'carol', 'easter', 'house blessing', 'sick', 'retreat', 'holy mass'];
+                            match = s.includes('other') || !knownKeys.some(k => s.includes(k));
+                          } else match = s.includes(f);
+                          if (!match) return false;
+                        }
+                        // Language filter
+                        if (priestFilterLanguage !== 'all') {
+                          const l = (b.language || '').toLowerCase();
+                          if (!l.includes(priestFilterLanguage.toLowerCase())) return false;
+                        }
+                        return true;
+                      });
+                    } else if (requestsTab === 'accepted') {
+                      displayBookings = bookings.filter(b => (b.status === 'accepted' || b.status === 'completed') && (b.responder_id === user.id || b.requester_id === user.id));
+                    } else if (requestsTab === 'review') {
+                      // requests where Father offered to celebrate
+                      displayBookings = bookings.filter(b => b.status === 'pending' && (b.applicants || []).some(a => a.priest_id === user.id));
+                    } else {
+                      // 'my_requests' tab: all requests created by this Father
+                      displayBookings = bookings.filter(b => b.requester_id === user.id);
+                    }
+
+                    // Sorting logic across items
+                    displayBookings.sort((a, b) => {
+                      if (priestSortBy === 'distance_asc') {
+                        const distA = a.distance_km != null ? a.distance_km : 99999;
+                        const distB = b.distance_km != null ? b.distance_km : 99999;
+                        if (distA !== distB) return distA - distB;
+                        return new Date(a.datetime).getTime() - new Date(b.datetime).getTime();
+                      } else if (priestSortBy === 'recent_posted') {
+                        const timeA = a.created_at ? new Date(a.created_at).getTime() : (a.id || 0);
+                        const timeB = b.created_at ? new Date(b.created_at).getTime() : (b.id || 0);
+                        return timeB - timeA;
+                      } else if (priestSortBy === 'date_desc') {
+                        const timeA = a.datetime ? new Date(a.datetime).getTime() : 0;
+                        const timeB = b.datetime ? new Date(b.datetime).getTime() : 0;
+                        return timeB - timeA;
+                      } else {
+                        // Default: 'date_asc' (Earliest need date first)
+                        const timeA = a.datetime ? new Date(a.datetime).getTime() : 0;
+                        const timeB = b.datetime ? new Date(b.datetime).getTime() : 0;
+                        return timeA - timeB;
+                      }
+                    });
+
+                    const isFiltered = priestFilterRadius !== 5 || priestFilterService !== 'all' || priestFilterLanguage !== 'all' || priestSortBy !== 'date_asc';
+
+                    if (displayBookings.length === 0) {
+                      return (
+                        <div className="no-data" style={{ gridColumn: '1 / -1', padding: '2.5rem 1rem' }}>
+                          <div className="no-data-icon" style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.65rem' }}>
+                            <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748B' }}>
+                              {requestsTab === 'open' ? (
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                                </svg>
+                              ) : requestsTab === 'accepted' ? (
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="m11 17 2 2a1 1 0 0 0 1.4 0l4.3-4.3a1 1 0 0 0 0-1.4l-2.6-2.6a1 1 0 0 0-1.4 0l-1.4 1.4" />
+                                  <path d="m18 10 1.3-1.3a1 1 0 0 0 0-1.4l-2.6-2.6a1 1 0 0 0-1.4 0L14 6" />
+                                  <path d="m2 14 6 6" />
+                                  <path d="M7 9 2 14" />
+                                  <path d="M14 6 8.7 11.3a1 1 0 0 0 0 1.4l2.6 2.6" />
+                                </svg>
+                              ) : requestsTab === 'my_requests' ? (
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M12 20h9" />
+                                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                                </svg>
+                              ) : (
+                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <circle cx="12" cy="12" r="10" />
+                                  <polyline points="12 6 12 12 16 14" />
+                                </svg>
+                              )}
+                            </div>
+                          </div>
+                          <h4 style={{ color: '#0F172A', marginBottom: '0.35rem' }}>
+                            {requestsTab === 'open'
+                              ? isFiltered
+                                ? 'No Requests Match Your Filters'
+                                : `No Open Needs Found within ${priestFilterRadius === 'all' ? 'the Diocese' : `${priestFilterRadius} km`}`
+                              : requestsTab === 'accepted'
+                              ? 'No Confirmed Celebrations Yet'
+                              : requestsTab === 'my_requests'
+                              ? 'No Ministry Requests Posted Yet'
+                              : 'No Pending Responses'}
+                          </h4>
+                          <p style={{ fontSize: '0.86rem', color: '#64748B', maxWidth: '440px', margin: '0 auto', marginBottom: '1rem' }}>
+                            {requestsTab === 'open'
+                              ? isFiltered
+                                ? 'Try adjusting your distance slider, sacrament filter, or liturgical language to see more needs.'
+                                : priestFilterRadius !== 'all'
+                                ? `There are no requests within ${priestFilterRadius} km right now. Expand your travel distance to discover needs in nearby parishes.`
+                                : 'All parishes and convents in the diocese are currently covered. Check back soon for new requests.'
+                              : requestsTab === 'accepted'
+                              ? 'When your availability offer is selected by a Sister or a parish, your confirmed celebration will appear here with WhatsApp, direct call, and Google Maps directions.'
+                              : requestsTab === 'my_requests'
+                              ? 'Need supply assistance for your parish during annual retreat, provincial chapter, or leave? Post a request to broadcast to available priests.'
+                              : 'Ministry needs where you marked your availability will stay listed here until confirmed by the Requester.'}
+                          </p>
+
+                          {/* ACTIONABLE 1-TAP ENGAGEMENT SHORTCUTS */}
+                          {requestsTab === 'open' && (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                              {priestFilterRadius !== 25 && priestFilterRadius !== 'all' && (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => setPriestFilterRadius(25)}
+                                  style={{ borderRadius: '9999px', padding: '0.45rem 1rem', fontSize: '0.8rem', fontWeight: 600, background: '#FFFFFF', borderColor: '#CBD5E1' }}
+                                >
+                                  Expand to 25 km
+                                </button>
+                              )}
+
+                              {priestFilterRadius !== 'all' && (() => {
+                                const totalDioceseNeeds = bookings.filter(b => b.status === 'pending' && b.requester_id !== user.id).length;
+                                return totalDioceseNeeds > 0 ? (
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary btn-sm"
+                                    onClick={() => {
+                                      setPriestFilterRadius('all');
+                                      setPriestFilterService('all');
+                                      setPriestFilterLanguage('all');
+                                    }}
+                                    style={{ borderRadius: '9999px', padding: '0.45rem 1.15rem', fontSize: '0.8rem', fontWeight: 700 }}
+                                  >
+                                    View All Diocese ({totalDioceseNeeds} Needs) ↗
+                                  </button>
+                                ) : null;
+                              })()}
+
+                              {isFiltered && (
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => {
+                                    setPriestFilterRadius(5);
+                                    setPriestSortBy('date_asc');
+                                    setPriestFilterService('all');
+                                    setPriestFilterLanguage('all');
+                                  }}
+                                  style={{ borderRadius: '9999px', padding: '0.45rem 1rem', fontSize: '0.8rem', fontWeight: 600 }}
+                                >
+                                  ↺ Reset All Filters
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {requestsTab === 'my_requests' && user.is_verified === 1 && (
+                            <button
+                              type="button"
+                              className="btn btn-primary"
+                              onClick={() => setShowRequestModal(true)}
+                              style={{ borderRadius: '9999px', padding: '0.6rem 1.25rem', fontWeight: 700 }}
+                            >
+                              ➕ Post a Ministry Request
+                            </button>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    return displayBookings.map((b) => {
+                      const { date, time } = formatDateTime(b.datetime, b.datetime_end);
+                      const isMyRequest = b.requester_id === user.id;
+                      const isConfirmed = b.status === 'accepted' || b.status === 'completed';
+                      const urgency = isConfirmed ? getCelebrationUrgency(b.datetime) : null;
+                      const isConfirmedPriest = b.responder_id === user.id;
+                      const hasOffered = (b.applicants || []).some(a => a.priest_id === user.id);
+                      const applicantsCount = (b.applicants || []).length;
+
+                      return (
+                        <div
+                          className="priest-card"
+                          key={b.id}
+                          style={{
+                            borderColor: isConfirmed ? '#BBF7D0' : hasOffered ? '#FDE68A' : '#E2E8F0',
+                            background: isConfirmed ? '#F0FDF4' : '#FFFFFF',
+                            boxShadow: isConfirmed ? '0 4px 14px rgba(22, 163, 74, 0.08)' : 'var(--shadow-sm)'
+                          }}
+                        >
+                          {/* 1. HERO SCHEDULE STRIP: DATE, TIME & STATUS */}
+                          <div className="card-schedule-strip">
+                            <div className="card-schedule-datetime">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                <span className="card-schedule-date">{date}</span>
+                                {urgency && (
+                                  <span className={`urgency-pill ${urgency.badgeClass}`}>
+                                    {urgency.isPulsing && <span className="urgency-pulse-dot"></span>}
+                                    {urgency.label}
+                                  </span>
+                                )}
+                              </div>
+                              <span className="card-schedule-time">{time}</span>
+                            </div>
+                            <span
+                              className={`distance-badge ${isConfirmed ? 'badge-confirmed' : ''}`}
+                              style={{
+                                background: isConfirmed ? '#F0FDF4' : hasOffered ? '#FEFCE8' : '#F1F5F9',
+                                color: isConfirmed ? '#166534' : hasOffered ? '#854D0E' : '#0F172A',
+                                borderColor: isConfirmed ? '#86EFAC' : hasOffered ? '#FDE047' : '#CBD5E1',
+                                fontWeight: 700,
+                                fontSize: '0.78rem',
+                                padding: '0.28rem 0.7rem',
+                                borderRadius: '8px'
+                              }}
+                            >
+                              {isConfirmed
+                                ? `Confirmed: ${b.service_type || 'Holy Mass'}`
+                                : hasOffered
+                                ? `Marked as available: ${b.service_type || 'Holy Mass'}`
+                                : (b.service_type || 'Holy Mass')}
+                            </span>
+                          </div>
+
+                          {/* 2. LITURGICAL MODIFIERS, LANGUAGE & DISTANCE TAGS ROW */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
+                            {(() => {
+                              const s = (b.service_type || '').toLowerCase();
+                              if (s.includes('substation')) {
+                                return <span className="card-tag-pill card-tag-substation">Substation</span>;
+                              }
+                              if (s.includes('concelebration')) {
+                                return <span className="card-tag-pill card-tag-concelebrant">Concelebrant</span>;
+                              }
+                              if (s.includes('funeral') || s.includes('requiem')) {
+                                return <span className="card-tag-pill card-tag-requiem">Requiem</span>;
+                              }
+                              if (s.includes('marriage') || s.includes('matrimony')) {
+                                return <span className="card-tag-pill card-tag-marriage">Marriage</span>;
+                              }
+                              return null;
+                            })()}
+
+                            <span className="card-tag-pill card-tag-language">
+                              {b.language || 'English'}
+                            </span>
+
+                            {b.distance_km !== null && (
+                              <span className="card-tag-pill card-tag-distance" style={{ marginLeft: 'auto' }}>
+                                {b.distance_km} km away
+                              </span>
+                            )}
+                          </div>
+
+                          {/* 3. REQUESTER & VENUE IDENTITY ROW */}
+                          <div className="card-requester-row">
+                            <div className="avatar-badge" style={{ width: '36px', height: '36px', borderColor: '#CBD5E1', flexShrink: 0 }}>
+                              {b.requester_photo ? (
+                                <img src={b.requester_photo} alt={b.requester_name} />
+                              ) : (
+                                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#475569' }}>
+                                  {b.requester_title === 'Sr.' || b.requester_clergy_type === 'convent' ? 'Sr.' : 'Fr.'}
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {formatEcclesiasticalName(b.requester_title || (b.requester_clergy_type === 'convent' ? 'Sr.' : 'Fr.'), b.requester_name, b.requester_congregation_abbr)}
+                              </div>
+                              <div style={{ fontSize: '0.76rem', color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {b.location ? `${b.location}` : (b.requester_order || b.requester_diocese || 'Parish Community')}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* 4. PROMINENT NOTE BOX */}
+                          {b.notes && (
+                            <div className="card-note-box">
+                              <span style={{ fontWeight: 700, marginRight: '4px' }}>Note:</span>
+                              "{b.notes}"
+                            </div>
+                          )}
+
+                          {/* CASE 1: CONFIRMED CELEBRATION - POST-CONFIRMATION ACTION HUB */}
+                          {isConfirmed && (
+                            <div style={{ background: '#F8FAFC', border: '1.5px solid #BBF7D0', borderRadius: '12px', padding: '0.9rem', marginTop: 'auto' }}>
+                              {/* Header: Celebrant / Requester Confirmation Badge */}
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginBottom: '0.65rem' }}>
+                                <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#166534', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                                    <polyline points="22 4 12 14.01 9 11.01" />
+                                  </svg>
+                                  <span>Confirmed with {formatEcclesiasticalName(isConfirmedPriest ? b.requester_title || 'Sr.' : b.responder_title || 'Fr.', isConfirmedPriest ? b.requester_name : b.responder_name, isConfirmedPriest ? b.requester_congregation_abbr : b.responder_congregation_abbr)}</span>
+                                </div>
+                                <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: '9999px', background: '#DCFCE7', color: '#15803D' }}>
+                                  Slot Locked
+                                </span>
+                              </div>
+
+                              {/* 1-Tap Quick Action Grid: Call, WhatsApp, Map Navigation, Add to Calendar */}
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem', marginBottom: '0.65rem' }}>
+                                <a
+                                  href={`tel:${isConfirmedPriest ? b.requester_mobile : b.responder_mobile}`}
+                                  className="btn btn-call btn-sm"
+                                  style={{ padding: '0.5rem', fontWeight: 700, fontSize: '0.78rem', justifyContent: 'center' }}
+                                >
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                                  </svg>
+                                  <span>Call Direct</span>
+                                </a>
+
+                                <a
+                                  href={getWhatsAppLink(isConfirmedPriest ? b.requester_mobile : b.responder_mobile, `Praised be Jesus Christ! Father here regarding our confirmed celebration for ${b.service_type || 'Holy Mass'} at ${b.location || 'Parish Chapel'} on ${date} (${time}).`)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="wa-btn"
+                                  style={{ padding: '0.5rem', fontWeight: 700, fontSize: '0.78rem', justifyContent: 'center' }}
+                                >
+                                  <span>WhatsApp</span>
+                                </a>
+
+                                {b.location && (
+                                  <a
+                                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.location)}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="btn btn-secondary btn-sm"
+                                    style={{ padding: '0.5rem', fontWeight: 700, fontSize: '0.78rem', justifyContent: 'center', background: '#FFFFFF', borderColor: '#CBD5E1' }}
+                                  >
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polygon points="3 11 22 2 13 21 11 13 3 11" />
+                                    </svg>
+                                    <span>Directions</span>
+                                  </a>
+                                )}
+
+                                <a
+                                  href={`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`${b.service_type || 'Holy Mass'} - ${b.location || 'Parish'}`)}&dates=${(() => {
+                                    const d = new Date(b.datetime);
+                                    const dEnd = new Date(b.datetime_end || d.getTime() + 3600000);
+                                    const fmt = dt => dt.toISOString().replace(/-|:|\.\d\d\d/g, '');
+                                    return `${fmt(d)}/${fmt(dEnd)}`;
+                                  })()}&details=${encodeURIComponent(`Confirmed ministry with ${formatEcclesiasticalName(isConfirmedPriest ? b.requester_title || 'Sr.' : b.responder_title || 'Fr.', isConfirmedPriest ? b.requester_name : b.responder_name, isConfirmedPriest ? b.requester_congregation_abbr : b.responder_congregation_abbr)}. Contact: ${isConfirmedPriest ? b.requester_mobile : b.responder_mobile}`)}&location=${encodeURIComponent(b.location || '')}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="btn btn-secondary btn-sm"
+                                  style={{ padding: '0.5rem', fontWeight: 700, fontSize: '0.78rem', justifyContent: 'center', background: '#FFFFFF', borderColor: '#CBD5E1' }}
+                                >
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                    <line x1="16" y1="2" x2="16" y2="6" />
+                                    <line x1="8" y1="2" x2="8" y2="6" />
+                                    <line x1="3" y1="10" x2="21" y2="10" />
+                                  </svg>
+                                  <span>Add to Calendar</span>
+                                </a>
+                              </div>
+
+                              {/* Pastoral Checklist: Next Steps Guide */}
+                              <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '0.55rem 0.75rem', fontSize: '0.74rem', color: '#475569', lineHeight: '1.45' }}>
+                                <div style={{ fontWeight: 700, color: '#0F172A', marginBottom: '0.25rem' }}>
+                                  ✓ Next Steps Checklist:
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                                  <span>1. Verify vestment/stole color & liturgy intentions via WhatsApp.</span>
+                                  <span>2. Recheck transit time ({b.distance_km ? `${b.distance_km} km` : 'destination distance'}) prior to celebration.</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* CASE 2: OPEN REQUEST FROM OTHERS - 1-TAP "I AM AVAILABLE" OR "WITHDRAW" */}
+                          {!isConfirmed && !isMyRequest && user.is_verified === 1 && (
+                            <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid #F1F5F9' }}>
+                              {hasOffered ? (
+                                <div style={{ background: '#FFFDF5', border: '1px solid #FDE68A', padding: '0.65rem 0.85rem', borderRadius: 'var(--radius-sm)' }}>
+                                  <div style={{ color: '#92400E', fontSize: '0.84rem', fontWeight: 700, marginBottom: '0.35rem', textAlign: 'center' }}>
+                                    ✓ Marked as available for this Mass
+                                  </div>
+                                  <div style={{ fontSize: '0.75rem', color: '#78350F', textAlign: 'center', marginBottom: '0.5rem' }}>
+                                    Awaiting Requester to review and confirm.
+                                  </div>
+                                  <div style={{ textAlign: 'center' }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleWithdrawOffer(b.id)}
+                                      style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#DC2626',
+                                        fontSize: '0.76rem',
+                                        cursor: 'pointer',
+                                        textDecoration: 'underline',
+                                        fontWeight: 600
+                                      }}
+                                    >
+                                      ✕ Withdraw my availability
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  className="btn btn-primary"
+                                  onClick={() => handleOfferMinistry(b.id)}
+                                  style={{
+                                    width: '100%',
+                                    padding: '0.75rem',
+                                    fontWeight: 700,
+                                    fontSize: '0.92rem',
+                                    background: '#16A34A',
+                                    borderColor: '#15803D'
+                                  }}
+                                >
+                                  ✋ I Am Available to Celebrate
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {/* CASE 3: MY REQUEST (FATHER'S OWN POST) - REVIEW APPLICANTS & CONFIRM */}
+                          {!isConfirmed && isMyRequest && (
+                            <div className="applicants-box" style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid #F1F5F9' }}>
+                              <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#0F172A', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+                                <span>🙌 Fathers Ready to Celebrate ({applicantsCount})</span>
+                                <span style={{ fontSize: '0.75rem', color: '#2563EB', fontWeight: 600 }}>Select a Father for this ministry</span>
+                              </div>
+
+                              {applicantsCount === 0 ? (
+                                <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: '0.5rem 0' }}>
+                                  Awaiting available priests to respond for this ministry.
+                                </p>
+                              ) : (
+                                (b.applicants || []).map(cand => (
+                                  <div className="applicant-card" key={cand.priest_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F8FAFC', padding: '0.65rem 0.85rem', borderRadius: '6px', marginBottom: '0.5rem', border: '1px solid #E2E8F0', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', minWidth: '220px', flex: 1 }}>
+                                      <div className="avatar-badge" style={{ width: '38px', height: '38px' }}>
+                                        {cand.profile_photo ? (
+                                          <img src={cand.profile_photo} alt={cand.priest_name} />
+                                        ) : (
+                                          <span style={{ fontSize: '0.78rem' }}>{cand.priest_title || 'Fr.'}</span>
+                                        )}
+                                      </div>
+                                      <div>
+                                        <div className="applicant-name" style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.88rem' }}>
+                                          {formatEcclesiasticalName(cand.priest_title || 'Fr.', cand.priest_name, cand.congregation_abbr)}
+                                        </div>
+                                        <div className="applicant-sub" style={{ fontSize: '0.76rem', color: '#64748B' }}>
+                                          {cand.clergy_type === 'religious' ? cand.religious_order : cand.diocese_province}
+                                          {cand.residence_name ? ` • 📍 ${cand.residence_name}` : ''}
+                                          {cand.distance_km !== null ? ` (${cand.distance_km} km away)` : ''}
+                                        </div>
+                                      </div>
                                     </div>
-                                    <div>
-                                      <div className="applicant-name" style={{ fontWeight: 700, color: '#0F172A' }}>
-                                        {formatEcclesiasticalName(cand.priest_title || 'Fr.', cand.priest_name, cand.congregation_abbr)}
-                                      </div>
-                                      <div className="applicant-sub" style={{ fontSize: '0.78rem', color: '#64748B' }}>
-                                        {cand.clergy_type === 'religious' ? cand.religious_order : cand.diocese_province}
-                                        {cand.residence_name ? ` • 📍 ${cand.residence_name}` : ''}
-                                        {cand.distance_km !== null ? ` (${cand.distance_km} km away)` : ''}
-                                      </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                                      {cand.priest_mobile && (
+                                        <>
+                                          <a
+                                            href={`tel:${cand.priest_mobile}`}
+                                            className="btn btn-call btn-sm"
+                                            style={{ padding: '0.4rem 0.6rem', fontSize: '0.78rem' }}
+                                            title="Call Father"
+                                          >
+                                            📞 Call
+                                          </a>
+                                          <a
+                                            href={getWhatsAppLink(cand.priest_mobile, `Praised be Jesus Christ! Father, regarding the ministry request for ${b.service_type || 'Holy Mass'} on ${date}.`)}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="wa-btn"
+                                            style={{ padding: '0.4rem 0.6rem', fontSize: '0.78rem' }}
+                                            title="WhatsApp Father"
+                                          >
+                                            💬
+                                          </a>
+                                        </>
+                                      )}
+                                      <button
+                                        className="btn btn-primary btn-sm"
+                                        onClick={() => handleConfirmApplicant(b.id, cand.priest_id, cand.priest_name)}
+                                        style={{ padding: '0.42rem 0.85rem', fontSize: '0.82rem', fontWeight: 700, background: '#16A34A', borderColor: '#15803D' }}
+                                      >
+                                        ✓ Select & Confirm
+                                      </button>
                                     </div>
                                   </div>
-                                  {isMyRequest ? (
-                                    <button
-                                      className="btn btn-primary btn-sm"
-                                      onClick={() => handleConfirmApplicant(b.id, cand.priest_id, cand.priest_name)}
-                                      style={{ padding: '0.4rem 0.75rem', fontSize: '0.82rem', fontWeight: 700 }}
-                                    >
-                                      ✓ Select {cand.priest_title || 'Fr.'} {cand.priest_name.replace(/^(Rev\.\s*|Fr\.\s*|Br\.\s*|Sr\.\s*)+/i, '').split(' ')[0]}
-                                    </button>
-                                  ) : cand.priest_id === user.id ? (
-                                    <span style={{ fontSize: '0.75rem', background: '#FEF9C3', color: '#854D0E', padding: '0.2rem 0.5rem', borderRadius: 4, fontWeight: 700 }}>
-                                      Response Sent
-                                    </span>
-                                  ) : null}
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        )}
+                                ))
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            ) : (
+              /* ========================================================================= */
+              /* SISTERS (Sr.) & BROTHERS (Br.) DASHBOARD - REQUESTER WORKFLOW             */
+              /* ========================================================================= */
+              <div>
+                <div className="quick-status-card" style={{ marginBottom: '1.25rem', background: '#F8FAFC', borderColor: '#E2E8F0' }}>
+                  <div className="quick-status-info">
+                    <h4>📖 Do You Want to Find a Priest?</h4>
+                    <p>
+                      Need a priest for Holy Mass, Recollection, or Retreat? Post a ministry request to broadcast to available priests.
+                    </p>
+                  </div>
+                  <div>
+                    {user.is_verified === 1 && (
+                      <button className="btn btn-primary" onClick={() => setShowRequestModal(true)}>
+                        ➕ Post a Ministry Request
+                      </button>
+                    )}
+                  </div>
+                </div>
 
-                        {/* CASE C: MINISTRY NEEDS TAB - PRIEST CAN RESPOND */}
-                        {!isConfirmed && !isMyRequest && user.is_verified === 1 && (user.title === 'Fr.' || (!user.title && user.clergy_type !== 'convent')) && (
-                          <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid #F1F5F9' }}>
-                            {hasOffered ? (
-                              <div style={{ background: '#FEF9C3', color: '#854D0E', padding: '0.55rem 0.85rem', borderRadius: 'var(--radius-sm)', fontSize: '0.84rem', fontWeight: 600, textAlign: 'center' }}>
-                                ✓ You are listed as available to celebrate. Awaiting parish/convent selection.
+                {/* 3 Sub-Tabs for Sisters/Brothers: 1. Ministry Needs, 2. Priests Responded, 3. Confirmed Celebrations */}
+                {(() => {
+                  const openCount = bookings.filter(b => b.status === 'pending' && (!b.applicants || b.applicants.length === 0)).length;
+                  const reviewCount = bookings.filter(b => b.status === 'pending' && (b.applicants && b.applicants.length > 0)).length;
+                  const confirmedCount = bookings.filter(b => b.status === 'accepted' || b.status === 'completed').length;
+
+                  return (
+                    <div className="tabs" style={{ marginBottom: '1.25rem' }}>
+                      <div
+                        className={`tab ${requestsTab === 'open' ? 'active' : ''}`}
+                        onClick={() => setRequestsTab('open')}
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 5L6 9H2v6h4l5 4V5z" />
+                          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                          <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                        </svg>
+                        <span>Ministry Needs ({openCount})</span>
+                      </div>
+                      <div
+                        className={`tab ${requestsTab === 'review' ? 'active' : ''}`}
+                        onClick={() => setRequestsTab('review')}
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                        <span>Priests Responded ({reviewCount})</span>
+                      </div>
+                      <div
+                        className={`tab ${requestsTab === 'accepted' ? 'active' : ''}`}
+                        onClick={() => setRequestsTab('accepted')}
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="m11 17 2 2a1 1 0 0 0 1.4 0l4.3-4.3a1 1 0 0 0 0-1.4l-2.6-2.6a1 1 0 0 0-1.4 0l-1.4 1.4" />
+                          <path d="m18 10 1.3-1.3a1 1 0 0 0 0-1.4l-2.6-2.6a1 1 0 0 0-1.4 0L14 6" />
+                          <path d="m2 14 6 6" />
+                          <path d="M7 9 2 14" />
+                          <path d="M14 6 8.7 11.3a1 1 0 0 0 0 1.4l2.6 2.6" />
+                        </svg>
+                        <span>Confirmed ({confirmedCount})</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                <div className="roster-grid">
+                  {(() => {
+                    const filteredBookings = bookings.filter(b => {
+                      if (requestsTab === 'open') {
+                        return b.status === 'pending' && (!b.applicants || b.applicants.length === 0);
+                      }
+                      if (requestsTab === 'review') {
+                        return b.status === 'pending' && (b.applicants && b.applicants.length > 0);
+                      }
+                      return b.status === 'accepted' || b.status === 'completed';
+                    });
+
+                    if (filteredBookings.length === 0) {
+                      return (
+                        <div className="no-data" style={{ gridColumn: '1 / -1' }}>
+                          <div className="no-data-icon">
+                            {requestsTab === 'open' ? '🕊️' : requestsTab === 'review' ? '🙌' : '🤝'}
+                          </div>
+                          <p>
+                            {requestsTab === 'open'
+                              ? 'No open liturgical needs waiting for celebrants.'
+                              : requestsTab === 'review'
+                              ? 'No pending priest responses to review at the moment.'
+                              : 'No confirmed celebrations found yet.'}
+                          </p>
+                          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                            {requestsTab === 'open'
+                              ? 'Parishes and Convents can click "➕ Post a Ministry Request" to share a need.'
+                              : requestsTab === 'review'
+                              ? 'When priests indicate their availability to celebrate, they will appear here for you to invite.'
+                              : 'When a priest is selected, the celebration appears here with direct contact details.'}
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return filteredBookings.map((b) => {
+                      const { date, time } = formatDateTime(b.datetime, b.datetime_end);
+                      const isMyRequest = b.requester_id === user.id;
+                      const isConfirmed = b.status === 'accepted' || b.status === 'completed';
+                      const urgency = isConfirmed ? getCelebrationUrgency(b.datetime) : null;
+                      const applicantsCount = (b.applicants || []).length;
+
+                      return (
+                        <div className="priest-card" key={b.id} style={{ borderColor: isConfirmed ? '#BBF7D0' : applicantsCount > 0 ? '#BFDBFE' : '#E2E8F0' }}>
+                          <div className="priest-header">
+                            <div>
+                              <div className="priest-name" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                <span>{date}</span>
+                                {urgency && (
+                                  <span className={`urgency-pill ${urgency.badgeClass}`}>
+                                    {urgency.isPulsing && <span className="urgency-pulse-dot"></span>}
+                                    {urgency.label}
+                                  </span>
+                                )}
                               </div>
-                            ) : (
-                              <button
-                                className="btn btn-primary btn-sm"
-                                onClick={() => handleOfferMinistry(b.id)}
-                                style={{ width: '100%', padding: '0.65rem' }}
-                              >
-                                ✋ Available to Celebrate
-                              </button>
+                              <div style={{ color: 'var(--accent-gold)', fontSize: '0.85rem' }}>⏰ {time}</div>
+                            </div>
+                            <span
+                              className={`distance-badge ${isConfirmed ? 'badge-confirmed' : ''}`}
+                              style={{
+                                background: isConfirmed ? '#DCFCE7' : applicantsCount > 0 ? '#EFF6FF' : '#F1F5F9',
+                                color: isConfirmed ? '#15803D' : applicantsCount > 0 ? '#1D4ED8' : '#475569'
+                              }}
+                            >
+                              {isConfirmed
+                                ? '🤝 Confirmed Celebrant'
+                                : applicantsCount > 0
+                                ? `🙌 ${applicantsCount} Priest${applicantsCount > 1 ? 's' : ''} Ready to Serve`
+                                : '🕊️ Awaiting Celebrant'}
+                            </span>
+                          </div>
+
+                          <div className="priest-meta-row">
+                            <div className="priest-meta-item">
+                              <span>✨</span>
+                              <strong>Service:</strong>
+                              <span style={{ color: 'var(--accent-gold)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
+                                <span>{b.service_type || 'Holy Mass'}</span>
+                                {(() => {
+                                  const s = (b.service_type || '').toLowerCase();
+                                  if (s.includes('substation')) {
+                                    return <span style={{ fontSize: '0.68rem', background: '#DBEAFE', color: '#1E40AF', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>🛵 Substation</span>;
+                                  }
+                                  if (s.includes('concelebration')) {
+                                    return <span style={{ fontSize: '0.68rem', background: '#F3E8FF', color: '#6B21A8', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>🤝 Concelebrant</span>;
+                                  }
+                                  if (s.includes('funeral') || s.includes('requiem')) {
+                                    return <span style={{ fontSize: '0.68rem', background: '#F1F5F9', color: '#334155', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>🕊️ Requiem</span>;
+                                  }
+                                  if (s.includes('marriage') || s.includes('matrimony')) {
+                                    return <span style={{ fontSize: '0.68rem', background: '#FEF3C7', color: '#92400E', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>💒 Marriage</span>;
+                                  }
+                                  return null;
+                                })()}
+                              </span>
+                            </div>
+                            <div className="priest-meta-item">
+                              <span>⛪</span>
+                              <strong>Venue:</strong> {b.location}
+                            </div>
+                            <div className="priest-meta-item">
+                              <span>🗣️</span>
+                              <strong>Language:</strong> {b.language}
+                            </div>
+                            <div className="priest-meta-item">
+                              <span>👤</span>
+                              <strong>Requested By:</strong> {formatEcclesiasticalName(b.requester_title || (b.requester_clergy_type === 'convent' ? 'Sr.' : 'Fr.'), b.requester_name, b.requester_congregation_abbr)} ({b.requester_order || b.requester_diocese})
+                            </div>
+                            {b.distance_km !== null && (
+                              <div className="priest-meta-item">
+                                <span>📍</span>
+                                <strong>Distance:</strong> {b.distance_km} km away
+                              </div>
+                            )}
+                            {b.notes && (
+                              <div className="priest-meta-item" style={{ gridColumn: '1 / -1', fontStyle: 'italic', color: '#64748B' }}>
+                                <span>📝</span>
+                                <strong>Note:</strong> {b.notes}
+                              </div>
                             )}
                           </div>
-                        )}
-                      </div>
-                    );
-                  });
-                })()}
+
+                          {/* CASE A: ACCEPTED / CONFIRMED TAB */}
+                          {isConfirmed && (
+                            <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 'var(--radius-md)', padding: '0.9rem', marginTop: 'auto' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                <div className="avatar-badge" style={{ width: '40px', height: '40px', borderColor: '#166534' }}>
+                                  {b.responder_photo ? (
+                                    <img src={b.responder_photo} alt={b.responder_name} />
+                                  ) : (
+                                    <span style={{ fontSize: '0.8rem' }}>{b.responder_title || 'Fr.'}</span>
+                                  )}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: 700, color: '#166534', fontSize: '0.92rem' }}>
+                                    🤝 Confirmed Celebrant: {formatEcclesiasticalName(b.responder_title || 'Fr.', b.responder_name, b.responder_congregation_abbr)}
+                                  </div>
+                                  <div style={{ fontSize: '0.82rem', color: '#15803D' }}>
+                                    {b.responder_order || b.responder_diocese}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem', marginBottom: '0.45rem' }}>
+                                <a
+                                  href={`tel:${isMyRequest ? b.responder_mobile : b.requester_mobile}`}
+                                  className="btn btn-call btn-sm"
+                                  style={{ padding: '0.5rem', fontWeight: 700, fontSize: '0.78rem', justifyContent: 'center' }}
+                                >
+                                  📞 Call {isMyRequest ? 'Priest' : 'Parish'}
+                                </a>
+                                <a
+                                  href={getWhatsAppLink(isMyRequest ? b.responder_mobile : b.requester_mobile, `Praised be Jesus Christ! Regarding our confirmed celebration for ${b.service_type || 'Holy Mass'} at ${b.location} on ${date} (${time}).`)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="wa-btn"
+                                  style={{ padding: '0.5rem', fontWeight: 700, fontSize: '0.78rem', justifyContent: 'center' }}
+                                >
+                                  💬 WhatsApp
+                                </a>
+                              </div>
+
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem' }}>
+                                {b.location && (
+                                  <a
+                                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.location)}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="btn btn-secondary btn-sm"
+                                    style={{ padding: '0.5rem', fontWeight: 700, fontSize: '0.78rem', justifyContent: 'center', background: '#FFFFFF', borderColor: '#CBD5E1' }}
+                                  >
+                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                      <polygon points="3 11 22 2 13 21 11 13 3 11" />
+                                    </svg>
+                                    <span>Directions</span>
+                                  </a>
+                                )}
+                                <a
+                                  href={`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`${b.service_type || 'Holy Mass'} - ${b.location || 'Parish'}`)}&dates=${(() => {
+                                    const d = new Date(b.datetime);
+                                    const dEnd = new Date(b.datetime_end || d.getTime() + 3600000);
+                                    const fmt = dt => dt.toISOString().replace(/-|:|\.\d\d\d/g, '');
+                                    return `${fmt(d)}/${fmt(dEnd)}`;
+                                  })()}&details=${encodeURIComponent(`Confirmed liturgy with ${formatEcclesiasticalName(b.responder_title || 'Fr.', b.responder_name, b.responder_congregation_abbr)}. Contact: ${b.responder_mobile}`)}&location=${encodeURIComponent(b.location || '')}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="btn btn-secondary btn-sm"
+                                  style={{ padding: '0.5rem', fontWeight: 700, fontSize: '0.78rem', justifyContent: 'center', background: '#FFFFFF', borderColor: '#CBD5E1' }}
+                                >
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                    <line x1="16" y1="2" x2="16" y2="6" />
+                                    <line x1="8" y1="2" x2="8" y2="6" />
+                                    <line x1="3" y1="10" x2="21" y2="10" />
+                                  </svg>
+                                  <span>Add to Calendar</span>
+                                </a>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* CASE B: PRIESTS RESPONDED TAB - SISTER/BROTHER CAN CONFIRM CELEBRANT */}
+                          {!isConfirmed && (requestsTab === 'review' || isMyRequest) && (
+                            <div className="applicants-box" style={{ marginTop: 'auto' }}>
+                              <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#0F172A', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                                <span>🙌 Fathers Ready to Celebrate ({applicantsCount})</span>
+                                {isMyRequest && (
+                                  <span style={{ fontSize: '0.75rem', color: '#2563EB', fontWeight: 600 }}>Select a Father for this ministry</span>
+                                )}
+                              </div>
+
+                              {isMyRequest && applicantsCount > 0 && (
+                                <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '0.45rem 0.65rem', fontSize: '0.74rem', color: '#1E40AF', lineHeight: '1.4', marginBottom: '0.55rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span>💬</span>
+                                  <span><strong>Direct Contact Advisory:</strong> Please chat with Father on WhatsApp or call him directly to verify timing and liturgical arrangements before confirming.</span>
+                                </div>
+                              )}
+
+                              {applicantsCount === 0 ? (
+                                <p style={{ fontSize: '0.8rem', color: '#94A3B8' }}>
+                                  Awaiting available priests to respond for this ministry.
+                                </p>
+                              ) : (
+                                (b.applicants || []).map(cand => (
+                                  <div className="applicant-card" key={cand.priest_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F8FAFC', padding: '0.65rem 0.85rem', borderRadius: '6px', marginBottom: '0.4rem', border: '1px solid #E2E8F0', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', minWidth: '200px' }}>
+                                      <div className="avatar-badge" style={{ width: '36px', height: '36px' }}>
+                                        {cand.profile_photo ? (
+                                          <img src={cand.profile_photo} alt={cand.priest_name} />
+                                        ) : (
+                                          <span style={{ fontSize: '0.75rem' }}>{cand.priest_title || 'Fr.'}</span>
+                                        )}
+                                      </div>
+                                      <div>
+                                        <div className="applicant-name" style={{ fontWeight: 700, color: '#0F172A' }}>
+                                          {formatEcclesiasticalName(cand.priest_title || 'Fr.', cand.priest_name, cand.congregation_abbr)}
+                                        </div>
+                                        <div className="applicant-sub" style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                                          {cand.clergy_type === 'religious' ? cand.religious_order : cand.diocese_province}
+                                          {cand.residence_name ? ` • 📍 ${cand.residence_name}` : ''}
+                                          {cand.distance_km !== null ? ` (${cand.distance_km} km away)` : ''}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    {isMyRequest && (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                        {cand.priest_mobile && (
+                                          <>
+                                            <a
+                                              href={`tel:${cand.priest_mobile}`}
+                                              className="btn btn-call btn-sm"
+                                              style={{ padding: '0.35rem 0.55rem', fontSize: '0.76rem' }}
+                                              title="Call Father"
+                                            >
+                                              📞
+                                            </a>
+                                            <a
+                                              href={getWhatsAppLink(cand.priest_mobile, `Praised be Jesus Christ! Father, regarding the ministry request for ${b.service_type || 'Holy Mass'} at ${b.location} on ${date}.`)}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="wa-btn"
+                                              style={{ padding: '0.35rem 0.6rem', fontSize: '0.76rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                              title="Chat directly on WhatsApp before confirming"
+                                            >
+                                              <span>💬</span>
+                                              <span>WhatsApp</span>
+                                            </a>
+                                          </>
+                                        )}
+                                        <button
+                                          className="btn btn-primary btn-sm"
+                                          onClick={() => handleConfirmApplicant(b.id, cand.priest_id, cand.priest_name)}
+                                          style={{ padding: '0.4rem 0.75rem', fontSize: '0.82rem', fontWeight: 700 }}
+                                        >
+                                          ✓ Select {cand.priest_title || 'Fr.'} {cand.priest_name.replace(/^(Rev\.\s*|Fr\.\s*|Br\.\s*|Sr\.\s*)+/i, '').split(' ')[0]}
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            )}
+
+            {/* PLATFORM NOTICE & CANONICAL ADVISORY DISCLAIMER */}
+            <div className="platform-disclaimer-card">
+              <div className="disclaimer-header">
+                <span className="disclaimer-icon">📜</span>
+                <h4 className="disclaimer-title">Platform Notice & Canonical Advisory</h4>
+              </div>
+              <div className="disclaimer-content">
+                <p>
+                  <strong>Facilitation Forum Only:</strong> ArulApp is designed solely as a voluntary facilitation forum to help convents, parishes, and religious communities discover the liturgical availability of Catholic priests easily.
+                </p>
+                <p>
+                  <strong>Direct Communication Required Prior to Confirmation:</strong> Requesters must always converse directly with the priest (via WhatsApp or phone call) prior to finalizing or confirming any ministry. Direct communication is essential to verify mutual agreement, exact timing, honorarium, and liturgical details.
+                </p>
+                <p>
+                  <strong>No Guarantee or Platform Liability:</strong> ArulApp provides availability information in good faith but provides no assurance or guarantee regarding celebrant attendance, punctuality, or fulfillment, and assumes no responsibility or liability for cancellations, unforeseen absences, or travel disruptions.
+                </p>
+                <p>
+                  <strong>Direct Bilateral Arrangements:</strong> Once contact details are obtained, all arrangements and coordination take place directly between the requesting community and the priest through WhatsApp or direct call. The platform does not arbitrate or entertain grievances or disputes arising from individual engagements.
+                </p>
               </div>
             </div>
           </>
@@ -2746,15 +3756,56 @@ export default function App() {
                 </p>
                 <div className="form-group">
                   <label className="form-label">SERVICE TYPE REQUIRED</label>
+                  <div className="service-category-tabs">
+                    <button
+                      type="button"
+                      className={`service-category-tab ${confirmServiceCategory === 'core' ? 'active' : ''}`}
+                      onClick={() => {
+                        setConfirmServiceCategory('core');
+                        if (!CORE_SERVICES.includes(confirmServiceType)) {
+                          setConfirmServiceType(CORE_SERVICES[0]);
+                        }
+                      }}
+                    >
+                      ⛪ Core Masses & Sacraments
+                    </button>
+                    <button
+                      type="button"
+                      className={`service-category-tab ${confirmServiceCategory === 'special' ? 'active' : ''}`}
+                      onClick={() => {
+                        setConfirmServiceCategory('special');
+                        if (!SPECIAL_SERVICES.includes(confirmServiceType)) {
+                          setConfirmServiceType(SPECIAL_SERVICES[0]);
+                        }
+                      }}
+                    >
+                      🌟 Special Events & Blessings
+                    </button>
+                  </div>
                   <select
                     className="form-input"
                     value={confirmServiceType}
                     onChange={(e) => setConfirmServiceType(e.target.value)}
                     style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
                   >
-                    {SERVICE_TYPES.map(st => <option key={st} value={st}>{st}</option>)}
+                    {(confirmServiceCategory === 'core' ? CORE_SERVICES : SPECIAL_SERVICES).map(st => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
                   </select>
                 </div>
+                {confirmServiceType === 'Others' && (
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#2563EB' }}>SPECIFY OTHER MINISTRY / SACRAMENT *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. Novena Preaching, School Mass, Vehicle Blessing"
+                      value={confirmCustomServiceType}
+                      onChange={(e) => setConfirmCustomServiceType(e.target.value)}
+                      required
+                    />
+                  </div>
+                )}
                 <div className="form-group">
                   <label className="form-label">PARISH / CONVENT / VENUE LOCATION</label>
                   <input
@@ -2788,6 +3839,10 @@ export default function App() {
                   </select>
                 </div>
 
+                <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '0.65rem 0.85rem', fontSize: '0.76rem', color: '#92400E', lineHeight: '1.45', marginTop: '1rem' }}>
+                  ⚠️ <strong>Platform Advisory:</strong> ArulApp facilitates availability discovery only and assumes no liability for celebrant commitments. Always directly speak or chat with Father on WhatsApp prior to confirming to ensure mutual agreement on timing and logistics.
+                </div>
+
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
                   <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowDirectConfirmModal(null)}>Cancel</button>
                   <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={formSubmitting}>Confirm & Lock Slot</button>
@@ -2810,15 +3865,66 @@ export default function App() {
               <div className="modal-body">
                 <div className="form-group">
                   <label className="form-label">LITURGICAL SERVICE TYPE</label>
+                  <div className="service-category-tabs">
+                    <button
+                      type="button"
+                      className={`service-category-tab ${bookingServiceCategory === 'core' ? 'active' : ''}`}
+                      onClick={() => {
+                        setBookingServiceCategory('core');
+                        if (!CORE_SERVICES.includes(bookingServiceType)) {
+                          setBookingServiceType(CORE_SERVICES[0]);
+                        }
+                      }}
+                    >
+                      ⛪ Core Masses & Sacraments
+                    </button>
+                    <button
+                      type="button"
+                      className={`service-category-tab ${bookingServiceCategory === 'special' ? 'active' : ''}`}
+                      onClick={() => {
+                        setBookingServiceCategory('special');
+                        if (!SPECIAL_SERVICES.includes(bookingServiceType)) {
+                          setBookingServiceType(SPECIAL_SERVICES[0]);
+                        }
+                      }}
+                    >
+                      🌟 Special Events & Blessings
+                    </button>
+                  </div>
                   <select
                     className="form-input"
                     value={bookingServiceType}
                     onChange={(e) => setBookingServiceType(e.target.value)}
                     style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
                   >
-                    {SERVICE_TYPES.map(st => <option key={st} value={st}>{st}</option>)}
+                    {(bookingServiceCategory === 'core' ? CORE_SERVICES : SPECIAL_SERVICES).map(st => (
+                      <option key={st} value={st}>{st}</option>
+                    ))}
                   </select>
                 </div>
+                {bookingServiceType === 'Others' && (
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#2563EB' }}>SPECIFY OTHER MINISTRY / SACRAMENT *</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. Novena Preaching, School Mass, Vehicle Blessing, Flag Hoisting"
+                      value={bookingCustomServiceType}
+                      onChange={(e) => setBookingCustomServiceType(e.target.value)}
+                      required
+                    />
+                  </div>
+                )}
+                {bookingServiceType === 'Substation Mass' && (
+                  <div style={{ fontSize: '0.76rem', color: '#1D4ED8', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '0.45rem 0.65rem', marginBottom: '0.75rem', lineHeight: '1.4' }}>
+                    🛵 <strong>Substation Note:</strong> Please specify the substation / village chapel name and distance from main parish in Venue Location below so Father is aware of travel.
+                  </div>
+                )}
+                {bookingServiceType === 'Concelebration (Feasts & Events)' && (
+                  <div style={{ fontSize: '0.76rem', color: '#6B21A8', background: '#FAF5FF', border: '1px solid #E9D5FF', borderRadius: '6px', padding: '0.45rem 0.65rem', marginBottom: '0.75rem', lineHeight: '1.4' }}>
+                    🤝 <strong>Concelebration Note:</strong> Mention vestment/stole color or feast details in Notes so visiting Father can prepare accordingly.
+                  </div>
+                )}
                 <div className="form-group">
                   <label className="form-label">PARISH / CONVENT / VENUE LOCATION</label>
                   <input
@@ -2883,6 +3989,22 @@ export default function App() {
                   </select>
                 </div>
 
+                <div className="form-group">
+                  <label className="form-label">ADDITIONAL NOTES / SPECIAL INSTRUCTIONS</label>
+                  <textarea
+                    className="form-input"
+                    rows="3"
+                    placeholder="e.g. Substation chapel landmark, vestment color, transport arrangements, intentions, or specific details for Father..."
+                    value={bookingNotes}
+                    onChange={(e) => setBookingNotes(e.target.value)}
+                    style={{ resize: 'vertical' }}
+                  />
+                </div>
+
+                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '0.65rem 0.85rem', fontSize: '0.75rem', color: '#64748B', lineHeight: '1.45', marginTop: '1rem' }}>
+                  💡 <strong>Facilitation Note:</strong> ArulApp broadcasts this need to nearby priests. Once priests respond, connect directly via WhatsApp or phone call to verify arrangements.
+                </div>
+
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
                   <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowRequestModal(false)}>Cancel</button>
                   <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={formSubmitting}>Broadcast Request</button>
@@ -2898,21 +4020,45 @@ export default function App() {
         <div className="modal-overlay">
           <div className="modal-container" style={{ maxWidth: '580px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div className="modal-header">
-              <h3 className="modal-title">⚙️ Modify Clergy Profile</h3>
+              <h3 className="modal-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+                <span>My Profile</span>
+              </h3>
               <button className="modal-close" onClick={() => setShowProfileModal(false)}>&times;</button>
             </div>
             <form onSubmit={handleUpdateProfile}>
               <div className="modal-body">
                 {/* Profile Photo Upload & Preview */}
-                <div style={{ textAlign: 'center', marginBottom: '1.5rem', background: '#F8FAFC', padding: '1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid #E2E8F0' }}>
-                  <div className="avatar-lg" style={{ width: '96px', height: '96px', marginBottom: '0.5rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', marginBottom: '1.25rem' }}>
+                  <div className="avatar-lg" style={{ width: '96px', height: '96px', background: '#F8FAFC', color: '#1E293B', cursor: 'pointer' }}>
                     {editProfilePhoto ? (
                       <img src={editProfilePhoto} alt="Profile" />
                     ) : (
-                      <span>{editClergyType === 'convent' ? '🕊️' : '⛪'}</span>
+                      <span style={{ fontSize: '1.75rem', fontWeight: 800, fontFamily: 'Outfit', letterSpacing: '-0.02em', color: '#0F172A' }}>
+                        {(editTitle || (editClergyType === 'convent' ? 'Sr.' : 'Fr.')).replace('.', '')}
+                      </span>
                     )}
-                    <label className="avatar-upload-overlay" htmlFor="edit-photo-upload">
-                      Upload
+                    <label
+                      className="avatar-upload-overlay"
+                      htmlFor="edit-photo-upload"
+                      style={{
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '4px',
+                        padding: '0.28rem 0'
+                      }}
+                      title="Upload from device or take photo with camera"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                        <circle cx="12" cy="13" r="4" />
+                      </svg>
+                      <span style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.02em' }}>Upload</span>
                     </label>
                     <input
                       id="edit-photo-upload"
@@ -2926,90 +4072,51 @@ export default function App() {
                       }}
                     />
                   </div>
-                  <div>
-                    <label
-                      htmlFor="edit-photo-upload"
-                      className="btn btn-secondary btn-sm"
-                      style={{ cursor: 'pointer', display: 'inline-block', fontSize: '0.78rem' }}
-                    >
-                      📷 Change / Upload Photograph
-                    </label>
-                    {editProfilePhoto && (
+                  <span style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '0.55rem', fontWeight: 500, letterSpacing: '0.01em' }}>
+                    {editProfilePhoto ? 'Change your photo' : 'Upload your clerical photo'}
+                  </span>
+                  {editProfilePhoto && (
+                    <div style={{ marginTop: '0.35rem' }}>
                       <button
                         type="button"
                         onClick={() => setEditProfilePhoto(null)}
-                        style={{ marginLeft: '0.5rem', background: 'none', border: 'none', color: '#DC2626', fontSize: '0.78rem', cursor: 'pointer', textDecoration: 'underline' }}
+                        style={{ background: 'none', border: 'none', color: '#DC2626', fontSize: '0.78rem', cursor: 'pointer', textDecoration: 'underline' }}
                       >
                         Remove Photo
                       </button>
-                    )}
-                  </div>
-                  <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '0.35rem' }}>
-                    Photos are automatically optimized and securely saved to your Turso cloud database.
-                  </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* Choose Clerical Status: Fr. / Br. / Sr. */}
+                {/* Name Input with Clickable Integrated Title Prefix */}
                 <div className="form-group">
-                  <label className="form-label">CLERICAL STATUS</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem' }}>
-                    <button
-                      type="button"
-                      className={`btn ${editTitle === 'Fr.' ? 'btn-primary' : 'btn-secondary'}`}
+                  <label className="form-label">
+                    <span>NAME *</span>
+                    <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 'normal', marginLeft: '6px' }}>
+                      (Tap title badge to change Fr. / Sr. / Br.)
+                    </span>
+                  </label>
+                  <div className="input-prefix-group" style={{ cursor: 'text' }}>
+                    <span
+                      className="input-prefix-badge"
                       onClick={() => {
-                        setEditTitle('Fr.');
-                        if (editClergyType === 'convent') setEditClergyType('religious');
+                        // Cycle through or open title picker
+                        setShowTitlePickerModal(true);
                       }}
-                      style={{ fontSize: '0.82rem', padding: '0.5rem 0.4rem', fontWeight: 700 }}
+                      title="Tap to change clerical status (Fr. / Sr. / Br.)"
+                      style={{ cursor: 'pointer', paddingRight: '0.45rem', userSelect: 'none', color: '#0F172A', fontWeight: 800 }}
                     >
-                      ✝️ Fr. (Priest)
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn ${editTitle === 'Br.' ? 'btn-primary' : 'btn-secondary'}`}
-                      onClick={() => {
-                        setEditTitle('Br.');
-                        setEditClergyType('religious');
-                      }}
-                      style={{ fontSize: '0.82rem', padding: '0.5rem 0.4rem', fontWeight: 700 }}
-                    >
-                      🤝 Br. (Brother)
-                    </button>
-                    <button
-                      type="button"
-                      className={`btn ${editTitle === 'Sr.' ? 'btn-primary' : 'btn-secondary'}`}
-                      onClick={() => {
-                        setEditTitle('Sr.');
-                        setEditClergyType('convent');
-                      }}
-                      style={{ fontSize: '0.82rem', padding: '0.5rem 0.4rem', fontWeight: 700 }}
-                    >
-                      🕊️ Sr. (Sister)
-                    </button>
-                  </div>
-                </div>
-
-                {/* Name with Live Display Name Preview & Uneditable Category Prefix */}
-                <div className="form-group">
-                  <label className="form-label">NAME</label>
-                  <div className="input-prefix-group">
-                    <span className="input-prefix-badge">{editTitle}</span>
+                      {editTitle || 'Fr.'} <span style={{ fontSize: '0.72rem', color: '#64748B', marginLeft: '1px' }}>▾</span>
+                    </span>
                     <input
                       type="text"
                       className="form-input-inline"
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
+                      placeholder="Enter your name..."
                       required
                     />
                   </div>
-                  {editName.trim() && (
-                    <div style={{ marginTop: '0.4rem', fontSize: '0.82rem', color: '#166534', background: '#F0FDF4', padding: '0.4rem 0.75rem', borderRadius: '4px', border: '1px solid #BBF7D0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span>✨</span>
-                      <span>
-                        Display Name Preview: <strong>{formatEcclesiasticalName(editTitle, editName, (editTitle === 'Fr.' && editClergyType === 'diocesan') ? '' : editCongregationAbbr)}</strong>
-                      </span>
-                    </div>
-                  )}
                 </div>
 
                 {/* BRANCH 1: PRIEST (Fr.) - Diocesan vs Religious */}
@@ -3190,7 +4297,7 @@ export default function App() {
 
                 <div className="form-group">
                   <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>LOCALITY ADDRESS / AREA</span>
+                    <span>ADDRESS</span>
                     {editLatitude && (
                       <span style={{ color: '#166534', fontSize: '0.74rem', fontWeight: 600 }}>
                         ✓ GPS Pin Set
@@ -3203,7 +4310,7 @@ export default function App() {
                       className="form-input"
                       value={editResidenceAddress}
                       onChange={(e) => setEditResidenceAddress(e.target.value)}
-                      placeholder="e.g. Kilpauk, Chennai - 600010"
+                      placeholder="e.g. Kilpauk, Chennai"
                     />
                     <button
                       type="button"
@@ -3226,39 +4333,54 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Travel Radius for Priests */}
-                {editClergyType !== 'convent' && (
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label className="form-label">MAX TRAVEL RADIUS (KM)</label>
-                      <select
-                        className="form-input"
-                        value={editMaxTravelKm}
-                        onChange={(e) => setEditMaxTravelKm(parseInt(e.target.value))}
-                      >
-                        <option value={10}>Within 10 km</option>
-                        <option value={20}>Within 20 km</option>
-                        <option value={35}>Within 35 km</option>
-                        <option value={50}>Within 50 km</option>
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">PRIMARY TRANSPORT MODE</label>
-                      <select
-                        className="form-input"
-                        value={editTransportMode}
-                        onChange={(e) => setEditTransportMode(e.target.value)}
-                      >
-                        <option value="own_bike">🏍️ Own Two-Wheeler / Bike</option>
-                        <option value="own_car">🚗 Own Car</option>
-                        <option value="public_transport">🚌 Public Transport / Bus</option>
-                        <option value="parish_pickup">🚙 Parish Pickup Needed</option>
-                      </select>
-                    </div>
+                {/* Postal PIN Code Field */}
+                <div className="form-group">
+                  <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>POSTAL PIN CODE *</span>
+                    {editPincode && editPincode.replace(/\D/g, '').length === 6 ? (
+                      <span style={{ color: '#166534', fontSize: '0.74rem', fontWeight: 600 }}>
+                        ✓ Valid 6-Digit PIN
+                      </span>
+                    ) : (
+                      <span style={{ color: '#64748B', fontSize: '0.72rem' }}>
+                        Required for ministry distance & location tracking
+                      </span>
+                    )}
+                  </label>
+                  <div className="input-prefix-group">
+                    <span className="input-prefix-badge" style={{ color: '#475569', fontWeight: 700, fontSize: '0.8rem' }}>
+                      PIN
+                    </span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                      className="form-input-inline"
+                      placeholder="e.g. 560036, 600010, 682001"
+                      value={editPincode}
+                      onChange={(e) => setEditPincode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      required
+                    />
                   </div>
-                )}
+                </div>
 
-                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+                {/* Location & Clerical Status Accuracy Advisory Note */}
+                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderLeft: '3.5px solid #2563EB', borderRadius: '8px', padding: '0.75rem 0.95rem', marginTop: '1.25rem', fontSize: '0.77rem', color: '#475569', lineHeight: '1.5' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: '#1E40AF', marginBottom: '0.2rem' }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="16" x2="12" y2="12" />
+                      <line x1="12" y1="8" x2="12.01" y2="8" />
+                    </svg>
+                    <span>Important Profile Accuracy Notice</span>
+                  </div>
+                  <span>
+                    Ministry suggestions, notifications, and celebration bookings are matched based on your <strong>clerical status</strong> and <strong>residence location</strong>. Please ensure this information is accurate so you receive relevant liturgical needs in your area.
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
                   <button
                     type="button"
                     className="btn btn-secondary"
@@ -3552,6 +4674,465 @@ export default function App() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* MONTHLY BOOKING & MINISTRY CALENDAR MODAL */}
+      {showCalendarModal && (
+        <div className="modal-overlay" onClick={() => setShowCalendarModal(false)}>
+          <div
+            className="modal-container"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '680px', width: '94%', maxHeight: '90vh', overflowY: 'auto', padding: 0 }}
+          >
+            {/* Modal Header */}
+            <div className="modal-header" style={{ padding: '1.1rem 1.4rem', borderBottom: '1px solid #E2E8F0', background: '#F8FAFC' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#EFF6FF', color: '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="modal-title" style={{ margin: 0, fontSize: '1.18rem', fontWeight: 800 }}>
+                    Monthly Ministry Calendar
+                  </h3>
+                  <span style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                    View scheduled celebrations, mass times & commitments at a glance
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="modal-close"
+                onClick={() => setShowCalendarModal(false)}
+                title="Close calendar"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="modal-body" style={{ padding: '1.25rem 1.4rem' }}>
+              {(() => {
+                const { monthName, days, year, month } = getCalendarDays(calMonthOffset);
+                
+                // Group user's confirmed bookings by YYYY-MM-DD
+                const bookingsByDate = {};
+                bookings.forEach((b) => {
+                  if ((b.status === 'accepted' || b.status === 'completed') && (b.responder_id === user.id || b.requester_id === user.id)) {
+                    if (b.datetime) {
+                      const dStr = b.datetime.split('T')[0];
+                      if (!bookingsByDate[dStr]) bookingsByDate[dStr] = [];
+                      bookingsByDate[dStr].push(b);
+                    }
+                  }
+                });
+
+                // Filter selected date's bookings
+                const selectedDayBookings = calendarSelectedDate ? (bookingsByDate[calendarSelectedDate] || []) : [];
+                const now = new Date();
+                const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+
+                return (
+                  <div>
+                    {/* Month Navigator Bar */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', background: '#FFFFFF', padding: '0.4rem 0.5rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                      <button
+                        type="button"
+                        onClick={() => setCalMonthOffset(prev => prev - 1)}
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '0.35rem 0.75rem', fontWeight: 700 }}
+                      >
+                        ◀ Prev
+                      </button>
+
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0F172A', fontFamily: 'Outfit' }}>
+                          {monthName}
+                        </div>
+                        {calMonthOffset !== 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setCalMonthOffset(0)}
+                            style={{ background: 'none', border: 'none', color: '#2563EB', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                          >
+                            Jump to Current Month
+                          </button>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setCalMonthOffset(prev => prev + 1)}
+                        className="btn btn-secondary btn-sm"
+                        style={{ padding: '0.35rem 0.75rem', fontWeight: 700 }}
+                      >
+                        Next ▶
+                      </button>
+                    </div>
+
+                    {/* Day-of-week headers */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginBottom: '6px', textAlign: 'center' }}>
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((dw, idx) => (
+                        <div key={dw} style={{ fontSize: '0.74rem', fontWeight: 700, color: idx === 0 ? '#DC2626' : '#64748B', padding: '4px 0' }}>
+                          {dw}
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Month Calendar Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', marginBottom: '1.25rem' }}>
+                      {days.map((item, idx) => {
+                        if (!item) {
+                          return <div key={`empty-${idx}`} style={{ minHeight: '52px', background: '#F8FAFC', borderRadius: '8px', opacity: 0.4 }}></div>;
+                        }
+
+                        const dayBookings = bookingsByDate[item.dateStr] || [];
+                        const isToday = item.dateStr === todayStr;
+                        const isSelected = item.dateStr === calendarSelectedDate;
+                        const hasBookings = dayBookings.length > 0;
+
+                        return (
+                          <button
+                            key={item.dateStr}
+                            type="button"
+                            onClick={() => setCalendarSelectedDate(item.dateStr)}
+                            style={{
+                              minHeight: '56px',
+                              padding: '4px',
+                              borderRadius: '8px',
+                              border: isSelected
+                                ? '2px solid #2563EB'
+                                : isToday
+                                ? '2px solid #F59E0B'
+                                : hasBookings
+                                ? '1.5px solid #BBF7D0'
+                                : '1px solid #E2E8F0',
+                              background: isSelected
+                                ? '#EFF6FF'
+                                : hasBookings
+                                ? '#F0FDF4'
+                                : isToday
+                                ? '#FEFCE8'
+                                : '#FFFFFF',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'flex-start',
+                              cursor: 'pointer',
+                              position: 'relative',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <span
+                              style={{
+                                fontSize: '0.82rem',
+                                fontWeight: isToday || isSelected || hasBookings ? 800 : 600,
+                                color: isToday ? '#B45309' : isSelected ? '#1D4ED8' : '#0F172A'
+                              }}
+                            >
+                              {item.day}
+                            </span>
+
+                            {/* Booking dot markers */}
+                            {hasBookings && (
+                              <div style={{ display: 'flex', gap: '3px', marginTop: '3px', alignItems: 'center' }}>
+                                <span
+                                  style={{
+                                    width: '6px',
+                                    height: '6px',
+                                    borderRadius: '50%',
+                                    background: '#16A34A'
+                                  }}
+                                  title={`${dayBookings.length} celebration(s)`}
+                                />
+                                {dayBookings.length > 1 && (
+                                  <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#166534' }}>
+                                    {dayBookings.length}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {isToday && (
+                              <span style={{ fontSize: '0.55rem', fontWeight: 800, color: '#D97706', textTransform: 'uppercase', marginTop: 'auto' }}>
+                                Today
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Selected Day Agenda View */}
+                    <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '1rem 1.15rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '1rem' }}>📅</span>
+                          <strong style={{ fontSize: '0.92rem', color: '#0F172A' }}>
+                            {calendarSelectedDate ? (() => {
+                              const [y, m, d] = calendarSelectedDate.split('-');
+                              const selObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+                              return selObj.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+                            })() : 'Select a date'}
+                          </strong>
+                          {calendarSelectedDate === todayStr && (
+                            <span className="urgency-pill urgency-today" style={{ fontSize: '0.65rem' }}>
+                              <span className="urgency-pulse-dot"></span> Today
+                            </span>
+                          )}
+                        </div>
+                        <span style={{ fontSize: '0.76rem', color: '#64748B', fontWeight: 700 }}>
+                          {selectedDayBookings.length} Celebration{selectedDayBookings.length === 1 ? '' : 's'}
+                        </span>
+                      </div>
+
+                      {selectedDayBookings.length === 0 ? (
+                        <div style={{ textAlign: 'center', padding: '1.25rem 0.5rem', color: '#94A3B8' }}>
+                          <span style={{ fontSize: '1.3rem', display: 'block', marginBottom: '0.2rem' }}>🕊️</span>
+                          <span style={{ fontSize: '0.82rem' }}>No confirmed celebrations scheduled for this date.</span>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                          {selectedDayBookings.map((b) => {
+                            const { time } = formatDateTime(b.datetime, b.datetime_end);
+                            const isConfirmedPriest = b.responder_id === user.id;
+                            const partnerName = formatEcclesiasticalName(
+                              isConfirmedPriest ? b.requester_title || 'Sr.' : b.responder_title || 'Fr.',
+                              isConfirmedPriest ? b.requester_name : b.responder_name,
+                              isConfirmedPriest ? b.requester_congregation_abbr : b.responder_congregation_abbr
+                            );
+                            const partnerMobile = isConfirmedPriest ? b.requester_mobile : b.responder_mobile;
+
+                            return (
+                              <div
+                                key={b.id}
+                                style={{
+                                  background: '#FFFFFF',
+                                  border: '1px solid #BBF7D0',
+                                  borderLeft: '4px solid #16A34A',
+                                  borderRadius: '8px',
+                                  padding: '0.75rem 0.9rem',
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  gap: '0.75rem',
+                                  flexWrap: 'wrap'
+                                }}
+                              >
+                                <div style={{ flex: 1, minWidth: '200px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.2rem' }}>
+                                    <strong style={{ fontSize: '0.88rem', color: '#0F172A' }}>
+                                      {b.service_type || 'Holy Mass'}
+                                    </strong>
+                                    <span style={{ fontSize: '0.72rem', color: '#166534', background: '#DCFCE7', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                                      Confirmed
+                                    </span>
+                                  </div>
+                                  <div style={{ fontSize: '0.78rem', color: '#0284C7', fontWeight: 700, marginBottom: '0.2rem' }}>
+                                    ⏰ {time}
+                                  </div>
+                                  <div style={{ fontSize: '0.76rem', color: '#475569' }}>
+                                    📍 {b.location || 'Parish Chapel'} • With {partnerName}
+                                  </div>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                                  {partnerMobile && (
+                                    <a
+                                      href={`tel:${partnerMobile}`}
+                                      className="btn btn-call btn-sm"
+                                      style={{ padding: '0.4rem 0.65rem', fontSize: '0.74rem', fontWeight: 700 }}
+                                    >
+                                      📞 Call
+                                    </a>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setShowCalendarModal(false);
+                                      setRequestsTab('accepted');
+                                    }}
+                                    className="btn btn-secondary btn-sm"
+                                    style={{ padding: '0.4rem 0.65rem', fontSize: '0.74rem', fontWeight: 700 }}
+                                  >
+                                    View Card ↗
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* --- INSTANT CLERICAL STATUS SELECTION LAYER PROMPT --- */}
+      {showTitlePickerModal && (
+        <div
+          className="modal-overlay"
+          style={{ zIndex: 99999 }}
+          onClick={() => setShowTitlePickerModal(false)}
+        >
+          <div
+            className="modal-container"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '440px',
+              padding: '2rem 1.75rem',
+              textAlign: 'center',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              border: '2px solid var(--papal-gold)',
+              background: '#FFFFFF',
+              position: 'relative'
+            }}
+          >
+            {/* Top-Right Dismissal Button */}
+            <button
+              type="button"
+              onClick={() => setShowTitlePickerModal(false)}
+              title="Close"
+              style={{
+                position: 'absolute',
+                top: '1rem',
+                right: '1rem',
+                background: '#F1F5F9',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '1.1rem',
+                color: '#64748B',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              ✕
+            </button>
+
+            {/* Catholic Church Header Icon */}
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.75rem' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: '#F8FAFC', border: '1.5px solid var(--papal-gold)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#0F172A" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                  {/* Cross at Steeple */}
+                  <line x1="12" y1="2" x2="12" y2="6" stroke="var(--papal-gold)" strokeWidth="2" />
+                  <line x1="10" y1="3.5" x2="14" y2="3.5" stroke="var(--papal-gold)" strokeWidth="2" />
+                  {/* Steeple roof */}
+                  <path d="M12 6 L7 11 L17 11 Z" fill="#E2E8F0" />
+                  {/* Church Body */}
+                  <rect x="6" y="11" width="12" height="11" rx="1" />
+                  {/* Arched Doorway */}
+                  <path d="M10 22 V16 C10 14.9 10.9 14 12 14 C13.1 14 14 14.9 14 16 V22" fill="#0F172A" />
+                </svg>
+              </div>
+            </div>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0F172A', marginBottom: '0.35rem' }}>
+              Choose Your Clerical Status
+            </h3>
+            <p style={{ fontSize: '0.88rem', color: '#64748B', lineHeight: '1.4', marginBottom: '1.25rem' }}>
+              Select your title to continue.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}>
+              {/* 1. PRIEST (Fr.): Traced from Reference - Priest with Hair, Ears, Face, Roman Collar, and Cassock */}
+              <button
+                type="button"
+                className={`clerical-status-btn ${(showProfileModal ? editTitle : regTitle) === 'Fr.' ? 'selected' : ''}`}
+                onClick={() => {
+                  setRegTitle('Fr.');
+                  setEditTitle('Fr.');
+                  if (regClergyType === 'convent') setRegClergyType('religious');
+                  if (editClergyType === 'convent') setEditClergyType('religious');
+                  setShowTitlePickerModal(false);
+                }}
+              >
+                <svg width="28" height="28" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 18 C18 24 30 24 30 18" />
+                  <path d="M18 16.5 C16 16.5 16 19 18 19.5" />
+                  <path d="M30 16.5 C32 16.5 32 19 30 19.5" />
+                  <path d="M18 16 C16.5 13 18 8 24 8 C30 8 31.5 13 30 16" />
+                  <path d="M18 12.5 C20 13.5 22 13 24 12 C26 13 28 13.5 30 12.5" />
+                  <path d="M20 23.5 L19.5 26.5 C19.5 28 28.5 28 28.5 26.5 L28 23.5" />
+                  <rect x="22.2" y="24" width="3.6" height="3" rx="0.5" fill="none" stroke="currentColor" strokeWidth="2" />
+                  <path d="M19.5 26.5 C15 27 10 30 10 37" />
+                  <path d="M28.5 26.5 C33 27 38 30 38 37" />
+                  <line x1="24" y1="27.5" x2="24" y2="37" />
+                </svg>
+                <span>Fr. (Priest)</span>
+              </button>
+
+              {/* 2. SISTER (Sr.): Traced from Reference - Traditional Habit with Veil framing face & flowing wimple */}
+              <button
+                type="button"
+                className={`clerical-status-btn ${(showProfileModal ? editTitle : regTitle) === 'Sr.' ? 'selected' : ''}`}
+                onClick={() => {
+                  setRegTitle('Sr.');
+                  setEditTitle('Sr.');
+                  setRegClergyType('convent');
+                  setEditClergyType('convent');
+                  setShowTitlePickerModal(false);
+                }}
+              >
+                <svg width="28" height="28" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <ellipse cx="24" cy="22.5" rx="4.8" ry="6" />
+                  <path d="M19.2 18 C21 16.8 27 16.8 28.8 18" />
+                  <path d="M17.5 19 C18 14 20.5 13 24 13 C27.5 13 30 14 30.5 19" />
+                  <path d="M24 7.5 C16.5 7.5 14 13 14 23 C14 30 10 37 10 40 L16 38 C16.5 35 17.5 31 18.5 29" />
+                  <path d="M24 7.5 C31.5 7.5 34 13 34 23 C34 30 38 37 38 40 L32 38 C31.5 35 30.5 31 29.5 29" />
+                  <path d="M19 28 C21 31.5 27 31.5 29 28" />
+                  <path d="M18.5 34 C21.5 36.5 26.5 36.5 29.5 34" />
+                </svg>
+                <span>Sr. (Sister)</span>
+              </button>
+
+              {/* 3. BROTHER (Br.): Traced from Reference - Monk/Friar with Hooded Cowl & Scapular */}
+              <button
+                type="button"
+                className={`clerical-status-btn ${(showProfileModal ? editTitle : regTitle) === 'Br.' ? 'selected' : ''}`}
+                onClick={() => {
+                  setRegTitle('Br.');
+                  setEditTitle('Br.');
+                  setRegClergyType('religious');
+                  setEditClergyType('religious');
+                  setShowTitlePickerModal(false);
+                }}
+              >
+                <svg width="28" height="28" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <ellipse cx="24" cy="22" rx="4.8" ry="5.8" />
+                  <path d="M20 18.5 C21.5 17.5 26.5 17.5 28 18.5" />
+                  <path d="M24 8 C16 8 15 15 15 23 C15 26 16.5 28 19 29.5" />
+                  <path d="M24 8 C32 8 33 15 33 23 C33 26 31.5 28 29 29.5" />
+                  <path d="M19 29.5 C21 31 27 31 29 29.5" />
+                  <path d="M18 31 C15 32 10 34 10 39" />
+                  <path d="M30 31 C33 32 38 34 38 39" />
+                  <path d="M14 36 C18 38 30 38 34 36" />
+                </svg>
+                <span>Br. (Brother)</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-link"
+              onClick={() => setShowTitlePickerModal(false)}
+              style={{ fontSize: '0.82rem', color: '#94A3B8', textDecoration: 'none', cursor: 'pointer', background: 'none', border: 'none' }}
+            >
+              Dismiss
+            </button>
           </div>
         </div>
       )}

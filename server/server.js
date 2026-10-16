@@ -499,6 +499,16 @@ app.post('/api/bookings/confirm-call', authenticate, requireVerification, (req, 
     return res.status(404).json({ error: 'Selected priest could not be found.' });
   }
 
+  // Check if Father is already locked for another celebration at this time
+  const conflict = db.checkPriestTimeConflict(priestId, datetime, null);
+  if (conflict) {
+    const conflictDate = conflict.datetime.split('T')[0];
+    const conflictTime = conflict.datetime.split('T')[1]?.slice(0, 5) || '';
+    return res.status(400).json({
+      error: `Conflict detected: Fr. ${responderPriest.name} is already confirmed for ${conflict.service_type || 'another celebration'} on ${conflictDate} at ${conflictTime}.`
+    });
+  }
+
   try {
     const newBooking = db.createBooking({
       requester_id: req.user.id,
@@ -557,6 +567,29 @@ app.post('/api/bookings/offer', authenticate, requireVerification, requirePriest
   } catch (error) {
     console.error('Error offering ministry for booking:', error);
     return res.status(500).json({ error: 'Failed to submit ministry offer.' });
+  }
+});
+
+// Priest withdraws their tentative ministry offer before confirmation
+app.post('/api/bookings/withdraw-offer', authenticate, requireVerification, requirePriest, async (req, res) => {
+  const { bookingId } = req.body;
+
+  if (!bookingId) {
+    return res.status(400).json({ error: 'Booking ID is required.' });
+  }
+
+  try {
+    const result = await db.withdrawBookingOffer(bookingId, req.user.id);
+    if (result.error) {
+      return res.status(400).json({ error: result.error });
+    }
+    return res.json({
+      message: 'Your offer for this ministry has been withdrawn.',
+      booking: result.booking
+    });
+  } catch (error) {
+    console.error('Error withdrawing ministry offer:', error);
+    return res.status(500).json({ error: 'Failed to withdraw offer.' });
   }
 });
 
