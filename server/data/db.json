@@ -241,6 +241,28 @@
       "profile_photo": null,
       "title": "Fr.",
       "congregation_abbr": ""
+    },
+    {
+      "id": 12,
+      "name": "Maria Goretti",
+      "title": "Sr.",
+      "congregation_abbr": "FMM",
+      "mobile": "+919840998877",
+      "email": "sister.goretti@fmm.org",
+      "diocese_province": "",
+      "clergy_type": "convent",
+      "religious_order": "Franciscan Missionaries of Mary (FMM)",
+      "residence_name": "Rosary Convent Chapel",
+      "residence_address": "Mylapore, Chennai - 600004",
+      "latitude": 13.0335,
+      "longitude": 80.2676,
+      "max_travel_km": 25,
+      "transport_mode": "own_bike",
+      "profile_photo": null,
+      "is_verified": 1,
+      "is_admin": 0,
+      "password_hash": "635c38100b71da782b374543fe61b0980f55bad753a33242b0950a5991fb0dc6",
+      "created_at": "2026-10-17T06:34:00.616Z"
     }
   ],
   "bookings": [

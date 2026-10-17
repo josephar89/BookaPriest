@@ -256,10 +256,16 @@ export default function App() {
     'Funeral / Requiem Mass',
     'Confession Ministry',
     'Monthly Recollection Talk',
-    'Annual Retreat Preacher'
+    'Annual Retreat Preacher',
+    'Anbiam Animation',
+    'House Visit',
+    'Catechism'
   ];
 
   const SPECIAL_SERVICES = [
+    'Anbiam Animation',
+    'House Visit',
+    'Catechism',
     'House Blessing',
     'Easter Blessing',
     'Christmas Carols',
@@ -267,7 +273,7 @@ export default function App() {
     'Others'
   ];
 
-  const SERVICE_TYPES = [...CORE_SERVICES, ...SPECIAL_SERVICES];
+  const SERVICE_TYPES = Array.from(new Set([...CORE_SERVICES, ...SPECIAL_SERVICES]));
 
   const RELIGIOUS_ORDERS = [
     'Salesians of Don Bosco (SDB)',
@@ -361,10 +367,11 @@ export default function App() {
         const parsed = JSON.parse(cached);
         setUser(parsed);
         // Default landing tab based on ecclesiastical role:
-        // - Diocesan priest: 'my_requests' (My Posts)
-        // - Religious priest: 'open' (Ministry Requests)
-        // - Sisters & Brothers: 'open' (Ministry Needs)
-        if (parsed.title === 'Fr.' && parsed.clergy_type === 'diocesan') {
+        // - Diocesan Priests & Nuns/Sisters: 'my_requests' (My Posts)
+        // - Religious Priests: 'open' (Ministry Requests)
+        const isPosterRole = (parsed.title === 'Sr.' || parsed.clergy_type === 'convent' || parsed.clergy_type === 'convent_sister') ||
+                             (parsed.title === 'Fr.' && parsed.clergy_type === 'diocesan');
+        if (isPosterRole) {
           setRequestsTab('my_requests');
         } else {
           setRequestsTab('open');
@@ -563,7 +570,9 @@ export default function App() {
       } else {
         localStorage.setItem('bookapriest_user', JSON.stringify(data.user));
         setUser(data.user);
-        if (data.user.title === 'Fr.' && data.user.clergy_type === 'diocesan') {
+        const isPosterRole = (data.user.title === 'Sr.' || data.user.clergy_type === 'convent' || data.user.clergy_type === 'convent_sister') ||
+                             (data.user.title === 'Fr.' && data.user.clergy_type === 'diocesan');
+        if (isPosterRole) {
           setRequestsTab('my_requests');
         } else {
           setRequestsTab('open');
@@ -1179,7 +1188,9 @@ export default function App() {
                 </div>
                 <div>
                   <span style={{ color: '#64748B', display: 'block', fontSize: '0.72rem' }}>Contact & Oversight</span>
-                  <span style={{ color: '#0F172A', fontWeight: 600 }}>support@bookapriest.in</span>
+                  <a href="mailto:bookapriestnow@gmail.com" style={{ color: '#0284C7', fontWeight: 600, textDecoration: 'none' }}>
+                    bookapriestnow@gmail.com
+                  </a>
                 </div>
               </div>
             </div>
@@ -1770,25 +1781,23 @@ export default function App() {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <a
-                          href="https://wa.me/919444000000?text=Praise%20be%20Jesus!%20I%20am%20registering%20on%20BookaPriest%20and%20would%20like%20assistance%20completing%20my%20details."
-                          target="_blank"
-                          rel="noreferrer"
-                          title="Contact support on WhatsApp"
+                          href="mailto:bookapriestnow@gmail.com?subject=Registration%20Assistance%20-%20Book%20a%20Priest&body=Praise%20be%20Jesus!%20I%20am%20registering%20on%20Book%20a%20Priest%20and%20would%20like%20assistance%20completing%20my%20details."
+                          title="Contact support via email: bookapriestnow@gmail.com"
                           style={{
-                            color: '#15803D',
+                            color: '#0369A1',
                             textDecoration: 'none',
                             fontWeight: 600,
                             fontSize: '0.74rem',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '3px',
-                            background: '#DCFCE7',
-                            padding: '2px 8px',
+                            gap: '4px',
+                            background: '#E0F2FE',
+                            padding: '3px 9px',
                             borderRadius: '12px',
-                            border: '1px solid #BBF7D0'
+                            border: '1px solid #BAE6FD'
                           }}
                         >
-                          💬 Need help?
+                          ✉️ Need help?
                         </a>
                         <button
                           type="button"
@@ -2224,12 +2233,14 @@ export default function App() {
         {activeMode !== 'admin' && (
           <>
             {/* ========================================================================= */}
-            {/* PRIEST DASHBOARD (Fr.) - CELEBRANT-FIRST WORKFLOW                         */}
+            {/* UNIFIED 4-TAB DASHBOARD (PRIESTS & SISTERS)                              */}
             {/* ========================================================================= */}
-            {user.title === 'Fr.' || (!user.title && user.clergy_type !== 'convent') ? (
-              <div>
-                {/* 1. CLEAN 4-TAB PRIEST DASHBOARD (SINGLE SLEEK TAB BAR) */}
-                {(() => {
+            <div>
+              {/* 1. CLEAN 4-TAB DASHBOARD (DYNAMIC TAB ORDER BY ECCLESIASTICAL ROLE) */}
+              {(() => {
+                  const isPosterRole = (user.title === 'Sr.' || user.clergy_type === 'convent' || user.clergy_type === 'convent_sister') ||
+                                       (user.title === 'Fr.' && user.clergy_type === 'diocesan');
+
                   const openNeeds = bookings.filter(b => {
                     if (b.status !== 'pending' || b.requester_id === user.id) return false;
                     if (priestFilterRadius === 'all') return true;
@@ -2237,14 +2248,36 @@ export default function App() {
                     return b.distance_km <= priestFilterRadius;
                   });
                   const myScheduled = bookings.filter(b => (b.status === 'accepted' || b.status === 'completed') && (b.responder_id === user.id || b.requester_id === user.id));
-                  const myApplications = bookings.filter(b => b.status === 'pending' && (b.applicants || []).some(a => a.priest_id === user.id));
+                  const myApplications = bookings.filter(b => {
+                    if (isPosterRole) {
+                      return b.status === 'pending' && b.requester_id === user.id && (b.applicants || []).length > 0;
+                    }
+                    return b.status === 'pending' && (b.applicants || []).some(a => a.priest_id === user.id);
+                  });
                   const myOwnRequests = bookings.filter(b => b.requester_id === user.id);
 
-                  return (
-                    <div>
-                      {/* SINGLE STREAMLINED 4-TAB SEGMENTED CONTROL WITH MODERN APP ICONS */}
-                      <div className="priest-dash-tabs">
+                  // Tab definitions
+                  const renderTabItem = (tabKey) => {
+                    if (tabKey === 'my_requests') {
+                      return (
                         <div
+                          key="my_requests"
+                          className={`priest-dash-tab ${requestsTab === 'my_requests' ? 'active' : ''}`}
+                          onClick={() => setRequestsTab('my_requests')}
+                        >
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 20h9" />
+                            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                          </svg>
+                          <span>My Posts</span>
+                          <span className="priest-dash-tab-badge" style={{ background: '#EFF6FF', color: '#1D4ED8' }}>{myOwnRequests.length}</span>
+                        </div>
+                      );
+                    }
+                    if (tabKey === 'open') {
+                      return (
+                        <div
+                          key="open"
                           className={`priest-dash-tab ${requestsTab === 'open' ? 'active' : ''}`}
                           onClick={() => setRequestsTab('open')}
                         >
@@ -2256,7 +2289,12 @@ export default function App() {
                           <span>Ministry Requests</span>
                           <span className={`priest-dash-tab-badge ${openNeeds.length > 0 ? 'badge-danger' : ''}`}>{openNeeds.length}</span>
                         </div>
+                      );
+                    }
+                    if (tabKey === 'review') {
+                      return (
                         <div
+                          key="review"
                           className={`priest-dash-tab ${requestsTab === 'review' ? 'active' : ''}`}
                           onClick={() => setRequestsTab('review')}
                         >
@@ -2267,7 +2305,12 @@ export default function App() {
                           <span>Awaiting</span>
                           <span className="priest-dash-tab-badge">{myApplications.length}</span>
                         </div>
+                      );
+                    }
+                    if (tabKey === 'accepted') {
+                      return (
                         <div
+                          key="accepted"
                           className={`priest-dash-tab ${requestsTab === 'accepted' ? 'active' : ''}`}
                           onClick={() => setRequestsTab('accepted')}
                         >
@@ -2281,17 +2324,23 @@ export default function App() {
                           <span>Confirmed</span>
                           <span className="priest-dash-tab-badge" style={{ background: '#DCFCE7', color: '#166534' }}>{myScheduled.length}</span>
                         </div>
-                        <div
-                          className={`priest-dash-tab ${requestsTab === 'my_requests' ? 'active' : ''}`}
-                          onClick={() => setRequestsTab('my_requests')}
-                        >
-                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 20h9" />
-                            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                          </svg>
-                          <span>My Posts</span>
-                          <span className="priest-dash-tab-badge" style={{ background: '#EFF6FF', color: '#1D4ED8' }}>{myOwnRequests.length}</span>
-                        </div>
+                      );
+                    }
+                    return null;
+                  };
+
+                  // Tab sequence:
+                  // For Diocesan Priests and Nuns (Sisters): My Posts -> Ministry Requests -> Awaiting -> Confirmed
+                  // For Religious Priests: Ministry Requests -> Awaiting -> Confirmed -> My Posts
+                  const tabOrder = isPosterRole
+                    ? ['my_requests', 'open', 'review', 'accepted']
+                    : ['open', 'review', 'accepted', 'my_requests'];
+
+                  return (
+                    <div>
+                      {/* SINGLE STREAMLINED 4-TAB SEGMENTED CONTROL WITH MODERN APP ICONS */}
+                      <div className="priest-dash-tabs">
+                        {tabOrder.map(tabKey => renderTabItem(tabKey))}
                       </div>
 
                       {/* TOP ACTION BAR: STREAMLINED COMPACT CONTROLS */}
@@ -2428,6 +2477,11 @@ export default function App() {
                                     <option value="recollection">Monthly Recollection Talk</option>
                                     <option value="retreat">Annual Retreat Preacher</option>
                                   </optgroup>
+                                  <optgroup label="Pastoral & Community Ministries">
+                                    <option value="anbiam">Anbiam Animation</option>
+                                    <option value="house_visit">House Visit</option>
+                                    <option value="catechism">Catechism</option>
+                                  </optgroup>
                                   <optgroup label="Special Events & Blessings">
                                     <option value="house_blessing">House Blessing</option>
                                     <option value="easter">Easter Blessing</option>
@@ -2511,6 +2565,9 @@ export default function App() {
                           else if (f === 'festival') match = s.includes('festival') || s.includes('feast') || s.includes('jubilee');
                           else if (f === 'confession') match = s.includes('confession') || s.includes('penitential');
                           else if (f === 'recollection') match = s.includes('recollection');
+                          else if (f === 'anbiam') match = s.includes('anbiam') || s.includes('bcc') || s.includes('small christian community');
+                          else if (f === 'house_visit') match = s.includes('house visit') || s.includes('home visit') || s.includes('family visit');
+                          else if (f === 'catechism') match = s.includes('catechism') || s.includes('sunday school') || s.includes('faith formation');
                           else if (f === 'carols') match = s.includes('carol') || s.includes('christmas');
                           else if (f === 'easter') match = s.includes('easter');
                           else if (f === 'house_blessing') match = s.includes('house blessing') || s.includes('home blessing');
@@ -2518,7 +2575,7 @@ export default function App() {
                           else if (f === 'retreat') match = s.includes('retreat');
                           else if (f === 'mass') match = s.includes('holy mass') || (s.includes('mass') && !s.includes('substation') && !s.includes('marriage') && !s.includes('funeral') && !s.includes('festival'));
                           else if (f === 'others') {
-                            const knownKeys = ['substation', 'concelebration', 'marriage', 'matrimony', 'funeral', 'requiem', 'festival', 'feast', 'confession', 'recollection', 'carol', 'easter', 'house blessing', 'sick', 'retreat', 'holy mass'];
+                            const knownKeys = ['substation', 'concelebration', 'marriage', 'matrimony', 'funeral', 'requiem', 'festival', 'feast', 'confession', 'recollection', 'anbiam', 'house visit', 'catechism', 'carol', 'easter', 'house blessing', 'sick', 'retreat', 'holy mass'];
                             match = s.includes('other') || !knownKeys.some(k => s.includes(k));
                           } else match = s.includes(f);
                           if (!match) return false;
@@ -2533,10 +2590,18 @@ export default function App() {
                     } else if (requestsTab === 'accepted') {
                       displayBookings = bookings.filter(b => (b.status === 'accepted' || b.status === 'completed') && (b.responder_id === user.id || b.requester_id === user.id));
                     } else if (requestsTab === 'review') {
-                      // requests where Father offered to celebrate
-                      displayBookings = bookings.filter(b => b.status === 'pending' && (b.applicants || []).some(a => a.priest_id === user.id));
+                      // Awaiting tab:
+                      // If user is requester (Sister or Diocesan priest with posts), show user's pending requests that have applicants responding
+                      // If user is offering priest, show requests where Father offered to celebrate
+                      const isPoster = (user.title === 'Sr.' || user.clergy_type === 'convent' || user.clergy_type === 'convent_sister') ||
+                                       (user.title === 'Fr.' && user.clergy_type === 'diocesan');
+                      if (isPoster) {
+                        displayBookings = bookings.filter(b => b.status === 'pending' && b.requester_id === user.id && (b.applicants || []).length > 0);
+                      } else {
+                        displayBookings = bookings.filter(b => b.status === 'pending' && (b.applicants || []).some(a => a.priest_id === user.id));
+                      }
                     } else {
-                      // 'my_requests' tab: all requests created by this Father
+                      // 'my_requests' tab: all requests created by this user
                       displayBookings = bookings.filter(b => b.requester_id === user.id);
                     }
 
@@ -2616,10 +2681,12 @@ export default function App() {
                                 ? `There are no requests within ${priestFilterRadius} km right now. Expand your travel distance to discover needs in nearby parishes.`
                                 : 'All parishes and convents in the diocese are currently covered. Check back soon for new requests.'
                               : requestsTab === 'accepted'
-                              ? 'When your availability offer is selected by a Sister or a parish, your confirmed celebration will appear here with WhatsApp, direct call, and Google Maps directions.'
+                              ? 'When an availability offer is confirmed, the celebration will appear here with WhatsApp, direct call, and Google Maps directions.'
                               : requestsTab === 'my_requests'
-                              ? 'Need supply assistance for your parish during annual retreat, provincial chapter, or leave? Post a request to broadcast to available priests.'
-                              : 'Ministry needs where you marked your availability will stay listed here until confirmed by the Requester.'}
+                              ? 'Need a priest for Holy Mass, Recollection, or Retreat? Post a request to broadcast to available priests.'
+                              : user.title === 'Fr.' && user.clergy_type === 'religious'
+                              ? 'Ministry needs where you marked your availability will stay listed here until confirmed by the Requester.'
+                              : 'Requests with responses from available priests waiting for your confirmation will appear here.'}
                           </p>
 
                           {/* ACTIONABLE 1-TAP ENGAGEMENT SHORTCUTS */}
@@ -2755,6 +2822,15 @@ export default function App() {
                               if (s.includes('marriage') || s.includes('matrimony')) {
                                 return <span className="card-tag-pill card-tag-marriage">Marriage</span>;
                               }
+                              if (s.includes('anbiam') || s.includes('bcc')) {
+                                return <span className="card-tag-pill card-tag-anbiam">Anbiam Animation</span>;
+                              }
+                              if (s.includes('house visit') || s.includes('home visit')) {
+                                return <span className="card-tag-pill card-tag-house-visit">House Visit</span>;
+                              }
+                              if (s.includes('catechism')) {
+                                return <span className="card-tag-pill card-tag-catechism">Catechism</span>;
+                              }
                               return null;
                             })()}
 
@@ -2886,8 +2962,8 @@ export default function App() {
                             </div>
                           )}
 
-                          {/* CASE 2: OPEN REQUEST FROM OTHERS - 1-TAP "I AM AVAILABLE" OR "WITHDRAW" */}
-                          {!isConfirmed && !isMyRequest && user.is_verified === 1 && (
+                          {/* CASE 2: OPEN REQUEST FROM OTHERS - 1-TAP "I AM AVAILABLE" OR "WITHDRAW" (PRIESTS ONLY) */}
+                          {!isConfirmed && !isMyRequest && user.is_verified === 1 && (user.title === 'Fr.' || (!user.title && user.clergy_type !== 'convent' && user.clergy_type !== 'convent_sister')) && (
                             <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid #F1F5F9' }}>
                               {hasOffered ? (
                                 <div style={{ background: '#FFFDF5', border: '1px solid #FDE68A', padding: '0.65rem 0.85rem', borderRadius: 'var(--radius-sm)' }}>
@@ -3010,367 +3086,7 @@ export default function App() {
                   })()}
                 </div>
               </div>
-            ) : (
-              /* ========================================================================= */
-              /* SISTERS (Sr.) & BROTHERS (Br.) DASHBOARD - REQUESTER WORKFLOW             */
-              /* ========================================================================= */
-              <div>
-                <div className="quick-status-card" style={{ marginBottom: '1.25rem', background: '#F8FAFC', borderColor: '#E2E8F0' }}>
-                  <div className="quick-status-info">
-                    <h4>📖 Do You Want to Find a Priest?</h4>
-                    <p>
-                      Need a priest for Holy Mass, Recollection, or Retreat? Post a ministry request to broadcast to available priests.
-                    </p>
-                  </div>
-                  <div>
-                    {user.is_verified === 1 && (
-                      <button className="btn btn-primary" onClick={() => setShowRequestModal(true)}>
-                        ➕ Post a Ministry Request
-                      </button>
-                    )}
-                  </div>
-                </div>
 
-                {/* 3 Sub-Tabs for Sisters/Brothers: 1. Ministry Needs, 2. Priests Responded, 3. Confirmed Celebrations */}
-                {(() => {
-                  const openCount = bookings.filter(b => b.status === 'pending' && (!b.applicants || b.applicants.length === 0)).length;
-                  const reviewCount = bookings.filter(b => b.status === 'pending' && (b.applicants && b.applicants.length > 0)).length;
-                  const confirmedCount = bookings.filter(b => b.status === 'accepted' || b.status === 'completed').length;
-
-                  return (
-                    <div className="tabs" style={{ marginBottom: '1.25rem' }}>
-                      <div
-                        className={`tab ${requestsTab === 'open' ? 'active' : ''}`}
-                        onClick={() => setRequestsTab('open')}
-                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                          <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                        </svg>
-                        <span>Ministry Needs ({openCount})</span>
-                      </div>
-                      <div
-                        className={`tab ${requestsTab === 'review' ? 'active' : ''}`}
-                        onClick={() => setRequestsTab('review')}
-                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="12" r="10" />
-                          <polyline points="12 6 12 12 16 14" />
-                        </svg>
-                        <span>Priests Responded ({reviewCount})</span>
-                      </div>
-                      <div
-                        className={`tab ${requestsTab === 'accepted' ? 'active' : ''}`}
-                        onClick={() => setRequestsTab('accepted')}
-                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
-                      >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="m11 17 2 2a1 1 0 0 0 1.4 0l4.3-4.3a1 1 0 0 0 0-1.4l-2.6-2.6a1 1 0 0 0-1.4 0l-1.4 1.4" />
-                          <path d="m18 10 1.3-1.3a1 1 0 0 0 0-1.4l-2.6-2.6a1 1 0 0 0-1.4 0L14 6" />
-                          <path d="m2 14 6 6" />
-                          <path d="M7 9 2 14" />
-                          <path d="M14 6 8.7 11.3a1 1 0 0 0 0 1.4l2.6 2.6" />
-                        </svg>
-                        <span>Confirmed ({confirmedCount})</span>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                <div className="roster-grid">
-                  {(() => {
-                    const filteredBookings = bookings.filter(b => {
-                      if (requestsTab === 'open') {
-                        return b.status === 'pending' && (!b.applicants || b.applicants.length === 0);
-                      }
-                      if (requestsTab === 'review') {
-                        return b.status === 'pending' && (b.applicants && b.applicants.length > 0);
-                      }
-                      return b.status === 'accepted' || b.status === 'completed';
-                    });
-
-                    if (filteredBookings.length === 0) {
-                      return (
-                        <div className="no-data" style={{ gridColumn: '1 / -1' }}>
-                          <div className="no-data-icon">
-                            {requestsTab === 'open' ? '🕊️' : requestsTab === 'review' ? '🙌' : '🤝'}
-                          </div>
-                          <p>
-                            {requestsTab === 'open'
-                              ? 'No open liturgical needs waiting for celebrants.'
-                              : requestsTab === 'review'
-                              ? 'No pending priest responses to review at the moment.'
-                              : 'No confirmed celebrations found yet.'}
-                          </p>
-                          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                            {requestsTab === 'open'
-                              ? 'Parishes and Convents can click "➕ Post a Ministry Request" to share a need.'
-                              : requestsTab === 'review'
-                              ? 'When priests indicate their availability to celebrate, they will appear here for you to invite.'
-                              : 'When a priest is selected, the celebration appears here with direct contact details.'}
-                          </p>
-                        </div>
-                      );
-                    }
-
-                    return filteredBookings.map((b) => {
-                      const { date, time } = formatDateTime(b.datetime, b.datetime_end);
-                      const isMyRequest = b.requester_id === user.id;
-                      const isConfirmed = b.status === 'accepted' || b.status === 'completed';
-                      const urgency = isConfirmed ? getCelebrationUrgency(b.datetime) : null;
-                      const applicantsCount = (b.applicants || []).length;
-
-                      return (
-                        <div className="priest-card" key={b.id} style={{ borderColor: isConfirmed ? '#BBF7D0' : applicantsCount > 0 ? '#BFDBFE' : '#E2E8F0' }}>
-                          <div className="priest-header">
-                            <div>
-                              <div className="priest-name" style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                <span>{date}</span>
-                                {urgency && (
-                                  <span className={`urgency-pill ${urgency.badgeClass}`}>
-                                    {urgency.isPulsing && <span className="urgency-pulse-dot"></span>}
-                                    {urgency.label}
-                                  </span>
-                                )}
-                              </div>
-                              <div style={{ color: 'var(--accent-gold)', fontSize: '0.85rem' }}>⏰ {time}</div>
-                            </div>
-                            <span
-                              className={`distance-badge ${isConfirmed ? 'badge-confirmed' : ''}`}
-                              style={{
-                                background: isConfirmed ? '#DCFCE7' : applicantsCount > 0 ? '#EFF6FF' : '#F1F5F9',
-                                color: isConfirmed ? '#15803D' : applicantsCount > 0 ? '#1D4ED8' : '#475569'
-                              }}
-                            >
-                              {isConfirmed
-                                ? '🤝 Confirmed Celebrant'
-                                : applicantsCount > 0
-                                ? `🙌 ${applicantsCount} Priest${applicantsCount > 1 ? 's' : ''} Ready to Serve`
-                                : '🕊️ Awaiting Celebrant'}
-                            </span>
-                          </div>
-
-                          <div className="priest-meta-row">
-                            <div className="priest-meta-item">
-                              <span>✨</span>
-                              <strong>Service:</strong>
-                              <span style={{ color: 'var(--accent-gold)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap' }}>
-                                <span>{b.service_type || 'Holy Mass'}</span>
-                                {(() => {
-                                  const s = (b.service_type || '').toLowerCase();
-                                  if (s.includes('substation')) {
-                                    return <span style={{ fontSize: '0.68rem', background: '#DBEAFE', color: '#1E40AF', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>🛵 Substation</span>;
-                                  }
-                                  if (s.includes('concelebration')) {
-                                    return <span style={{ fontSize: '0.68rem', background: '#F3E8FF', color: '#6B21A8', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>🤝 Concelebrant</span>;
-                                  }
-                                  if (s.includes('funeral') || s.includes('requiem')) {
-                                    return <span style={{ fontSize: '0.68rem', background: '#F1F5F9', color: '#334155', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>🕊️ Requiem</span>;
-                                  }
-                                  if (s.includes('marriage') || s.includes('matrimony')) {
-                                    return <span style={{ fontSize: '0.68rem', background: '#FEF3C7', color: '#92400E', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>💒 Marriage</span>;
-                                  }
-                                  return null;
-                                })()}
-                              </span>
-                            </div>
-                            <div className="priest-meta-item">
-                              <span>⛪</span>
-                              <strong>Venue:</strong> {b.location}
-                            </div>
-                            <div className="priest-meta-item">
-                              <span>🗣️</span>
-                              <strong>Language:</strong> {b.language}
-                            </div>
-                            <div className="priest-meta-item">
-                              <span>👤</span>
-                              <strong>Requested By:</strong> {formatEcclesiasticalName(b.requester_title || (b.requester_clergy_type === 'convent' ? 'Sr.' : 'Fr.'), b.requester_name, b.requester_congregation_abbr)} ({b.requester_order || b.requester_diocese})
-                            </div>
-                            {b.distance_km !== null && (
-                              <div className="priest-meta-item">
-                                <span>📍</span>
-                                <strong>Distance:</strong> {b.distance_km} km away
-                              </div>
-                            )}
-                            {b.notes && (
-                              <div className="priest-meta-item" style={{ gridColumn: '1 / -1', fontStyle: 'italic', color: '#64748B' }}>
-                                <span>📝</span>
-                                <strong>Note:</strong> {b.notes}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* CASE A: ACCEPTED / CONFIRMED TAB */}
-                          {isConfirmed && (
-                            <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: 'var(--radius-md)', padding: '0.9rem', marginTop: 'auto' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                                <div className="avatar-badge" style={{ width: '40px', height: '40px', borderColor: '#166534' }}>
-                                  {b.responder_photo ? (
-                                    <img src={b.responder_photo} alt={b.responder_name} />
-                                  ) : (
-                                    renderDefaultAvatar(b.responder_title || 'Fr.', b.responder_clergy_type || 'diocesan', 20)
-                                  )}
-                                </div>
-                                <div>
-                                  <div style={{ fontWeight: 700, color: '#166534', fontSize: '0.92rem' }}>
-                                    🤝 Confirmed Celebrant: {formatEcclesiasticalName(b.responder_title || 'Fr.', b.responder_name, b.responder_congregation_abbr)}
-                                  </div>
-                                  <div style={{ fontSize: '0.82rem', color: '#15803D' }}>
-                                    {b.responder_order || b.responder_diocese}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem', marginBottom: '0.45rem' }}>
-                                <a
-                                  href={`tel:${isMyRequest ? b.responder_mobile : b.requester_mobile}`}
-                                  className="btn btn-call btn-sm"
-                                  style={{ padding: '0.5rem', fontWeight: 700, fontSize: '0.78rem', justifyContent: 'center' }}
-                                >
-                                  📞 Call {isMyRequest ? 'Priest' : 'Parish'}
-                                </a>
-                                <a
-                                  href={getWhatsAppLink(isMyRequest ? b.responder_mobile : b.requester_mobile, `Praised be Jesus Christ! Regarding our confirmed celebration for ${b.service_type || 'Holy Mass'} at ${b.location} on ${date} (${time}).`)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="wa-btn"
-                                  style={{ padding: '0.5rem', fontWeight: 700, fontSize: '0.78rem', justifyContent: 'center' }}
-                                >
-                                  💬 WhatsApp
-                                </a>
-                              </div>
-
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem' }}>
-                                {b.location && (
-                                  <a
-                                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.location)}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="btn btn-secondary btn-sm"
-                                    style={{ padding: '0.5rem', fontWeight: 700, fontSize: '0.78rem', justifyContent: 'center', background: '#FFFFFF', borderColor: '#CBD5E1' }}
-                                  >
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                      <polygon points="3 11 22 2 13 21 11 13 3 11" />
-                                    </svg>
-                                    <span>Directions</span>
-                                  </a>
-                                )}
-                                <a
-                                  href={`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`${b.service_type || 'Holy Mass'} - ${b.location || 'Parish'}`)}&dates=${(() => {
-                                    const d = new Date(b.datetime);
-                                    const dEnd = new Date(b.datetime_end || d.getTime() + 3600000);
-                                    const fmt = dt => dt.toISOString().replace(/-|:|\.\d\d\d/g, '');
-                                    return `${fmt(d)}/${fmt(dEnd)}`;
-                                  })()}&details=${encodeURIComponent(`Confirmed liturgy with ${formatEcclesiasticalName(b.responder_title || 'Fr.', b.responder_name, b.responder_congregation_abbr)}. Contact: ${b.responder_mobile}`)}&location=${encodeURIComponent(b.location || '')}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="btn btn-secondary btn-sm"
-                                  style={{ padding: '0.5rem', fontWeight: 700, fontSize: '0.78rem', justifyContent: 'center', background: '#FFFFFF', borderColor: '#CBD5E1' }}
-                                >
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                    <line x1="16" y1="2" x2="16" y2="6" />
-                                    <line x1="8" y1="2" x2="8" y2="6" />
-                                    <line x1="3" y1="10" x2="21" y2="10" />
-                                  </svg>
-                                  <span>Add to Calendar</span>
-                                </a>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* CASE B: PRIESTS RESPONDED TAB - SISTER/BROTHER CAN CONFIRM CELEBRANT */}
-                          {!isConfirmed && (requestsTab === 'review' || isMyRequest) && (
-                            <div className="applicants-box" style={{ marginTop: 'auto' }}>
-                              <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#0F172A', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                                <span>🙌 Fathers Ready to Celebrate ({applicantsCount})</span>
-                                {isMyRequest && (
-                                  <span style={{ fontSize: '0.75rem', color: '#2563EB', fontWeight: 600 }}>Select a Father for this ministry</span>
-                                )}
-                              </div>
-
-                              {isMyRequest && applicantsCount > 0 && (
-                                <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '0.45rem 0.65rem', fontSize: '0.74rem', color: '#1E40AF', lineHeight: '1.4', marginBottom: '0.55rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <span>💬</span>
-                                  <span><strong>Direct Contact Advisory:</strong> Please chat with Father on WhatsApp or call him directly to verify timing and liturgical arrangements before confirming.</span>
-                                </div>
-                              )}
-
-                              {applicantsCount === 0 ? (
-                                <p style={{ fontSize: '0.8rem', color: '#94A3B8' }}>
-                                  Awaiting available priests to respond for this ministry.
-                                </p>
-                              ) : (
-                                (b.applicants || []).map(cand => (
-                                  <div className="applicant-card" key={cand.priest_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F8FAFC', padding: '0.65rem 0.85rem', borderRadius: '6px', marginBottom: '0.4rem', border: '1px solid #E2E8F0', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', minWidth: '200px' }}>
-                                      <div className="avatar-badge" style={{ width: '36px', height: '36px' }}>
-                                        {cand.profile_photo ? (
-                                          <img src={cand.profile_photo} alt={cand.priest_name} />
-                                        ) : (
-                                          renderDefaultAvatar(cand.priest_title || 'Fr.', cand.clergy_type, 18)
-                                        )}
-                                      </div>
-                                      <div>
-                                        <div className="applicant-name" style={{ fontWeight: 700, color: '#0F172A' }}>
-                                          {formatEcclesiasticalName(cand.priest_title || 'Fr.', cand.priest_name, cand.congregation_abbr)}
-                                        </div>
-                                        <div className="applicant-sub" style={{ fontSize: '0.78rem', color: '#64748B' }}>
-                                          {cand.clergy_type === 'religious' ? cand.religious_order : cand.diocese_province}
-                                          {cand.residence_name ? ` • 📍 ${cand.residence_name}` : ''}
-                                          {cand.distance_km !== null ? ` (${cand.distance_km} km away)` : ''}
-                                        </div>
-                                      </div>
-                                    </div>
-                                    {isMyRequest && (
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
-                                        {cand.priest_mobile && (
-                                          <>
-                                            <a
-                                              href={`tel:${cand.priest_mobile}`}
-                                              className="btn btn-call btn-sm"
-                                              style={{ padding: '0.35rem 0.55rem', fontSize: '0.76rem' }}
-                                              title="Call Father"
-                                            >
-                                              📞
-                                            </a>
-                                            <a
-                                              href={getWhatsAppLink(cand.priest_mobile, `Praised be Jesus Christ! Father, regarding the ministry request for ${b.service_type || 'Holy Mass'} at ${b.location} on ${date}.`)}
-                                              target="_blank"
-                                              rel="noreferrer"
-                                              className="wa-btn"
-                                              style={{ padding: '0.35rem 0.6rem', fontSize: '0.76rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                                              title="Chat directly on WhatsApp before confirming"
-                                            >
-                                              <span>💬</span>
-                                              <span>WhatsApp</span>
-                                            </a>
-                                          </>
-                                        )}
-                                        <button
-                                          className="btn btn-primary btn-sm"
-                                          onClick={() => handleConfirmApplicant(b.id, cand.priest_id, cand.priest_name)}
-                                          style={{ padding: '0.4rem 0.75rem', fontSize: '0.82rem', fontWeight: 700 }}
-                                        >
-                                          ✓ Select {cand.priest_title || 'Fr.'} {cand.priest_name.replace(/^(Rev\.\s*|Fr\.\s*|Br\.\s*|Sr\.\s*)+/i, '').split(' ')[0]}
-                                        </button>
-                                      </div>
-                                    )}
-                                  </div>
-                                ))
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
-              </div>
-            )}
 
             {/* PLATFORM NOTICE & CANONICAL ADVISORY DISCLAIMER */}
             <div className="platform-disclaimer-card">
