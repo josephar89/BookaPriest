@@ -1095,6 +1095,20 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 1px 3px rgba(22, 163, 74, 0.25);
 }
 
+.dash-tab-pill.pill-blue {
+  background: #2563EB !important;
+  color: #FFFFFF !important;
+  font-weight: 800;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.25);
+}
+
+.dash-tab-pill.pill-amber {
+  background: #D97706 !important;
+  color: #FFFFFF !important;
+  font-weight: 800;
+  box-shadow: 0 1px 3px rgba(217, 119, 6, 0.25);
+}
+
 .dash-tab-pill.pill-empty {
   background: #F1F5F9;
   color: #94A3B8;

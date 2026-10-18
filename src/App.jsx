@@ -2773,17 +2773,59 @@ export default function App() {
 
                 // Counts for Unified 4-Tab Navigation:
                 // 1. Explore: open community needs (excluding user's own)
+                const isCatCMinistry = (serviceType) => {
+                  const s = (serviceType || '').toLowerCase();
+                  return s.includes('catechism') || s.includes('sunday school') || s.includes('faith formation') ||
+                         s.includes('altar decoration') || s.includes('decoration') ||
+                         s.includes('anbiam') || s.includes('bcc') || s.includes('small christian community') ||
+                         s.includes('house visit') || s.includes('home visit') || s.includes('family visit') ||
+                         s.includes('communion to sick') || (s.includes('communion') && s.includes('sick')) ||
+                         s.includes('choir') || s.includes('choir animation');
+                };
+
                 const openNeeds = bookings.filter(b => {
                   if (b.status !== 'pending' || b.requester_id === user.id) return false;
+                  const isCatC = isCatCMinistry(b.service_type);
                   if (isSister) {
-                    const s = (b.service_type || '').toLowerCase();
-                    const isNonSacr = s.includes('anbiam') || s.includes('bcc') || s.includes('house visit') ||
-                                      s.includes('catechism') || s.includes('carol') || s.includes('sunday school');
-                    if (!isNonSacr) return false;
+                    // Sisters: ONLY Category C (Pastoral Ministries)
+                    if (!isCatC) return false;
+                  } else {
+                    // Priests: ONLY Categories A & B (Sacraments & Paraliturgies, exclude Category C)
+                    if (isCatC) return false;
                   }
-                  if (priestFilterRadius === 'all') return true;
-                  if (b.distance_km === null) return true;
-                  return b.distance_km <= priestFilterRadius;
+                  if (priestFilterRadius !== 'all') {
+                    if (b.distance_km !== null && b.distance_km > priestFilterRadius) return false;
+                  }
+                  if (priestFilterService !== 'all') {
+                    const s = (b.service_type || '').toLowerCase();
+                    const f = priestFilterService.toLowerCase();
+                    let match = false;
+                    if (f === 'mass') match = s.includes('holy mass') || s.includes('mass');
+                    else if (f === 'concelebration') match = s.includes('concelebration');
+                    else if (f === 'marriage') match = s.includes('marriage') || s.includes('matrimony');
+                    else if (f === 'funeral') match = s.includes('funeral') || s.includes('requiem');
+                    else if (f === 'confession') match = s.includes('confession');
+                    else if (f === 'anointing') match = s.includes('anointing') || s.includes('sick');
+                    else if (f === 'adoration') match = s.includes('adoration');
+                    else if (f === 'charismatic') match = s.includes('charismatic') || s.includes('prayer service');
+                    else if (f === 'house_blessing') match = s.includes('house blessing') || s.includes('blessing');
+                    else if (f === 'recollection') match = s.includes('recollection');
+                    else if (f === 'retreat') match = s.includes('retreat');
+                    else if (f === 'catechism') match = s.includes('catechism') || s.includes('sunday school');
+                    else if (f === 'altar_decoration') match = s.includes('altar decoration') || s.includes('decoration');
+                    else if (f === 'anbiam') match = s.includes('anbiam') || s.includes('bcc');
+                    else if (f === 'house_visit') match = s.includes('house visit') || s.includes('family visit');
+                    else if (f === 'communion_sick') match = s.includes('communion to sick') || (s.includes('communion') && s.includes('sick'));
+                    else if (f === 'choir') match = s.includes('choir');
+                    else if (f === 'others') match = s.includes('other');
+                    else match = s.includes(f);
+                    if (!match) return false;
+                  }
+                  if (priestFilterLanguage !== 'all') {
+                    const l = (b.language || '').toLowerCase();
+                    if (!l.includes(priestFilterLanguage.toLowerCase())) return false;
+                  }
+                  return true;
                 });
 
                 // 2. My Requests: posts created by this user that are active/pending
@@ -2869,7 +2911,7 @@ export default function App() {
                     {/* UNIFIED SINGLE-ROW APP BAR (4 CLEAR DIRECT TABS + CONTROLS) */}
                     <div className="dash-subtabs-toolbar-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.85rem', borderBottom: '1.5px solid #E2E8F0', marginBottom: '1.15rem' }}>
                       <div className="dash-underline-tabs" style={{ borderBottom: 'none', marginBottom: 0, paddingBottom: 0 }}>
-                        {/* TAB 1: EXPLORE */}
+                        {/* TAB 1: EXPLORE - BLUE PILL */}
                         <button
                           type="button"
                           className={`dash-underline-tab ${requestsTab === 'open' ? 'active' : ''}`}
@@ -2880,12 +2922,12 @@ export default function App() {
                             <line x1="21" y1="21" x2="16.65" y2="16.65" />
                           </svg>
                           <span>Explore</span>
-                          <span className={`dash-tab-pill ${openNeeds.length > 0 ? 'pill-green' : 'pill-empty'}`}>
+                          <span className={`dash-tab-pill ${openNeeds.length > 0 ? 'pill-blue' : 'pill-empty'}`}>
                             {openNeeds.length}
                           </span>
                         </button>
 
-                        {/* TAB 2: MY REQUESTS */}
+                        {/* TAB 2: MY REQUESTS - RED PILL */}
                         <button
                           type="button"
                           className={`dash-underline-tab ${requestsTab === 'my_requests' ? 'active' : ''}`}
@@ -2899,12 +2941,12 @@ export default function App() {
                             <polyline points="10 9 9 9 8 9" />
                           </svg>
                           <span>My Requests</span>
-                          <span className={`dash-tab-pill ${myPendingPosts.length > 0 ? (myResponsesCount > 0 ? 'pill-danger' : '') : 'pill-empty'}`}>
+                          <span className={`dash-tab-pill ${myPendingPosts.length > 0 ? 'pill-red' : 'pill-empty'}`}>
                             {myPendingPosts.length}
                           </span>
                         </button>
 
-                        {/* TAB 3: CONFIRMED */}
+                        {/* TAB 3: CONFIRMED - GREEN PILL */}
                         <button
                           type="button"
                           className={`dash-underline-tab ${requestsTab === 'accepted' ? 'active' : ''}`}
@@ -2915,12 +2957,12 @@ export default function App() {
                             <polyline points="22 4 12 14.01 9 11.01" />
                           </svg>
                           <span>Confirmed</span>
-                          <span className={`dash-tab-pill ${myConfirmedAll.length > 0 ? 'pill-success' : 'pill-empty'}`}>
+                          <span className={`dash-tab-pill ${myConfirmedAll.length > 0 ? 'pill-green' : 'pill-empty'}`}>
                             {myConfirmedAll.length}
                           </span>
                         </button>
 
-                        {/* TAB 4: HISTORY */}
+                        {/* TAB 4: HISTORY - NO COLOUR (NEUTRAL MUTED PILL) */}
                         <button
                           type="button"
                           className={`dash-underline-tab ${requestsTab === 'history' ? 'active' : ''}`}
@@ -2931,7 +2973,7 @@ export default function App() {
                             <polyline points="12 6 12 12 16 14" />
                           </svg>
                           <span>History</span>
-                          <span className={`dash-tab-pill ${myHistoryAll.length > 0 ? 'pill-empty' : 'pill-empty'}`}>
+                          <span className="dash-tab-pill pill-empty">
                             {myHistoryAll.length}
                           </span>
                         </button>
@@ -3232,40 +3274,49 @@ export default function App() {
                             <label className="feed-filter-label" htmlFor="feed-service-select">
                               Sacrament / Ministry
                             </label>
-                            <select
-                              id="feed-service-select"
-                              className="feed-select"
-                              value={priestFilterService}
-                              onChange={(e) => setPriestFilterService(e.target.value)}
-                            >
-                              <option value="all">All Ministries & Sacraments (Default)</option>
-                              <optgroup label="A. Mass & Sacraments">
-                                <option value="mass">Holy Mass</option>
-                                <option value="concelebration">Concelebration</option>
-                                <option value="marriage">Marriage Mass</option>
-                                <option value="funeral">Funeral / Requiem Mass</option>
-                                <option value="confession">Confession Ministry</option>
-                                <option value="anointing">Anointing of the Sick</option>
-                              </optgroup>
-                              <option disabled style={{ fontSize: '6px', color: '#CBD5E1', lineHeight: '6px' }}>&nbsp;</option>
-                              <optgroup label="B. Paraliturgy & Blessings">
-                                <option value="adoration">Adoration Service</option>
-                                <option value="charismatic">Charismatic Prayer Service</option>
-                                <option value="house_blessing">House Blessing</option>
-                                <option value="recollection">Monthly Recollection Talk</option>
-                                <option value="retreat">Retreat</option>
-                              </optgroup>
-                              <option disabled style={{ fontSize: '6px', color: '#CBD5E1', lineHeight: '6px' }}>&nbsp;</option>
-                              <optgroup label="C. Pastoral Ministries">
-                                <option value="catechism">Catechism</option>
-                                <option value="altar_decoration">Altar Decoration</option>
-                                <option value="anbiam">BCC / Anbiam Animation</option>
-                                <option value="house_visit">House Visit</option>
-                                <option value="communion_sick">Communion to Sick</option>
-                                <option value="choir">Choir Animation</option>
-                                <option value="others">Others</option>
-                              </optgroup>
-                            </select>
+                            {(() => {
+                              const isSister = user.title === 'Sr.' || user.clergy_type === 'convent' || user.clergy_type === 'convent_sister';
+                              return (
+                                <select
+                                  id="feed-service-select"
+                                  className="feed-select"
+                                  value={priestFilterService}
+                                  onChange={(e) => setPriestFilterService(e.target.value)}
+                                >
+                                  <option value="all">All Available Ministries (Default)</option>
+                                  {!isSister ? (
+                                    <>
+                                      <optgroup label="A. Mass & Sacraments">
+                                        <option value="mass">Holy Mass</option>
+                                        <option value="concelebration">Concelebration</option>
+                                        <option value="marriage">Marriage Mass</option>
+                                        <option value="funeral">Funeral / Requiem Mass</option>
+                                        <option value="confession">Confession Ministry</option>
+                                        <option value="anointing">Anointing of the Sick</option>
+                                      </optgroup>
+                                      <option disabled style={{ fontSize: '6px', color: '#CBD5E1', lineHeight: '6px' }}>&nbsp;</option>
+                                      <optgroup label="B. Paraliturgy & Blessings">
+                                        <option value="adoration">Adoration Service</option>
+                                        <option value="charismatic">Charismatic Prayer Service</option>
+                                        <option value="house_blessing">House Blessing</option>
+                                        <option value="recollection">Monthly Recollection Talk</option>
+                                        <option value="retreat">Retreat</option>
+                                      </optgroup>
+                                    </>
+                                  ) : (
+                                    <optgroup label="C. Pastoral Ministries">
+                                      <option value="catechism">Catechism</option>
+                                      <option value="altar_decoration">Altar Decoration</option>
+                                      <option value="anbiam">BCC / Anbiam Animation</option>
+                                      <option value="house_visit">House Visit</option>
+                                      <option value="communion_sick">Communion to Sick</option>
+                                      <option value="choir">Choir Animation</option>
+                                      <option value="others">Others</option>
+                                    </optgroup>
+                                  )}
+                                </select>
+                              );
+                            })()}
                           </div>
 
                           {/* Liturgical Language Filter */}
@@ -3302,18 +3353,25 @@ export default function App() {
 
                     if (requestsTab === 'open') {
                       // 1. Explore feed: open community requests from others
+                      const isCatCMinistry = (serviceType) => {
+                        const s = (serviceType || '').toLowerCase();
+                        return s.includes('catechism') || s.includes('sunday school') || s.includes('faith formation') ||
+                               s.includes('altar decoration') || s.includes('decoration') ||
+                               s.includes('anbiam') || s.includes('bcc') || s.includes('small christian community') ||
+                               s.includes('house visit') || s.includes('home visit') || s.includes('family visit') ||
+                               s.includes('communion to sick') || (s.includes('communion') && s.includes('sick')) ||
+                               s.includes('choir') || s.includes('choir animation');
+                      };
+
                       displayBookings = bookings.filter(b => {
                         if (b.status !== 'pending' || b.requester_id === user.id) return false;
-                        // Sisters can only see designated non-sacramental ministries
+                        const isCatC = isCatCMinistry(b.service_type);
                         if (isSister) {
-                          const s = (b.service_type || '').toLowerCase();
-                          const isNonSacr = s.includes('catechism') || s.includes('sunday school') || s.includes('faith formation') ||
-                                            s.includes('altar decoration') || s.includes('decoration') ||
-                                            s.includes('anbiam') || s.includes('bcc') || s.includes('small christian community') ||
-                                            s.includes('house visit') || s.includes('home visit') || s.includes('family visit') ||
-                                            s.includes('communion to sick') || (s.includes('communion') && s.includes('sick')) ||
-                                            s.includes('choir') || s.includes('choir animation');
-                          if (!isNonSacr) return false;
+                          // Sisters: ONLY Category C (Pastoral Ministries)
+                          if (!isCatC) return false;
+                        } else {
+                          // Priests: ONLY Categories A & B (Sacraments & Paraliturgies, exclude Category C)
+                          if (isCatC) return false;
                         }
                         // Radius filter
                         if (priestFilterRadius !== 'all') {
