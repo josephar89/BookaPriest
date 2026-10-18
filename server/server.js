@@ -122,8 +122,10 @@ app.post('/api/auth/register', (req, res) => {
       latitude,
       longitude,
       max_travel_km: max_travel_km || 25,
-      transport_mode: transport_mode || 'own_bike',
-      profile_photo: req.body.profile_photo || null
+      transport_mode: transport_mode || (Array.isArray(req.body.transport_modes) && req.body.transport_modes[0]) || 'own_bike',
+      transport_modes: req.body.transport_modes || (transport_mode ? [transport_mode] : ['own_bike']),
+      profile_photo: req.body.profile_photo || null,
+      dob: req.body.dob || null
     });
 
     const { password_hash, ...userResponse } = newUser;
@@ -168,7 +170,7 @@ app.put('/api/users/profile', authenticate, async (req, res) => {
     religious_order, diocese_province,
     residence_name, residence_address,
     latitude, longitude, max_travel_km, transport_mode,
-    profile_photo
+    profile_photo, about_me, social_links
   } = req.body;
 
   const user = db.getUserById(req.user.id);
@@ -211,7 +213,21 @@ app.put('/api/users/profile', authenticate, async (req, res) => {
   if (longitude !== undefined) updates.longitude = longitude !== null ? parseFloat(longitude) : null;
   if (max_travel_km !== undefined) updates.max_travel_km = parseInt(max_travel_km);
   if (transport_mode !== undefined) updates.transport_mode = transport_mode;
+  if (req.body.transport_modes !== undefined) {
+    updates.transport_modes = Array.isArray(req.body.transport_modes) ? req.body.transport_modes : [req.body.transport_modes];
+    if (!updates.transport_mode && updates.transport_modes.length > 0) {
+      updates.transport_mode = updates.transport_modes[0];
+    }
+  }
   if (profile_photo !== undefined) updates.profile_photo = profile_photo;
+  if (req.body.dob !== undefined) updates.dob = req.body.dob || null;
+  if (about_me !== undefined) updates.about_me = about_me ? String(about_me).trim() : '';
+  if (social_links !== undefined) updates.social_links = typeof social_links === 'object' ? social_links : {};
+  if (req.body.liturgical_languages !== undefined) {
+    updates.liturgical_languages = Array.isArray(req.body.liturgical_languages)
+      ? req.body.liturgical_languages.filter(Boolean)
+      : [String(req.body.liturgical_languages)];
+  }
 
   try {
     const updated = await db.updateUser(user.id, updates);
@@ -220,6 +236,104 @@ app.put('/api/users/profile', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Error updating user profile:', error);
     return res.status(500).json({ error: 'Failed to update profile.' });
+  }
+});
+
+// Toggle favorite minister for the logged in user
+app.post('/api/users/favorites/toggle', authenticate, async (req, res) => {
+  try {
+    const { ministerId } = req.body;
+    if (!ministerId) {
+      return res.status(400).json({ error: 'Minister ID is required.' });
+    }
+    const user = db.getUserById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    let currentFavs = Array.isArray(user.favorite_ministers)
+      ? [...user.favorite_ministers]
+      : (typeof user.favorite_ministers === 'string'
+          ? (() => { try { return JSON.parse(user.favorite_ministers); } catch(e) { return []; } })()
+          : []);
+
+    const targetId = Number(ministerId);
+    const isFav = currentFavs.includes(targetId);
+    if (isFav) {
+      currentFavs = currentFavs.filter(id => id !== targetId);
+    } else {
+      currentFavs.push(targetId);
+    }
+
+    const updated = await db.updateUser(user.id, { favorite_ministers: currentFavs });
+    const { password_hash, ...userResponse } = updated;
+    return res.json({
+      message: isFav ? 'Removed from favorites.' : 'Saved to favorites!',
+      isFavorite: !isFav,
+      favorite_ministers: currentFavs,
+      user: userResponse
+    });
+  } catch (error) {
+    console.error('Error toggling favorite minister:', error);
+    return res.status(500).json({ error: 'Failed to update favorite minister.' });
+  }
+});
+
+// Get list of all favorite ministers for the logged in user
+app.get('/api/users/favorites', authenticate, (req, res) => {
+  try {
+    const user = db.getUserById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const favIds = Array.isArray(user.favorite_ministers)
+      ? user.favorite_ministers.map(Number)
+      : (typeof user.favorite_ministers === 'string'
+          ? (() => { try { return JSON.parse(user.favorite_ministers).map(Number); } catch(e) { return []; } })()
+          : []);
+
+    const userLat = req.user.latitude;
+    const userLon = req.user.longitude;
+
+    const favoriteMinisters = (db.data.users || [])
+      .filter(u => favIds.includes(Number(u.id)))
+      .map(u => {
+        let distance_km = null;
+        if (userLat && userLon && u.latitude && u.longitude) {
+          distance_km = calculateDistanceKm(parseFloat(userLat), parseFloat(userLon), u.latitude, u.longitude);
+        }
+        return {
+          id: u.id,
+          priest_id: u.id,
+          title: u.title || (u.clergy_type === 'convent' || u.clergy_type === 'convent_sister' ? 'Sr.' : 'Fr.'),
+          priest_title: u.title || (u.clergy_type === 'convent' || u.clergy_type === 'convent_sister' ? 'Sr.' : 'Fr.'),
+          name: u.name,
+          priest_name: u.name,
+          congregation_abbr: u.congregation_abbr || '',
+          clergy_type: u.clergy_type,
+          religious_order: u.religious_order,
+          diocese_province: u.diocese_province,
+          residence_name: u.residence_name,
+          residence_address: u.residence_address || '',
+          mobile: u.mobile,
+          priest_mobile: u.mobile,
+          email: u.email,
+          priest_email: u.email,
+          profile_photo: u.profile_photo || null,
+          about_me: u.about_me || '',
+          dob: u.dob || null,
+          age: calculateAge(u.dob),
+          social_links: u.social_links || {},
+          transport_modes: u.transport_modes || [u.transport_mode || 'own_bike'],
+          distance_km
+        };
+      });
+
+    return res.json({ favorites: favoriteMinisters, count: favoriteMinisters.length });
+  } catch (error) {
+    console.error('Error fetching favorite ministers:', error);
+    return res.status(500).json({ error: 'Failed to retrieve favorite ministers.' });
   }
 });
 
@@ -300,8 +414,10 @@ app.post('/api/admin/onboard-user', authenticate, requireAdmin, async (req, res)
       latitude,
       longitude,
       max_travel_km: max_travel_km || 25,
-      transport_mode: transport_mode || 'own_bike',
+      transport_mode: transport_mode || (Array.isArray(req.body.transport_modes) && req.body.transport_modes[0]) || 'own_bike',
+      transport_modes: req.body.transport_modes || (transport_mode ? [transport_mode] : ['own_bike']),
       profile_photo: profile_photo || null,
+      dob: req.body.dob || null,
       is_verified: 1 // Auto-verified by Administrator!
     });
 
@@ -486,6 +602,47 @@ app.post('/api/bookings', authenticate, requireVerification, (req, res) => {
   }
 });
 
+// Update an existing ministry request (before or after confirmation)
+app.put('/api/bookings/:id', authenticate, requireVerification, async (req, res) => {
+  const bookingId = req.params.id;
+  const { datetime, datetime_end, location, language, honorarium, latitude, longitude, notes, service_type } = req.body;
+
+  if (!bookingId) {
+    return res.status(400).json({ error: 'Booking ID is required.' });
+  }
+
+  try {
+    const result = await db.updateBooking(bookingId, req.user.id, {
+      datetime,
+      datetime_end,
+      location,
+      latitude,
+      longitude,
+      language,
+      honorarium,
+      notes,
+      service_type
+    });
+
+    if (result.error) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    const noticeMsg = result.notified_count > 0
+      ? `Ministry request updated. ${result.notified_count} responding minister(s) have been flagged with the changes.`
+      : 'Ministry request updated successfully.';
+
+    return res.json({
+      message: noticeMsg,
+      booking: result.booking,
+      changes: result.changes || []
+    });
+  } catch (error) {
+    console.error('Error updating booking:', error);
+    return res.status(500).json({ error: 'Failed to update ministry request.' });
+  }
+});
+
 // Direct booking from the Availability Roster ("Phone call verbal agreement confirmed")
 app.post('/api/bookings/confirm-call', authenticate, requireVerification, (req, res) => {
   const { priestId, datetime, location, language, honorarium, notes, service_type } = req.body;
@@ -534,8 +691,23 @@ app.post('/api/bookings/confirm-call', authenticate, requireVerification, (req, 
   }
 });
 
-// Offer Ministry for an open request (Available Priest expresses willingness; request stays open)
-app.post('/api/bookings/offer', authenticate, requireVerification, requirePriest, async (req, res) => {
+// Helper to check if a service is pastoral / non-sacramental (open for Sisters & Priests)
+// Category C: Pastoral Ministries
+const isNonSacramentalService = (serviceType) => {
+  if (!serviceType) return false;
+  const s = serviceType.toLowerCase();
+  return s.includes('catechism') || s.includes('sunday school') || s.includes('faith formation') ||
+         s.includes('altar decoration') || s.includes('decoration') ||
+         s.includes('anbiam') || s.includes('bcc') || s.includes('small christian community') ||
+         s.includes('house visit') || s.includes('home visit') || s.includes('family visit') ||
+         s.includes('communion to sick') || (s.includes('communion') && s.includes('sick')) ||
+         s.includes('choir') || s.includes('choir animation');
+};
+
+// Offer Ministry for an open request
+// - Ordained Priests (Fr.) can accept ALL ministry
+// - Religious Nuns (Sr.) can accept designated NON-SACRAMENTAL ministry (Anbiam, House Visit, Catechism)
+app.post('/api/bookings/offer', authenticate, requireVerification, async (req, res) => {
   const { bookingId } = req.body;
 
   if (!bookingId) {
@@ -544,15 +716,27 @@ app.post('/api/bookings/offer', authenticate, requireVerification, requirePriest
 
   const booking = db.getBookingById(bookingId);
   if (!booking) {
-    return res.status(404).json({ error: 'Liturgical request not found.' });
+    return res.status(404).json({ error: 'Ministry request not found.' });
   }
 
   if (booking.status !== 'pending') {
-    return res.status(400).json({ error: 'This liturgical request is already filled.' });
+    return res.status(400).json({ error: 'This ministry request is already filled.' });
   }
 
   if (booking.requester_id === req.user.id) {
     return res.status(400).json({ error: 'You cannot offer ministry for your own request.' });
+  }
+
+  const isPriest = isPriestUser(req.user);
+  const isSister = req.user.title === 'Sr.' || req.user.clergy_type === 'convent' || req.user.clergy_type === 'convent_sister';
+  const isNonSacramental = isNonSacramentalService(booking.service_type);
+
+  if (!isPriest) {
+    if (!isSister || !isNonSacramental) {
+      return res.status(403).json({
+        error: 'Only ordained priests (Fr.) can accept sacramental celebration ministry. Sisters may lead or assist in non-sacramental ministries (Anbiam, House Visit, Catechism).'
+      });
+    }
   }
 
   try {
@@ -570,8 +754,8 @@ app.post('/api/bookings/offer', authenticate, requireVerification, requirePriest
   }
 });
 
-// Priest withdraws their tentative ministry offer before confirmation
-app.post('/api/bookings/withdraw-offer', authenticate, requireVerification, requirePriest, async (req, res) => {
+// Withdraw tentative ministry offer before confirmation
+app.post('/api/bookings/withdraw-offer', authenticate, requireVerification, async (req, res) => {
   const { bookingId } = req.body;
 
   if (!bookingId) {
@@ -593,7 +777,7 @@ app.post('/api/bookings/withdraw-offer', authenticate, requireVerification, requ
   }
 });
 
-// Requester confirms a specific priest who offered ministry (Ticket locked, contacts revealed)
+// Requester confirms a specific priest/sister who offered ministry (Ticket locked, contacts revealed)
 app.post('/api/bookings/confirm-applicant', authenticate, requireVerification, async (req, res) => {
   const { bookingId, priestId } = req.body;
 

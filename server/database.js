@@ -44,6 +44,20 @@ export function calculateDistanceKm(lat1, lon1, lat2, lon2) {
   return Math.round(d * 10) / 10; // Round to 1 decimal place (e.g. 4.2 km)
 }
 
+// Calculate age from YYYY-MM-DD date of birth
+export function calculateAge(dob) {
+  if (!dob) return null;
+  const birthDate = new Date(dob);
+  if (isNaN(birthDate.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age >= 0 ? age : null;
+}
+
 class RelationalDatabase {
   constructor() {
     this.data = {
@@ -118,6 +132,46 @@ class RelationalDatabase {
       } catch (e) {
         // Column likely already exists
       }
+      try {
+        await tursoClient.execute('ALTER TABLE bookings ADD COLUMN datetime_end TEXT');
+      } catch (e) {
+        // Column likely already exists
+      }
+      try {
+        await tursoClient.execute('ALTER TABLE users ADD COLUMN dob TEXT');
+      } catch (e) {
+        // Column likely already exists
+      }
+      try {
+        await tursoClient.execute('ALTER TABLE users ADD COLUMN transport_modes TEXT');
+      } catch (e) {
+        // Column likely already exists
+      }
+      try {
+        await tursoClient.execute('ALTER TABLE users ADD COLUMN about_me TEXT');
+      } catch (e) {
+        // Column likely already exists
+      }
+      try {
+        await tursoClient.execute('ALTER TABLE users ADD COLUMN social_links TEXT');
+      } catch (e) {
+        // Column likely already exists
+      }
+      try {
+        await tursoClient.execute('ALTER TABLE users ADD COLUMN favorite_ministers TEXT');
+      } catch (e) {
+        // Column likely already exists
+      }
+      try {
+        await tursoClient.execute('ALTER TABLE users ADD COLUMN liturgical_languages TEXT');
+      } catch (e) {
+        // Column likely already exists
+      }
+      try {
+        await tursoClient.execute('ALTER TABLE bookings ADD COLUMN edit_history TEXT');
+      } catch (e) {
+        // Column likely already exists
+      }
 
       const usersRs = await tursoClient.execute('SELECT * FROM users');
       const slotsRs = await tursoClient.execute('SELECT * FROM availability_slots');
@@ -136,9 +190,24 @@ class RelationalDatabase {
           is_verified: Number(r.is_verified),
           is_admin: Number(r.is_admin),
           max_travel_km: Number(r.max_travel_km || 25),
+          transport_mode: r.transport_mode || 'own_bike',
+          transport_modes: typeof r.transport_modes === 'string'
+            ? (() => { try { return JSON.parse(r.transport_modes); } catch(e) { return [r.transport_mode || 'own_bike']; } })()
+            : (Array.isArray(r.transport_modes) ? r.transport_modes : [r.transport_mode || 'own_bike']),
           latitude: r.latitude !== null ? Number(r.latitude) : null,
           longitude: r.longitude !== null ? Number(r.longitude) : null,
-          profile_photo: r.profile_photo || null
+          profile_photo: r.profile_photo || null,
+          dob: r.dob || null,
+          about_me: r.about_me || '',
+          social_links: typeof r.social_links === 'string'
+            ? (() => { try { return JSON.parse(r.social_links); } catch(e) { return {}; } })()
+            : (r.social_links || {}),
+          favorite_ministers: typeof r.favorite_ministers === 'string'
+            ? (() => { try { return JSON.parse(r.favorite_ministers); } catch(e) { return []; } })()
+            : (Array.isArray(r.favorite_ministers) ? r.favorite_ministers : []),
+          liturgical_languages: typeof r.liturgical_languages === 'string'
+            ? (() => { try { return JSON.parse(r.liturgical_languages); } catch(e) { return ['English', 'Tamil']; } })()
+            : (Array.isArray(r.liturgical_languages) && r.liturgical_languages.length > 0 ? r.liturgical_languages : ['English', 'Tamil'])
         })),
         ...localUsersToKeep
       ];
@@ -164,7 +233,8 @@ class RelationalDatabase {
             responder_id: r.responder_id !== null ? Number(r.responder_id) : null,
             latitude: r.latitude !== null ? Number(r.latitude) : null,
             longitude: r.longitude !== null ? Number(r.longitude) : null,
-            applicants: localExisting ? (localExisting.applicants || []) : (r.applicants ? JSON.parse(r.applicants) : [])
+            applicants: localExisting ? (localExisting.applicants || []) : (r.applicants ? JSON.parse(r.applicants) : []),
+            edit_history: localExisting && localExisting.edit_history ? localExisting.edit_history : (r.edit_history ? (typeof r.edit_history === 'string' ? JSON.parse(r.edit_history) : r.edit_history) : [])
           };
         }),
         ...localBookingsToKeep
@@ -259,7 +329,11 @@ class RelationalDatabase {
       longitude: user.longitude ? parseFloat(user.longitude) : null,
       max_travel_km: user.max_travel_km ? parseInt(user.max_travel_km) : 25,
       transport_mode: user.transport_mode || 'own_bike',
+      transport_modes: Array.isArray(user.transport_modes)
+        ? user.transport_modes
+        : (user.transport_mode ? [user.transport_mode] : ['own_bike']),
       profile_photo: user.profile_photo || null,
+      dob: user.dob || null,
       is_verified: user.is_verified !== undefined ? Number(user.is_verified) : 0,
       is_admin: 0,
       password_hash: hashPassword(user.password),
@@ -274,13 +348,13 @@ class RelationalDatabase {
         sql: `INSERT INTO users (
           id, name, title, congregation_abbr, mobile, email, password_hash, clergy_type, religious_order,
           diocese_province, residence_name, residence_address, latitude, longitude,
-          max_travel_km, transport_mode, profile_photo, is_verified, is_admin, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          max_travel_km, transport_mode, transport_modes, profile_photo, dob, is_verified, is_admin, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           newUser.id, newUser.name, newUser.title, newUser.congregation_abbr, newUser.mobile, newUser.email, newUser.password_hash,
           newUser.clergy_type, newUser.religious_order, newUser.diocese_province,
           newUser.residence_name, newUser.residence_address, newUser.latitude, newUser.longitude,
-          newUser.max_travel_km, newUser.transport_mode, newUser.profile_photo, newUser.is_verified, newUser.is_admin, newUser.created_at
+          newUser.max_travel_km, newUser.transport_mode, JSON.stringify(newUser.transport_modes), newUser.profile_photo, newUser.dob, newUser.is_verified, newUser.is_admin, newUser.created_at
         ]
       }).catch(err => console.error('Turso background insert user failed:', err));
     }
@@ -307,14 +381,18 @@ class RelationalDatabase {
         const allowedColumns = [
           'name', 'title', 'congregation_abbr', 'mobile', 'email', 'clergy_type', 'religious_order',
           'diocese_province', 'residence_name', 'residence_address',
-          'latitude', 'longitude', 'max_travel_km', 'transport_mode',
-          'profile_photo', 'is_verified'
+          'latitude', 'longitude', 'max_travel_km', 'transport_mode', 'transport_modes',
+          'profile_photo', 'is_verified', 'dob', 'about_me', 'social_links', 'favorite_ministers', 'liturgical_languages'
         ];
 
         for (const col of allowedColumns) {
           if (updates[col] !== undefined) {
             fields.push(`${col} = ?`);
-            args.push(updates[col]);
+            if ((col === 'social_links' || col === 'transport_modes' || col === 'favorite_ministers' || col === 'liturgical_languages') && typeof updates[col] === 'object') {
+              args.push(JSON.stringify(updates[col]));
+            } else {
+              args.push(updates[col]);
+            }
           }
         }
 
@@ -387,7 +465,14 @@ class RelationalDatabase {
         date: todayStr,
         time_start: slot ? slot.time_start : '06:00',
         time_end: slot ? slot.time_end : '20:00',
-        languages: slot && slot.languages ? slot.languages : ['English', 'Tamil'],
+        languages: (slot && Array.isArray(slot.languages) && slot.languages.length > 0)
+          ? slot.languages
+          : (Array.isArray(priest.liturgical_languages) && priest.liturgical_languages.length > 0
+              ? priest.liturgical_languages
+              : ['English', 'Tamil']),
+        liturgical_languages: Array.isArray(priest.liturgical_languages) && priest.liturgical_languages.length > 0
+          ? priest.liturgical_languages
+          : ['English', 'Tamil'],
         status: isBusy ? 'busy' : 'available',
         priest_title: priest.title || 'Fr.',
         priest_name: priest.name,
@@ -396,12 +481,24 @@ class RelationalDatabase {
         clergy_type: priest.clergy_type,
         religious_order: priest.religious_order,
         residence_name: priest.residence_name,
+        residence_address: priest.residence_address || '',
         diocese_province: priest.diocese_province,
         transport_mode: priest.transport_mode,
+        transport_modes: Array.isArray(priest.transport_modes)
+          ? priest.transport_modes
+          : (typeof priest.transport_modes === 'string'
+              ? (() => { try { return JSON.parse(priest.transport_modes); } catch(e) { return [priest.transport_mode || 'own_bike']; } })()
+              : (priest.transport_mode ? [priest.transport_mode] : ['own_bike'])),
         max_travel_km: priest.max_travel_km,
         priest_latitude: priest.latitude,
         priest_longitude: priest.longitude,
         profile_photo: priest.profile_photo || null,
+        dob: priest.dob || null,
+        age: calculateAge(priest.dob),
+        about_me: priest.about_me || '',
+        social_links: typeof priest.social_links === 'string'
+          ? (() => { try { return JSON.parse(priest.social_links); } catch(e) { return {}; } })()
+          : (priest.social_links || {}),
         distance_km
       };
     }).filter(p => p.status === 'available'); // Only show currently available priests on public list
@@ -632,13 +729,35 @@ class RelationalDatabase {
           priest_name: priestUser.name,
           congregation_abbr: priestUser.congregation_abbr || '',
           priest_mobile: priestUser.mobile,
+          priest_email: priestUser.email || '',
           clergy_type: priestUser.clergy_type,
           religious_order: priestUser.religious_order,
           diocese_province: priestUser.diocese_province,
           residence_name: priestUser.residence_name,
+          residence_address: priestUser.residence_address || '',
+          liturgical_languages: Array.isArray(priestUser.liturgical_languages) && priestUser.liturgical_languages.length > 0
+            ? priestUser.liturgical_languages
+            : ['English', 'Tamil'],
+          transport_mode: priestUser.transport_mode || 'own_bike',
+          transport_modes: Array.isArray(priestUser.transport_modes)
+            ? priestUser.transport_modes
+            : (typeof priestUser.transport_modes === 'string'
+                ? (() => { try { return JSON.parse(priestUser.transport_modes); } catch(e) { return [priestUser.transport_mode || 'own_bike']; } })()
+                : (priestUser.transport_mode ? [priestUser.transport_mode] : ['own_bike'])),
+          max_travel_km: priestUser.max_travel_km || 25,
+          is_verified: priestUser.is_verified || 0,
           profile_photo: priestUser.profile_photo || null,
+          dob: priestUser.dob || null,
+          age: calculateAge(priestUser.dob),
+          about_me: priestUser.about_me || '',
+          social_links: typeof priestUser.social_links === 'string'
+            ? (() => { try { return JSON.parse(priestUser.social_links); } catch(e) { return {}; } })()
+            : (priestUser.social_links || {}),
           distance_km: pDistance,
-          offered_at: typeof app === 'object' ? app.offered_at : new Date().toISOString()
+          offered_at: typeof app === 'object' ? app.offered_at : new Date().toISOString(),
+          has_post_edit: typeof app === 'object' ? Boolean(app.has_post_edit) : false,
+          last_edit_notice: typeof app === 'object' ? (app.last_edit_notice || '') : '',
+          last_edited_at: typeof app === 'object' ? (app.last_edited_at || null) : null
         };
       }).filter(Boolean);
 
@@ -733,18 +852,118 @@ class RelationalDatabase {
     if (tursoClient) {
       tursoClient.execute({
         sql: `INSERT INTO bookings (
-          id, requester_id, responder_id, booking_type, service_type, datetime,
+          id, requester_id, responder_id, booking_type, service_type, datetime, datetime_end,
           location, latitude, longitude, language, honorarium, notes, status, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           newBooking.id, newBooking.requester_id, newBooking.responder_id, newBooking.booking_type,
-          newBooking.service_type, newBooking.datetime, newBooking.location, newBooking.latitude, newBooking.longitude,
+          newBooking.service_type, newBooking.datetime, newBooking.datetime_end || null,
+          newBooking.location, newBooking.latitude, newBooking.longitude,
           newBooking.language, newBooking.honorarium, newBooking.notes, newBooking.status, newBooking.created_at
         ]
       }).catch(err => console.error('Turso background insert booking failed:', err));
     }
 
     return newBooking;
+  }
+
+  // Update/Edit an existing booking (Only allowed before confirmation)
+  async updateBooking(bookingId, requesterId, updates) {
+    const booking = this.data.bookings.find(b => b.id === parseInt(bookingId));
+    if (!booking) return { error: 'Booking request not found.' };
+
+    // Only the requester (or an admin) can edit the request details
+    if (booking.requester_id !== parseInt(requesterId)) {
+      return { error: 'You are only authorized to edit your own ministry requests.' };
+    }
+
+    // Confirmed ministries cannot be edited or deleted through the app; arrangements must be made directly
+    if (booking.status === 'accepted' || booking.status === 'completed') {
+      return { error: 'This ministry is already confirmed and locked. To change details, please contact the celebrant directly via Phone or WhatsApp.' };
+    }
+
+    // Determine what changed for change tracking & notification
+    const changes = [];
+    if (updates.datetime && updates.datetime !== booking.datetime) {
+      changes.push(`Date/time updated to ${updates.datetime.replace('T', ' ')}`);
+      booking.datetime = updates.datetime;
+    }
+    if (updates.datetime_end !== undefined && updates.datetime_end !== booking.datetime_end) {
+      booking.datetime_end = updates.datetime_end;
+    }
+    if (updates.location && updates.location !== booking.location) {
+      changes.push(`Venue updated to "${updates.location}"`);
+      booking.location = updates.location;
+      if (updates.latitude !== undefined) booking.latitude = updates.latitude ? parseFloat(updates.latitude) : null;
+      if (updates.longitude !== undefined) booking.longitude = updates.longitude ? parseFloat(updates.longitude) : null;
+    }
+    if (updates.language && updates.language !== booking.language) {
+      changes.push(`Language updated to "${updates.language}"`);
+      booking.language = updates.language;
+    }
+    if (updates.service_type && updates.service_type !== booking.service_type) {
+      changes.push(`Ministry type updated to "${updates.service_type}"`);
+      booking.service_type = updates.service_type;
+    }
+    if (updates.honorarium !== undefined && updates.honorarium !== booking.honorarium) {
+      booking.honorarium = updates.honorarium;
+    }
+    if (updates.notes !== undefined && updates.notes !== booking.notes) {
+      booking.notes = updates.notes;
+    }
+
+    if (changes.length === 0) {
+      return { success: true, booking, notified_count: 0, message: 'No changes detected.' };
+    }
+
+    const editTimestamp = new Date().toISOString();
+    booking.updated_at = editTimestamp;
+
+    // Track edit record in edit_history
+    if (!booking.edit_history) booking.edit_history = [];
+    const editRecord = {
+      edited_at: editTimestamp,
+      summary: changes.join('; '),
+      changes
+    };
+    booking.edit_history.push(editRecord);
+
+    // If ministers already offered availability (or if confirmed with a celebrant),
+    // mark their applicant record with an unacknowledged update flag so they get notified and can re-confirm or withdraw.
+    const applicantsCount = (booking.applicants || []).length;
+    if (booking.applicants && booking.applicants.length > 0) {
+      booking.applicants = booking.applicants.map(app => {
+        return {
+          ...(typeof app === 'object' ? app : { priest_id: app }),
+          has_post_edit: true,
+          last_edit_notice: changes.join('; '),
+          last_edited_at: editTimestamp
+        };
+      });
+    }
+
+    this.saveLocal();
+
+    if (tursoClient) {
+      tursoClient.execute({
+        sql: `UPDATE bookings 
+              SET service_type = ?, datetime = ?, datetime_end = ?, location = ?, latitude = ?, longitude = ?, language = ?, honorarium = ?, notes = ?, edit_history = ?
+              WHERE id = ?`,
+        args: [
+          booking.service_type, booking.datetime, booking.datetime_end || null,
+          booking.location, booking.latitude, booking.longitude,
+          booking.language, booking.honorarium, booking.notes,
+          JSON.stringify(booking.edit_history), booking.id
+        ]
+      }).catch(err => console.error('Turso background update booking failed:', err));
+    }
+
+    return {
+      success: true,
+      booking,
+      changes,
+      notified_count: applicantsCount + (booking.responder_id ? 1 : 0)
+    };
   }
 
   // Available Priest offers ministry for an open request (ticket remains open)
@@ -792,7 +1011,10 @@ class RelationalDatabase {
     const pId = parseInt(priestId);
     if (!booking.applicants) booking.applicants = [];
 
-    const initialLength = booking.applicants.length;
+    const withdrawingApplicant = booking.applicants.find(
+      a => (typeof a === 'object' ? a.priest_id : a) === pId
+    );
+
     booking.applicants = booking.applicants.filter(
       a => (typeof a === 'object' ? a.priest_id : a) !== pId
     );
@@ -800,6 +1022,18 @@ class RelationalDatabase {
     if (booking.applicants.length === initialLength) {
       return { error: 'You have not offered for this ministry.' };
     }
+
+    // Record the withdrawal for notifications timeline and history tracking
+    if (!booking.withdrawals) booking.withdrawals = [];
+    const ministerUser = this.getUserById(pId);
+    booking.withdrawals.push({
+      priest_id: pId,
+      priest_name: ministerUser?.name || (typeof withdrawingApplicant === 'object' ? withdrawingApplicant.priest_name : 'Minister'),
+      priest_title: ministerUser?.title || (typeof withdrawingApplicant === 'object' ? withdrawingApplicant.priest_title : 'Fr.'),
+      clergy_type: ministerUser?.clergy_type || '',
+      congregation_abbr: ministerUser?.congregation_abbr || ministerUser?.religious_order || '',
+      withdrawn_at: new Date().toISOString()
+    });
 
     this.saveLocal();
     return { success: true, booking };

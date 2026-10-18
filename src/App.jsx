@@ -17,6 +17,7 @@ export default function App() {
   const [regCongregationAbbr, setRegCongregationAbbr] = useState('');
   const [regMobile, setRegMobile] = useState('');
   const [regEmail, setRegEmail] = useState('');
+  const [regDob, setRegDob] = useState(''); // mandatory Date of Birth: YYYY-MM-DD
   const [regPassword, setRegPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [regClergyType, setRegClergyType] = useState('religious'); // 'religious' or 'diocesan'
@@ -45,8 +46,9 @@ export default function App() {
   const [myStatus, setMyStatus] = useState('available');
   const [requestsTab, setRequestsTab] = useState('open'); // 'open' (open to opt-in) vs 'review' (priests opted in, awaiting requester to lock) vs 'accepted' (locked/confirmed)
   const [priestRolePerspective, setPriestRolePerspective] = useState('celebrate'); // 'celebrate' (Serve: ministry needs & offers) vs 'request' (Supply: needs Father posted)
-  const [priestFilterRadius, setPriestFilterRadius] = useState(5); // 5 km default, up to 100 or 'all' km
-  const [priestSortBy, setPriestSortBy] = useState('date_asc'); // 'date_asc', 'distance_asc', 'recent_posted', 'date_desc'
+  const [priestFilterRadius, setPriestFilterRadius] = useState(25); // 25 km default, up to 100 or 'all' km
+  const [priestSortBy, setPriestSortBy] = useState('smart_match'); // 'smart_match' (intelligent explore score), 'date_asc', 'distance_asc', 'recent_posted', 'date_desc'
+  const [priestSortOrder, setPriestSortOrder] = useState('asc'); // 'asc' (normal) vs 'desc' (reversed)
   const [priestFilterService, setPriestFilterService] = useState('all'); // 'all', 'mass', 'recollection', 'feast', etc.
   const [priestFilterLanguage, setPriestFilterLanguage] = useState('all'); // 'all', 'Tamil', 'English', etc.
   const [showPriestFilterDrawer, setShowPriestFilterDrawer] = useState(false);
@@ -55,12 +57,15 @@ export default function App() {
 
   // Modals & Feedback
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [editingBooking, setEditingBooking] = useState(null); // booking object when editing an existing post
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [showDirectConfirmModal, setShowDirectConfirmModal] = useState(null); // selected priest object
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showFavoritesModal, setShowFavoritesModal] = useState(false); // Favorite Ministers Modal
   const [showNotificationsModal, setShowNotificationsModal] = useState(false); // Notifications & Timeline modal
   const [showCalendarModal, setShowCalendarModal] = useState(false); // Monthly Booking Calendar Modal
   const [calendarSelectedDate, setCalendarSelectedDate] = useState(null); // Selected date string 'YYYY-MM-DD'
+  const [viewMinisterModal, setViewMinisterModal] = useState(null); // Detailed view for applicant priest / sister
   const [showTitlePickerModal, setShowTitlePickerModal] = useState(false);
   const [showPhoneInfoTip, setShowPhoneInfoTip] = useState(false);
   const [showPrivacyPage, setShowPrivacyPage] = useState(false);
@@ -77,6 +82,7 @@ export default function App() {
   const [editCongregationAbbr, setEditCongregationAbbr] = useState('');
   const [editMobile, setEditMobile] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editDob, setEditDob] = useState(''); // mandatory Date of Birth: YYYY-MM-DD
   const [editClergyType, setEditClergyType] = useState('religious');
   const [editOrder, setEditOrder] = useState('');
   const [editDiocese, setEditDiocese] = useState('');
@@ -87,14 +93,30 @@ export default function App() {
   const [editLongitude, setEditLongitude] = useState(null);
   const [editMaxTravelKm, setEditMaxTravelKm] = useState(25);
   const [editTransportMode, setEditTransportMode] = useState('own_bike');
+  const [editTransportModes, setEditTransportModes] = useState(['own_bike']);
+  const [editLiturgicalLanguages, setEditLiturgicalLanguages] = useState(['English', 'Tamil']);
   const [editProfilePhoto, setEditProfilePhoto] = useState(null);
+  const [editAboutMe, setEditAboutMe] = useState('');
+  const [editYoutube, setEditYoutube] = useState('');
+  const [editFacebook, setEditFacebook] = useState('');
+  const [editInstagram, setEditInstagram] = useState('');
+  const [editWebsite, setEditWebsite] = useState('');
+  const [showEditSocialLinks, setShowEditSocialLinks] = useState(false);
   const [regProfilePhoto, setRegProfilePhoto] = useState(null);
+
+  // Photo Crop & Zoom Modal States
+  const [cropperModal, setCropperModal] = useState(null); // { rawImage, target: 'edit' | 'reg' }
+  const [cropZoom, setCropZoom] = useState(1); // 1 to 3x
+  const [cropPan, setCropPan] = useState({ x: 0, y: 0 }); // offset in px
+  const [cropDragging, setCropDragging] = useState(false);
+  const [cropDragStart, setCropDragStart] = useState({ x: 0, y: 0 });
 
   // Direct Admin Onboarding Form States
   const [onboardTitle, setOnboardTitle] = useState('Sr.');
   const [onboardName, setOnboardName] = useState('');
   const [onboardCongregationAbbr, setOnboardCongregationAbbr] = useState('');
   const [onboardMobile, setOnboardMobile] = useState('');
+  const [onboardDob, setOnboardDob] = useState('');
   const [onboardOrder, setOnboardOrder] = useState('');
   const [onboardDiocese, setOnboardDiocese] = useState('');
   const [onboardClergyType, setOnboardClergyType] = useState('convent');
@@ -102,6 +124,19 @@ export default function App() {
   const [onboardAddress, setOnboardAddress] = useState('');
   const [onboardPincode, setOnboardPincode] = useState('');
   const [onboardPassword, setOnboardPassword] = useState('Jesus@123');
+
+  // Available travel / transport options ministers can select
+  const TRANSPORT_OPTIONS = [
+    { id: 'flight', label: 'Flight', icon: '✈️' },
+    { id: 'train', label: 'Train', icon: '🚆' },
+    { id: 'bus', label: 'Bus', icon: '🚌' },
+    { id: 'taxi', label: 'Taxi', icon: '🚕' },
+    { id: 'auto', label: 'Auto', icon: '🛺' },
+    { id: 'bike_taxi', label: 'Bike Taxi', icon: '🛵' },
+    { id: 'own_bike', label: 'Own bike', icon: '🏍️' },
+    { id: 'own_car', label: 'Own car', icon: '🚗' },
+    { id: 'pickup', label: 'Need to arrange a pick up', icon: '🤝' }
+  ];
 
   // Helper to extract abbreviation from congregation string like "Salesians of Don Bosco (SDB)" -> "SDB"
   const extractAbbr = (str) => {
@@ -111,22 +146,27 @@ export default function App() {
   };
 
   // Helper to render standard Male / Female generic silhouette icon when no photo is uploaded
-  const renderDefaultAvatar = (title, clergyType, size = 20) => {
-    const isFemale = title === 'Sr.' || clergyType === 'convent';
+  const renderDefaultAvatar = (title, clergyType, size = 38) => {
+    const isFemale = title === 'Sr.' || clergyType === 'convent' || clergyType === 'convent_sister';
     if (isFemale) {
       return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Sister Avatar">
-          <path d="M19 21v-2a4 4 0 0 0-3-3.87" />
-          <path d="M5 21v-2a4 4 0 0 1 3-3.87" />
-          <circle cx="12" cy="7" r="4" />
-          <path d="M9 14h6a3 3 0 0 1 3 3v4H6v-4a3 3 0 0 1 3-3z" />
+        <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-label="Sister Avatar">
+          <circle cx="24" cy="24" r="24" fill="#FCE7F3" />
+          <circle cx="24" cy="17" r="7.5" fill="#DB2777" />
+          <path d="M11 39c0-7.18 5.82-13 13-13s13 5.82 13 13" fill="#BE185D" />
+          {/* Sister Veil contour */}
+          <path d="M16.5 12c0-4.5 3.5-7 7.5-7s7.5 2.5 7.5 7c0 4-1.5 9-2.5 11h-10c-1-2-2.5-7-2.5-11z" fill="#9D174D" opacity="0.85" />
+          <circle cx="24" cy="16.5" r="5" fill="#FDF2F8" />
         </svg>
       );
     }
     return (
-      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-label="Priest Avatar">
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
+      <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-label="Priest Avatar">
+        <circle cx="24" cy="24" r="24" fill="#E2E8F0" />
+        <circle cx="24" cy="17" r="7.5" fill="#334155" />
+        <path d="M11 39c0-7.18 5.82-13 13-13s13 5.82 13 13" fill="#1E293B" />
+        {/* Roman Clerical Collar notch */}
+        <rect x="22" y="26" width="4" height="3" rx="0.5" fill="#FFFFFF" />
       </svg>
     );
   };
@@ -149,6 +189,20 @@ export default function App() {
       return `${digits.slice(0, 5)} ${digits.slice(5)}`;
     }
     return digits;
+  };
+
+  // Helper to calculate age from YYYY-MM-DD date of birth
+  const calculateAge = (dob) => {
+    if (!dob) return null;
+    const birthDate = new Date(dob);
+    if (isNaN(birthDate.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age >= 0 ? age : null;
   };
 
   // Helper to get canonical +919876543210
@@ -220,6 +274,49 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
+  // Generate cropped and zoomed square avatar (320x320 px)
+  const handleApplyCroppedImage = () => {
+    if (!cropperModal || !cropperModal.rawImage) return;
+    const img = new Image();
+    img.onload = () => {
+      const outputCanvas = document.createElement('canvas');
+      const size = 320;
+      outputCanvas.width = size;
+      outputCanvas.height = size;
+      const ctx = outputCanvas.getContext('2d');
+
+      // The preview container is 240x240 px circle
+      const previewSize = 240;
+      const baseScale = Math.max(previewSize / img.width, previewSize / img.height);
+      const totalScale = baseScale * cropZoom;
+      const drawnW = img.width * totalScale;
+      const drawnH = img.height * totalScale;
+
+      // Position relative to preview center, then scaled to 320x320 output
+      const scaleToOutput = size / previewSize;
+      const centerX = previewSize / 2 + cropPan.x;
+      const centerY = previewSize / 2 + cropPan.y;
+
+      const destX = (centerX - drawnW / 2) * scaleToOutput;
+      const destY = (centerY - drawnH / 2) * scaleToOutput;
+      const destW = drawnW * scaleToOutput;
+      const destH = drawnH * scaleToOutput;
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, size, size);
+      ctx.drawImage(img, destX, destY, destW, destH);
+
+      const croppedBase64 = outputCanvas.toDataURL('image/jpeg', 0.88);
+      if (cropperModal.target === 'edit') {
+        setEditProfilePhoto(croppedBase64);
+      } else if (cropperModal.target === 'reg') {
+        setRegProfilePhoto(croppedBase64);
+      }
+      setCropperModal(null);
+    };
+    img.src = cropperModal.rawImage;
+  };
+
   // New Mass Request Form Fields
   const [bookingLocation, setBookingLocation] = useState('');
   const [bookingDate, setBookingDate] = useState('');
@@ -228,10 +325,12 @@ export default function App() {
   const [bookingTimeEnd, setBookingTimeEnd] = useState('07:30');
   const [bookingLanguage, setBookingLanguage] = useState('Tamil');
   const [bookingHonorarium, setBookingHonorarium] = useState('');
-  const [bookingServiceType, setBookingServiceType] = useState('Holy Mass (Parish / Convent)');
-  const [bookingServiceCategory, setBookingServiceCategory] = useState('core'); // 'core' vs 'special'
+  const [bookingServiceType, setBookingServiceType] = useState('Holy Mass');
+  const [bookingServiceCategory, setBookingServiceCategory] = useState('sacraments'); // 'sacraments', 'paraliturgy', 'pastoral'
   const [bookingCustomServiceType, setBookingCustomServiceType] = useState('');
   const [bookingNotes, setBookingNotes] = useState('');
+  const [bookingLatitude, setBookingLatitude] = useState(null);
+  const [bookingLongitude, setBookingLongitude] = useState(null);
 
   // Set Availability Form Fields (Date Range & Times)
   const [availStartDate, setAvailStartDate] = useState('');
@@ -244,36 +343,44 @@ export default function App() {
   const [confirmLocation, setConfirmLocation] = useState('');
   const [confirmLanguage, setConfirmLanguage] = useState('English');
   const [confirmHonorarium, setConfirmHonorarium] = useState('1000');
-  const [confirmServiceType, setConfirmServiceType] = useState('Holy Mass (Parish / Convent)');
-  const [confirmServiceCategory, setConfirmServiceCategory] = useState('core');
+  const [confirmServiceType, setConfirmServiceType] = useState('Holy Mass');
+  const [confirmServiceCategory, setConfirmServiceCategory] = useState('sacraments');
   const [confirmCustomServiceType, setConfirmCustomServiceType] = useState('');
 
-  const CORE_SERVICES = [
-    'Holy Mass (Parish / Convent)',
-    'Substation Mass',
-    'Concelebration (Feasts & Events)',
+  // Category A: Mass & Sacraments
+  const MASS_SACRAMENTS = [
+    'Holy Mass',
+    'Concelebration',
     'Marriage Mass',
     'Funeral / Requiem Mass',
     'Confession Ministry',
-    'Monthly Recollection Talk',
-    'Annual Retreat Preacher',
-    'Anbiam Animation',
-    'House Visit',
-    'Catechism'
-  ];
-
-  const SPECIAL_SERVICES = [
-    'Anbiam Animation',
-    'House Visit',
-    'Catechism',
-    'House Blessing',
-    'Easter Blessing',
-    'Christmas Carols',
-    'Communion to Sick',
+    'Anointing of the Sick',
     'Others'
   ];
 
-  const SERVICE_TYPES = Array.from(new Set([...CORE_SERVICES, ...SPECIAL_SERVICES]));
+  // Category B: Paraliturgy & Blessings
+  const PARALITURGY_BLESSINGS = [
+    'Adoration Service',
+    'Charismatic Prayer Service',
+    'House Blessing',
+    'Monthly Recollection Talk',
+    'Retreat for Religious',
+    'Retreat for Lay Faithful',
+    'Others'
+  ];
+
+  // Category C: Pastoral Ministries (Sisters can also receive & volunteer for these)
+  const PASTORAL_MINISTRIES = [
+    'Catechism',
+    'Altar Decoration',
+    'BCC / Anbiam Animation',
+    'House Visit',
+    'Communion to Sick',
+    'Choir Animation',
+    'Others'
+  ];
+
+  const SERVICE_TYPES = Array.from(new Set([...MASS_SACRAMENTS, ...PARALITURGY_BLESSINGS, ...PASTORAL_MINISTRIES]));
 
   const RELIGIOUS_ORDERS = [
     'Salesians of Don Bosco (SDB)',
@@ -366,14 +473,16 @@ export default function App() {
       try {
         const parsed = JSON.parse(cached);
         setUser(parsed);
-        // Default landing tab based on ecclesiastical role:
-        // - Diocesan Priests & Nuns/Sisters: 'my_requests' (My Posts)
-        // - Religious Priests: 'open' (Ministry Requests)
-        const isPosterRole = (parsed.title === 'Sr.' || parsed.clergy_type === 'convent' || parsed.clergy_type === 'convent_sister') ||
-                             (parsed.title === 'Fr.' && parsed.clergy_type === 'diocesan');
-        if (isPosterRole) {
+        // Default landing perspective:
+        // Sisters and Diocesan Priests: default to 'request' (My Requests)
+        // Religious Priests: default to 'celebrate' (Serve Ministry)
+        const isRequesterFirst = (parsed.title === 'Sr.' || parsed.clergy_type === 'convent' || parsed.clergy_type === 'convent_sister') ||
+                                 (parsed.title === 'Fr.' && parsed.clergy_type === 'diocesan');
+        if (isRequesterFirst) {
+          setPriestRolePerspective('request');
           setRequestsTab('my_requests');
         } else {
+          setPriestRolePerspective('celebrate');
           setRequestsTab('open');
         }
         loadDashboardData(parsed);
@@ -462,6 +571,9 @@ export default function App() {
         if (target === 'edit') {
           setEditLatitude(lat);
           setEditLongitude(lon);
+        } else if (target === 'booking') {
+          setBookingLatitude(lat);
+          setBookingLongitude(lon);
         } else {
           setRegLatitude(lat);
           setRegLongitude(lon);
@@ -477,7 +589,7 @@ export default function App() {
             const addr = geoData.address || {};
             // Construct clean locality: suburb/neighbourhood, city/town, pincode
             const localityParts = [
-              addr.suburb || addr.neighbourhood || addr.residential || addr.road || '',
+              addr.amenity || addr.building || addr.suburb || addr.neighbourhood || addr.residential || addr.road || '',
               addr.city || addr.town || addr.village || addr.city_district || addr.county || '',
               addr.state ? addr.state : '',
               addr.postcode ? `- ${addr.postcode}` : ''
@@ -487,6 +599,8 @@ export default function App() {
             if (readableAddress) {
               if (target === 'edit') {
                 setEditResidenceAddress(readableAddress);
+              } else if (target === 'booking') {
+                setBookingLocation(readableAddress);
               } else {
                 setRegResidenceAddress(readableAddress);
               }
@@ -570,11 +684,13 @@ export default function App() {
       } else {
         localStorage.setItem('bookapriest_user', JSON.stringify(data.user));
         setUser(data.user);
-        const isPosterRole = (data.user.title === 'Sr.' || data.user.clergy_type === 'convent' || data.user.clergy_type === 'convent_sister') ||
-                             (data.user.title === 'Fr.' && data.user.clergy_type === 'diocesan');
-        if (isPosterRole) {
+        const isRequesterFirst = (data.user.title === 'Sr.' || data.user.clergy_type === 'convent' || data.user.clergy_type === 'convent_sister') ||
+                                 (data.user.title === 'Fr.' && data.user.clergy_type === 'diocesan');
+        if (isRequesterFirst) {
+          setPriestRolePerspective('request');
           setRequestsTab('my_requests');
         } else {
+          setPriestRolePerspective('celebrate');
           setRequestsTab('open');
         }
         showFeedback('success', `Welcome back, ${data.user.title || ''} ${data.user.name}!`);
@@ -622,6 +738,15 @@ export default function App() {
       showFeedback('error', 'A valid 6-digit Postal PIN Code is required for parish/convent proximity.');
       return;
     }
+    if (!regDob) {
+      showFeedback('error', 'Date of Birth is required.');
+      return;
+    }
+    const regAge = calculateAge(regDob);
+    if (regAge === null || regAge < 18 || regAge > 110) {
+      showFeedback('error', 'Please provide a valid Date of Birth (must be at least 18 years of age).');
+      return;
+    }
     if (!regPassword) {
       showFeedback('error', 'Password is required.');
       return;
@@ -646,6 +771,7 @@ export default function App() {
           congregation_abbr: (regTitle === 'Fr.' && regClergyType === 'diocesan') ? '' : regCongregationAbbr.trim(),
           mobile: getCanonicalMobile(regMobile),
           email: regEmail,
+          dob: regDob,
           password: regPassword,
           clergy_type: regTitle === 'Fr.' ? regClergyType : 'convent',
           religious_order: (regTitle === 'Fr.' && regClergyType === 'diocesan') ? null : regOrder,
@@ -699,7 +825,29 @@ export default function App() {
     setEditLongitude(user.longitude || null);
     setEditMaxTravelKm(user.max_travel_km || 25);
     setEditTransportMode(user.transport_mode || 'own_bike');
+    const existingModes = Array.isArray(user.transport_modes)
+      ? user.transport_modes
+      : (typeof user.transport_modes === 'string'
+          ? (() => { try { return JSON.parse(user.transport_modes); } catch(e) { return [user.transport_mode || 'own_bike']; } })()
+          : [user.transport_mode || 'own_bike']);
+    setEditTransportModes(existingModes.length > 0 ? existingModes : ['own_bike']);
+    const existingLangs = Array.isArray(user.liturgical_languages) && user.liturgical_languages.length > 0
+      ? user.liturgical_languages
+      : (typeof user.liturgical_languages === 'string'
+          ? (() => { try { return JSON.parse(user.liturgical_languages); } catch(e) { return ['English', 'Tamil']; } })()
+          : ['English', 'Tamil']);
+    setEditLiturgicalLanguages(existingLangs);
     setEditProfilePhoto(user.profile_photo || null);
+    setEditDob(user.dob || '');
+    setEditAboutMe(user.about_me || '');
+    const soc = typeof user.social_links === 'string'
+      ? (() => { try { return JSON.parse(user.social_links); } catch(e) { return {}; } })()
+      : (user.social_links || {});
+    setEditYoutube(soc.youtube || '');
+    setEditFacebook(soc.facebook || '');
+    setEditInstagram(soc.instagram || '');
+    setEditWebsite(soc.website || '');
+    setShowEditSocialLinks(Boolean(soc.youtube || soc.facebook || soc.instagram || soc.website));
     setShowProfileModal(true);
   };
 
@@ -708,6 +856,15 @@ export default function App() {
     e.preventDefault();
     if (!editName || !editMobile) {
       showFeedback('error', 'Name and mobile number are required.');
+      return;
+    }
+    if (!editDob) {
+      showFeedback('error', 'Date of Birth is required.');
+      return;
+    }
+    const computedAge = calculateAge(editDob);
+    if (computedAge === null || computedAge < 18 || computedAge > 110) {
+      showFeedback('error', 'Please provide a valid Date of Birth (must be at least 18 years of age).');
       return;
     }
     const cleanEditPin = editPincode.replace(/\D/g, '');
@@ -730,6 +887,7 @@ export default function App() {
           congregation_abbr: (editTitle === 'Fr.' && editClergyType === 'diocesan') ? '' : editCongregationAbbr.trim(),
           mobile: getCanonicalMobile(editMobile),
           email: editEmail,
+          dob: editDob,
           clergy_type: editTitle === 'Fr.' ? editClergyType : 'convent',
           religious_order: (editTitle === 'Fr.' && editClergyType === 'diocesan') ? null : editOrder,
           diocese_province: (editTitle === 'Fr.' && editClergyType === 'diocesan') ? editDiocese : '',
@@ -739,8 +897,17 @@ export default function App() {
           latitude: editLatitude,
           longitude: editLongitude,
           max_travel_km: editTitle === 'Fr.' ? editMaxTravelKm : 25,
-          transport_mode: editTransportMode,
-          profile_photo: editProfilePhoto
+          transport_mode: editTransportModes.length > 0 ? editTransportModes[0] : editTransportMode,
+          transport_modes: editTransportModes,
+          liturgical_languages: editLiturgicalLanguages,
+          profile_photo: editProfilePhoto,
+          about_me: editAboutMe.trim(),
+          social_links: {
+            youtube: editYoutube.trim(),
+            facebook: editFacebook.trim(),
+            instagram: editInstagram.trim(),
+            website: editWebsite.trim()
+          }
         })
       });
       const data = await res.json();
@@ -884,7 +1051,51 @@ export default function App() {
     }
   };
 
-  // Create Broadcast Mass Request
+  // Open Request Modal in Edit Mode pre-filled with existing booking details
+  const openEditBookingModal = (booking) => {
+    setEditingBooking(booking);
+    setBookingLocation(booking.location || '');
+    setBookingLatitude(booking.latitude || null);
+    setBookingLongitude(booking.longitude || null);
+    
+    // Parse start datetime
+    if (booking.datetime) {
+      const parts = booking.datetime.split('T');
+      setBookingDate(parts[0] || '');
+      if (parts[1]) {
+        setBookingTimeStart(parts[1].slice(0, 5));
+      }
+    }
+
+    // Parse end datetime
+    if (booking.datetime_end) {
+      const parts = booking.datetime_end.split('T');
+      setBookingEndDate(parts[0] !== booking.datetime.split('T')[0] ? parts[0] : '');
+      if (parts[1]) {
+        setBookingTimeEnd(parts[1].slice(0, 5));
+      }
+    } else {
+      setBookingEndDate('');
+    }
+
+    // Match service type or set to Others
+    const rawService = booking.service_type || 'Holy Mass';
+    const allPresets = [...MASS_SACRAMENTS, ...PARALITURGY_BLESSINGS, ...PASTORAL_MINISTRIES];
+    if (allPresets.includes(rawService)) {
+      setBookingServiceType(rawService);
+      setBookingCustomServiceType('');
+    } else {
+      setBookingServiceType('Others');
+      setBookingCustomServiceType(rawService);
+    }
+
+    setBookingLanguage(booking.language || 'English');
+    setBookingHonorarium(booking.honorarium || '');
+    setBookingNotes(booking.notes || '');
+    setShowRequestModal(true);
+  };
+
+  // Create or Update Broadcast Ministry Request
   const handleCreateBooking = async (e) => {
     e.preventDefault();
     if (!bookingLocation || !bookingDate || !bookingLanguage) {
@@ -903,11 +1114,17 @@ export default function App() {
 
     setFormSubmitting(true);
     try {
-      const res = await fetch('/api/bookings', {
-        method: 'POST',
+      const isEditing = Boolean(editingBooking);
+      const url = isEditing ? `/api/bookings/${editingBooking.id}` : '/api/bookings';
+      const method = isEditing ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
         headers: getHeaders(),
         body: JSON.stringify({
           location: bookingLocation,
+          latitude: bookingLatitude,
+          longitude: bookingLongitude,
           datetime: formattedDatetime,
           datetime_end: formattedDatetimeEnd,
           language: bookingLanguage,
@@ -918,14 +1135,17 @@ export default function App() {
       });
       const data = await res.json();
       if (res.ok) {
-        showFeedback('success', 'Mass request broadcasted successfully!');
+        showFeedback('success', isEditing ? (data.message || 'Ministry request successfully updated!') : 'Ministry request broadcasted successfully!');
         setShowRequestModal(false);
+        setEditingBooking(null);
         setBookingLocation('');
+        setBookingLatitude(null);
+        setBookingLongitude(null);
         setBookingDate('');
         setBookingEndDate('');
         loadDashboardData();
       } else {
-        showFeedback('error', data.error || 'Failed to post slot.');
+        showFeedback('error', data.error || (isEditing ? 'Failed to update request.' : 'Failed to post slot.'));
       }
     } catch (err) {
       showFeedback('error', 'Failed to communicate with server.');
@@ -968,6 +1188,29 @@ export default function App() {
         loadDashboardData();
       } else {
         showFeedback('error', data.error || 'Failed to withdraw offer.');
+      }
+    } catch (err) {
+      showFeedback('error', 'Failed to communicate with server.');
+    }
+  };
+
+  // Toggle favorite minister
+  const handleToggleFavorite = async (ministerId, ministerName) => {
+    try {
+      const res = await fetch('/api/users/favorites/toggle', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ ministerId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showFeedback('success', data.isFavorite ? `⭐ ${ministerName || 'Minister'} marked as favorite!` : `Removed ${ministerName || 'Minister'} from favorites.`);
+        if (data.user) {
+          setUser(data.user);
+          localStorage.setItem('bookapriest_user', JSON.stringify(data.user));
+        }
+      } else {
+        showFeedback('error', data.error || 'Failed to update favorite.');
       }
     } catch (err) {
       showFeedback('error', 'Failed to communicate with server.');
@@ -1046,7 +1289,8 @@ export default function App() {
           diocese_province: (onboardTitle === 'Fr.' && onboardClergyType === 'diocesan') ? onboardDiocese : '',
           residence_name: onboardResidenceName,
           residence_address: fullAddress,
-          pincode: cleanPin
+          pincode: cleanPin,
+          dob: onboardDob || null
         })
       });
       const data = await res.json();
@@ -1073,17 +1317,20 @@ export default function App() {
   const formatDateTime = (isoString, isoEndString = null) => {
     const d = new Date(isoString);
     let date = d.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-    let time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+    const timeStart = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+
+    // If no explicit end time is set, assume default 1-hour celebration duration
+    const dEnd = isoEndString ? new Date(isoEndString) : new Date(d.getTime() + 60 * 60 * 1000);
+    const timeEnd = dEnd.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+    const time = `${timeStart} to ${timeEnd}`;
+
     if (isoEndString) {
-      const dEnd = new Date(isoEndString);
-      const timeEnd = dEnd.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
-      time = `${time} – ${timeEnd}`;
       const endDate = dEnd.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
       if (endDate !== date) {
         date = `${date} → ${endDate}`;
       }
     }
-    return { date, time };
+    return { date, time, timeStart, timeEnd };
   };
 
   // Helper to determine celebration urgency (Today / Tomorrow / In N days)
@@ -1117,8 +1364,41 @@ export default function App() {
   };
 
   const getWhatsAppLink = (mobileNumber, messageText) => {
-    const cleaned = mobileNumber.replace(/[^0-9+]/g, '');
+    if (!mobileNumber) return '#';
+    let cleaned = mobileNumber.replace(/[^0-9]/g, '');
+    if (cleaned.length === 10) cleaned = `91${cleaned}`;
     return `https://wa.me/${cleaned}?text=${encodeURIComponent(messageText)}`;
+  };
+
+  // Helper to build pre-filled fraternal WhatsApp message
+  const buildWhatsAppCelebrationMessage = (b, isConfirmedCelebration = true, candidateName = null) => {
+    const isMeRequester = b.requester_id === user.id;
+    const myName = formatEcclesiasticalName(user?.title || (user?.clergy_type === 'convent' || user?.clergy_type === 'convent_sister' ? 'Sr.' : 'Fr.'), user?.name, user?.congregation_abbr);
+    
+    // Partner details
+    const partnerTitle = isMeRequester ? (b.responder_title || 'Fr.') : (b.requester_title || 'Sr.');
+    const partnerName = formatEcclesiasticalName(
+      partnerTitle,
+      isMeRequester ? (b.responder_name || candidateName) : b.requester_name,
+      isMeRequester ? b.responder_congregation_abbr : b.requester_congregation_abbr
+    );
+
+    const { date, time } = formatDateTime(b.datetime, b.datetime_end);
+    const serviceName = (b.service_type || 'Holy Mass').replace(/\s*\([^)]*\)/g, '').trim();
+    const location = b.location || 'Parish Chapel';
+    const language = b.language ? ` (${b.language})` : '';
+
+    if (!isConfirmedCelebration) {
+      // Inquiry / Offer stage message before confirmation
+      return `Praise be to Lord Jesus Christ ${partnerTitle}!\n\nThis is ${myName} via Book a Priest regarding our ministry request for *${serviceName}${language}* on *${date}* at *${time}* (${location}).\n\nI would be glad to coordinate the celebration details with you.`;
+    }
+
+    // Confirmed celebration message
+    if (isMeRequester) {
+      return `Praise be to Lord Jesus Christ ${partnerTitle}!\n\nThis is ${myName} regarding our confirmed ministry celebration for *${serviceName}${language}*:\n\n📅 Date: ${date}\n⏰ Time: ${time}\n📍 Venue: ${location}\n\nLooking forward to welcoming you for the celebration. Please let us know if you need any travel coordination or special liturgical requirements. Thank you fraternally!`;
+    } else {
+      return `Praise be to Lord Jesus Christ ${partnerTitle}!\n\nThis is ${myName} regarding our confirmed ministry celebration for *${serviceName}${language}*:\n\n📅 Date: ${date}\n⏰ Time: ${time}\n📍 Venue: ${location}\n\nI look forward to celebrating with your community. Please let me know of any specific liturgical intentions or directions. God bless!`;
+    }
   };
 
   if (loading) {
@@ -1144,7 +1424,7 @@ export default function App() {
               className="btn btn-secondary"
               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', padding: '0.45rem 0.85rem' }}
             >
-              ← Back to Registration
+              {user ? '← Back to App' : '← Back to Registration'}
             </button>
             <span style={{ fontSize: '0.74rem', background: '#FEF08A', color: '#854D0E', padding: '3px 8px', borderRadius: '6px', fontWeight: 700 }}>
               Official Policy
@@ -1158,61 +1438,154 @@ export default function App() {
                 <path d="M9 12l2 2 4-4" />
               </svg>
             </div>
-            <h2 style={{ fontSize: '1.4rem', color: '#0F172A', fontWeight: 700, margin: '0 0 0.4rem 0', fontFamily: 'Outfit' }}>
-              Privacy & Canonical Authenticity Declaration
+            <h2 style={{ fontSize: '1.35rem', color: '#0F172A', fontWeight: 700, margin: '0 0 0.35rem 0', fontFamily: 'Outfit' }}>
+              A Personal Note to Our Fathers &amp; Sisters
             </h2>
-            <p style={{ fontSize: '0.85rem', color: '#64748B', margin: 0 }}>
-              BookaPriest Liturgical Coordination Platform
+            <p style={{ fontSize: '0.84rem', color: '#64748B', margin: 0 }}>
+              BookaPriest Liturgical &amp; Pastoral Coordination
             </p>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.4rem', fontSize: '0.88rem', color: '#334155', lineHeight: '1.65' }}>
-            {/* Section 1: Administrator & Accountability */}
-            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '1rem 1.2rem' }}>
-              <h3 style={{ fontSize: '0.95rem', color: '#0F172A', margin: '0 0 0.5rem 0', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span>👤</span> Platform Administration & Ownership
-              </h3>
-              <p style={{ margin: '0 0 0.6rem 0' }}>
-                This portal is created, scrutinized, and maintained under Catholic religious administration to foster transparent and dignified sacramental coordination across India.
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem', fontSize: '0.9rem', color: '#334155', lineHeight: '1.7' }}>
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '1.15rem 1.35rem' }}>
+              <p style={{ margin: '0 0 0.5rem 0', fontWeight: 700, color: '#0F172A' }}>
+                Dear {user ? formatEcclesiasticalName(user) : 'Fr. / Rev. Sister'},
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.6rem', marginTop: '0.5rem', background: '#FFFFFF', padding: '0.75rem', borderRadius: '8px', border: '1px solid #E2E8F0', fontSize: '0.82rem' }}>
+              <p style={{ margin: '0 0 0.65rem 0', fontWeight: 600, color: '#1E293B' }}>
+                Praise be to Lord Jesus Christ.
+              </p>
+              <p style={{ margin: '0 0 0.75rem 0' }}>
+                I hope you are doing well in your ministry.
+              </p>
+              <p style={{ margin: '0 0 0.75rem 0' }}>
+                Please be informed that this is not any profit-making website or commercial venture. It is simply my personal attempt to address the everyday logistical friction in pastoral ministry through technology, helping our convents, parishes, and religious communities easily discover the liturgical availability of our priests when a spiritual need arises.
+              </p>
+              <p style={{ margin: 0 }}>
+                To make the best use of this platform and to ensure both a smooth ministry experience and complete mutual privacy, please keep in mind the following:
+              </p>
+            </div>
+
+            {/* Step 1: Security & Manual Verification */}
+            <div style={{ padding: '0.9rem 1.1rem', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                <span style={{ fontSize: '1.1rem', lineHeight: '1.3' }}>🛡️</span>
                 <div>
-                  <span style={{ color: '#64748B', display: 'block', fontSize: '0.72rem' }}>Maintained By</span>
-                  <strong style={{ color: '#0F172A' }}>[Your Name / Ecclesiastical Forum]</strong>
-                </div>
-                <div>
-                  <span style={{ color: '#64748B', display: 'block', fontSize: '0.72rem' }}>Official Website</span>
-                  <a href="https://bookapriest.in" target="_blank" rel="noreferrer" style={{ color: '#0284C7', fontWeight: 600, textDecoration: 'none' }}>
-                    www.bookapriest.in ↗
-                  </a>
-                </div>
-                <div>
-                  <span style={{ color: '#64748B', display: 'block', fontSize: '0.72rem' }}>Contact & Oversight</span>
-                  <a href="mailto:bookapriestnow@gmail.com" style={{ color: '#0284C7', fontWeight: 600, textDecoration: 'none' }}>
-                    bookapriestnow@gmail.com
-                  </a>
+                  <strong style={{ color: '#0F172A', display: 'block', marginBottom: '0.25rem' }}>
+                    1. Highly Secure &amp; 100% Private (No Public Web Access)
+                  </strong>
+                  <span style={{ fontSize: '0.86rem', color: '#475569' }}>
+                    All your personal information, clerical profile, and contact details are strictly protected and kept confidential. There is <strong>no public access</strong>, and your data is never crawled by web search engines or commercial directories. To protect the sanctity of ministry, <strong>I personally scrutinize and manually verify each user's authentic clerical and religious status</strong> before granting entry to the platform.
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* Section 2: Strict Privacy Guarantee */}
-            <div>
-              <h3 style={{ fontSize: '0.95rem', color: '#0F172A', margin: '0 0 0.4rem 0', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span>🔒</span> 100% Confidentiality & Data Protection
-              </h3>
-              <p style={{ margin: 0 }}>
-                Your personal telephone number, clerical identity, and convent/residence address are never sold, commercialized, or made publicly crawlable on the open web. Contact details are strictly restricted to verified parishioners and fellow religious only upon confirmation of a liturgical engagement.
-              </p>
+            {/* Step 2: Facilitation vs Automated App */}
+            <div style={{ padding: '0.9rem 1.1rem', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                <span style={{ fontSize: '1.1rem', lineHeight: '1.3' }}>🕊️</span>
+                <div>
+                  <strong style={{ color: '#0F172A', display: 'block', marginBottom: '0.25rem' }}>
+                    2. Facilitation Forum Only (Not an Automated Booking System)
+                  </strong>
+                  <span style={{ fontSize: '0.86rem', color: '#475569' }}>
+                    This platform is <strong>not an automatic booking service like Uber or commercial ride-hailing apps</strong>. It is designed solely as a voluntary facilitation forum to help convents, parishes, and communities easily discover the liturgical availability of our priests in an aggregated, transparent manner. It is meant to assist, not replace, our sacred fraternity and pastoral discernment.
+                  </span>
+                </div>
+              </div>
             </div>
 
-            {/* Section 3: Canonical Vetting */}
-            <div>
-              <h3 style={{ fontSize: '0.95rem', color: '#0F172A', margin: '0 0 0.4rem 0', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span>⛪</span> Canonical Vetting & Authenticity
-              </h3>
-              <p style={{ margin: 0 }}>
-                Every profile registered as a Priest (Fr.) or Sister (Sr.) is cross-checked against diocesan directories or religious congregational registries to preserve sacred liturgical trust and protect communities from unauthorized ministry.
+            {/* Step 3: Direct Personal Communication */}
+            <div style={{ padding: '0.9rem 1.1rem', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                <span style={{ fontSize: '1.1rem', lineHeight: '1.3' }}>📞</span>
+                <div>
+                  <strong style={{ color: '#0F172A', display: 'block', marginBottom: '0.25rem' }}>
+                    3. Direct Personal Communication Before Confirmation
+                  </strong>
+                  <span style={{ fontSize: '0.86rem', color: '#475569' }}>
+                    Whenever an offer is made or a request is posted, requesters must always speak directly with the priest—via direct phone call or WhatsApp—prior to finalizing or locking in any celebration. A brief personal conversation is essential to verify mutual agreement, exact timing, liturgical language, and specific requirements.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Step 4: Bilateral Coordination */}
+            <div style={{ padding: '0.9rem 1.1rem', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                <span style={{ fontSize: '1.1rem', lineHeight: '1.3' }}>🤝</span>
+                <div>
+                  <strong style={{ color: '#0F172A', display: 'block', marginBottom: '0.25rem' }}>
+                    4. Direct Bilateral Coordination
+                  </strong>
+                  <span style={{ fontSize: '0.86rem', color: '#475569' }}>
+                    Once contact numbers are exchanged, all celebration arrangements, travel coordination, and details take place entirely between your community and the celebrant. The platform does not arbitrate or intervene in individual arrangements.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Step 5: Good-Faith Advisory */}
+            <div style={{ padding: '0.9rem 1.1rem', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                <span style={{ fontSize: '1.1rem', lineHeight: '1.3' }}>🔒</span>
+                <div>
+                  <strong style={{ color: '#0F172A', display: 'block', marginBottom: '0.25rem' }}>
+                    5. No Commercial Guarantees or Platform Liability
+                  </strong>
+                  <span style={{ fontSize: '0.86rem', color: '#475569' }}>
+                    Information is shared in good faith. As an informal coordination aid, the platform cannot provide legal or canonical guarantees regarding attendance or travel disruptions, and assumes no liability for unforeseen cancellations or emergencies.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Sign-off & Fraternal Blessing with Photo & Canonical Address */}
+            <div style={{ padding: '1.15rem 1.35rem', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px' }}>
+              <p style={{ margin: '0 0 1rem 0' }}>
+                Thank you sincerely for your dedication to the Church and for your willingness to serve our communities. May the Lord continue to bless you and your sacred ministry abundantly.
               </p>
+              
+              <div style={{ borderTop: '1px dashed #CBD5E1', paddingTop: '1rem', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                <img
+                  src="/fr_joseph.jpg"
+                  alt="Fr. Joseph ArRa OFM Cap"
+                  style={{
+                    width: '68px',
+                    height: '68px',
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    border: '2.5px solid #D97706',
+                    boxShadow: '0 3px 10px rgba(0,0,0,0.12)',
+                    flexShrink: 0
+                  }}
+                />
+                <div style={{ flex: 1, minWidth: '220px' }}>
+                  <span style={{ display: 'block', color: '#64748B', fontSize: '0.82rem' }}>Yours fraternally in Christ,</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    <strong style={{ color: '#0F172A', fontSize: '1rem' }}>Fr. Joseph ArRa OFM Cap</strong>
+                    <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#166534', background: '#DCFCE7', border: '1px solid #86EFAC', padding: '1px 6px', borderRadius: '9999px' }}>
+                      ✓ Verified Developer &amp; Admin
+                    </span>
+                  </div>
+                  
+                  {/* Canonical Address */}
+                  <div style={{ fontSize: '0.8rem', color: '#475569', marginTop: '0.25rem', lineHeight: '1.4' }}>
+                    <span>⛪ Fraternité des Capucins</span><br />
+                    <span>📍 32 rue Boissonade, 75014 PARIS</span>
+                  </div>
+
+                  {/* Links */}
+                  <div style={{ marginTop: '0.45rem', display: 'flex', gap: '14px', flexWrap: 'wrap', fontSize: '0.78rem' }}>
+                    <a href="https://josephcap.com" target="_blank" rel="noreferrer" style={{ color: '#0284C7', textDecoration: 'none', fontWeight: 600 }}>
+                      🌐 josephcap.com
+                    </a>
+                    <a href="mailto:bookapriestnow@gmail.com" style={{ color: '#0284C7', textDecoration: 'none', fontWeight: 600 }}>
+                      ✉️ bookapriestnow@gmail.com
+                    </a>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1223,7 +1596,7 @@ export default function App() {
               className="btn btn-primary"
               style={{ padding: '0.7rem 2rem', fontWeight: 600 }}
             >
-              Back to Registration
+              {user ? '← Back to App' : '← Back to Registration'}
             </button>
           </div>
         </div>
@@ -1234,7 +1607,7 @@ export default function App() {
   // --- Login / Register Screen ---
   if (!user) {
     return (
-      <div className="auth-page">
+      <div className="auth-page" style={{ flexDirection: 'column', minHeight: '100vh', justifyContent: 'center', alignItems: 'center', gap: '1.5rem', padding: '2rem 1rem' }}>
         <div className="glass-card auth-card">
           <div className="auth-header">
             <h1>Book a Priest</h1>
@@ -1621,15 +1994,32 @@ export default function App() {
                 </div>
               </div>
 
+              {/* Date of Birth (Mandatory) & Live Age Badge */}
+              <div className="form-group">
+                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>DATE OF BIRTH *</span>
+                  {regDob && calculateAge(regDob) !== null && (
+                    <span style={{ color: '#166534', background: '#DCFCE7', padding: '2px 8px', borderRadius: '9999px', fontSize: '0.74rem', fontWeight: 700 }}>
+                      ✓ Age: {calculateAge(regDob)} years
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={regDob}
+                  max={new Date().toISOString().split('T')[0]}
+                  onChange={(e) => setRegDob(e.target.value)}
+                  required
+                />
+                <span style={{ fontSize: '0.72rem', color: '#64748B', display: 'block', marginTop: '0.2rem' }}>
+                  Used to calculate your age for ministry compatibility and travel ease.
+                </span>
+              </div>
+
                 <div className="form-group">
                   <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>
-                      {regTitle === 'Sr.'
-                        ? 'Convent Address (optional)'
-                        : (regTitle === 'Fr.' && regClergyType === 'diocesan'
-                            ? 'Parish Address (optional)'
-                            : 'Residence Address (optional)')}
-                    </span>
+                    <span>Address (optional)</span>
                     {regLatitude && (
                       <span style={{ color: '#166534', fontSize: '0.74rem', fontWeight: 600 }}>
                         ✓ GPS Pin Set
@@ -1904,6 +2294,33 @@ export default function App() {
           )}
         </div>
 
+        {/* --- AUTH PAGE FOOTER (DISCREET & PRIVACY-CONSCIOUS) --- */}
+        <footer style={{ marginTop: '0.5rem', textAlign: 'center', fontSize: '0.78rem', color: '#64748B', lineHeight: '1.6' }}>
+          <div style={{ marginBottom: '0.25rem', fontWeight: 500 }}>
+            Managed under Catholic Religious Administration
+          </div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span>&copy; <a href="https://josephcap.com" target="_blank" rel="noreferrer" style={{ color: '#0284C7', textDecoration: 'none', fontWeight: 600 }}>josephcap.com</a></span>
+            <span style={{ color: '#CBD5E1' }}>&bull;</span>
+            <button
+              type="button"
+              onClick={() => setShowPrivacyPage(true)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#0284C7',
+                cursor: 'pointer',
+                padding: 0,
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                textDecoration: 'underline',
+                textUnderlineOffset: '3px'
+              }}
+            >
+              Privacy &amp; Authenticity Notes
+            </button>
+          </div>
+        </footer>
       </div>
     );
   }
@@ -1933,8 +2350,12 @@ export default function App() {
               )}
             </div>
             <div className="user-tag" style={{ textAlign: 'left' }}>
-              <span className="user-name">
-                {formatEcclesiasticalName(user)} ✏️
+              <span className="user-name" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                <span>{formatEcclesiasticalName(user)}</span>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.85 }}>
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
               </span>
               <span className="user-status" style={{ justifyContent: 'flex-start' }}>
                 <span className={`status-dot ${user.is_verified === 1 ? 'verified' : 'pending'}`}></span>
@@ -1943,6 +2364,34 @@ export default function App() {
             </div>
           </button>
 
+          {/* Favorite Ministers Quick Access Button */}
+          <div className="header-notif-wrapper">
+            <button
+              type="button"
+              className="header-notif-btn"
+              onClick={() => setShowFavoritesModal(true)}
+              title="My Favorite Ministers"
+              aria-label="View favorite ministers"
+              style={{
+                borderColor: showFavoritesModal ? '#EAB308' : '#E2E8F0',
+                background: showFavoritesModal ? '#FEFCE8' : '#FFFFFF',
+                color: showFavoritesModal ? '#CA8A04' : '#64748B'
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={user?.favorite_ministers?.length > 0 ? '#EAB308' : 'none'} stroke="#EAB308" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+              {(() => {
+                const favCount = Array.isArray(user?.favorite_ministers) ? user.favorite_ministers.length : 0;
+                return favCount > 0 ? (
+                  <span className="header-notif-badge" style={{ background: '#EAB308', color: '#FFFFFF', boxShadow: '0 2px 4px rgba(234, 179, 8, 0.4)' }}>
+                    {favCount}
+                  </span>
+                ) : null;
+              })()}
+            </button>
+          </div>
+
           {/* Monthly Booking Calendar Quick Access Button */}
           <div className="header-notif-wrapper">
             <button
@@ -1950,8 +2399,17 @@ export default function App() {
               className="header-notif-btn"
               onClick={() => {
                 const todayStr = new Date().toISOString().split('T')[0];
-                setCalendarSelectedDate(todayStr);
                 setCalMonthOffset(0);
+                // Look for upcoming celebration dates for this user
+                const confirmedUserBookings = bookings.filter(b => (b.status === 'accepted' || b.status === 'completed') && (b.responder_id === user.id || b.requester_id === user.id));
+                const datesWithBookings = confirmedUserBookings
+                  .map(b => b.datetime ? b.datetime.split('T')[0] : null)
+                  .filter(Boolean)
+                  .sort();
+                // Select today if it has a booking, or the next upcoming date, or first available, or today
+                const upcomingDate = datesWithBookings.find(d => d >= todayStr);
+                const targetDate = datesWithBookings.includes(todayStr) ? todayStr : (upcomingDate || datesWithBookings[0] || todayStr);
+                setCalendarSelectedDate(targetDate);
                 setShowCalendarModal(true);
               }}
               title="Monthly Ministry & Booking Calendar"
@@ -2111,6 +2569,58 @@ export default function App() {
                             badgeBg: '#DCFCE7'
                           });
                         }
+
+                        // 4. Post Edit Events (Changes made by Requester)
+                        (b.edit_history || []).forEach((ed, idx) => {
+                          const hasOfferedThis = (b.applicants || []).some(a => a.priest_id === user.id);
+                          if (isRequester || isResponder || hasOfferedThis) {
+                            events.push({
+                              id: `edit-${b.id}-${idx}`,
+                              timestamp: new Date(ed.edited_at || b.updated_at || b.created_at),
+                              type: 'edited',
+                              icon: (
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                </svg>
+                              ),
+                              iconBg: '#FEF3C7',
+                              title: isRequester ? 'You edited your ministry request' : `Ministry request details updated (${b.service_type || 'Holy Mass'})`,
+                              subtitle: ed.summary || 'Schedule, venue, or language updated by requester.',
+                              targetDate: `${date} • ⏰ ${time}`,
+                              badge: 'Details Edited',
+                              badgeColor: '#B45309',
+                              badgeBg: '#FEF3C7'
+                            });
+                          }
+                        });
+
+                        // 5. Offer Withdrawal Events
+                        (b.withdrawals || []).forEach((w, wIdx) => {
+                          const isWithdrawer = w.priest_id === user.id;
+                          if (isRequester || isWithdrawer) {
+                            const withdrawerName = formatEcclesiasticalName(w.priest_title || 'Fr.', w.priest_name, w.congregation_abbr);
+                            events.push({
+                              id: `withdrawn-${b.id}-${w.priest_id}-${wIdx}`,
+                              timestamp: new Date(w.withdrawn_at || b.updated_at || b.created_at),
+                              type: 'withdrawn',
+                              icon: (
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                                  <circle cx="12" cy="12" r="10" />
+                                  <line x1="15" y1="9" x2="9" y2="15" />
+                                  <line x1="9" y1="9" x2="15" y2="15" />
+                                </svg>
+                              ),
+                              iconBg: '#FEE2E2',
+                              title: isWithdrawer ? 'You withdrew your availability' : `${withdrawerName} withdrew availability`,
+                              subtitle: `For ${b.service_type || 'Holy Mass'} at ${b.location || 'Parish'}`,
+                              targetDate: `${date} • ⏰ ${time}`,
+                              badge: 'Withdrawn',
+                              badgeColor: '#DC2626',
+                              badgeBg: '#FEE2E2'
+                            });
+                          }
+                        });
                       });
 
                       events.sort((a, b) => b.timestamp - a.timestamp);
@@ -2183,18 +2693,37 @@ export default function App() {
             )}
           </div>
 
-          <button
-            className="btn btn-secondary btn-sm"
-            onClick={handleSignOut}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontWeight: 600 }}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-            <span>Sign Out</span>
-          </button>
+          {/* Sign Out Action Button (Styled matching the circular header action buttons) */}
+          <div className="header-notif-wrapper">
+            <button
+              type="button"
+              className="header-notif-btn"
+              onClick={handleSignOut}
+              title="Sign Out"
+              aria-label="Sign out of Book a Priest"
+              style={{
+                borderColor: '#E2E8F0',
+                background: '#FFFFFF',
+                color: '#64748B'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#FCA5A5';
+                e.currentTarget.style.background = '#FEF2F2';
+                e.currentTarget.style.color = '#DC2626';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#E2E8F0';
+                e.currentTarget.style.background = '#FFFFFF';
+                e.currentTarget.style.color = '#64748B';
+              }}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
 
@@ -2236,123 +2765,277 @@ export default function App() {
             {/* UNIFIED 4-TAB DASHBOARD (PRIESTS & SISTERS)                              */}
             {/* ========================================================================= */}
             <div>
-              {/* 1. CLEAN 4-TAB DASHBOARD (DYNAMIC TAB ORDER BY ECCLESIASTICAL ROLE) */}
+              {/* ========================================================================= */}
+              {/* DUAL-MODE ROLE PERSPECTIVE SWITCH: [ 📋 My Requests ] vs [ 🤝 Serve ]     */}
+              {/* ========================================================================= */}
               {(() => {
-                  const isPosterRole = (user.title === 'Sr.' || user.clergy_type === 'convent' || user.clergy_type === 'convent_sister') ||
-                                       (user.title === 'Fr.' && user.clergy_type === 'diocesan');
+                const isSister = user.title === 'Sr.' || user.clergy_type === 'convent' || user.clergy_type === 'convent_sister';
 
-                  const openNeeds = bookings.filter(b => {
-                    if (b.status !== 'pending' || b.requester_id === user.id) return false;
-                    if (priestFilterRadius === 'all') return true;
-                    if (b.distance_km === null) return true;
-                    return b.distance_km <= priestFilterRadius;
-                  });
-                  const myScheduled = bookings.filter(b => (b.status === 'accepted' || b.status === 'completed') && (b.responder_id === user.id || b.requester_id === user.id));
-                  const myApplications = bookings.filter(b => {
-                    if (isPosterRole) {
-                      return b.status === 'pending' && b.requester_id === user.id && (b.applicants || []).length > 0;
-                    }
-                    return b.status === 'pending' && (b.applicants || []).some(a => a.priest_id === user.id);
-                  });
-                  const myOwnRequests = bookings.filter(b => b.requester_id === user.id);
+                // Current timestamp for separating upcoming confirmed vs past history
+                const nowMs = Date.now();
 
-                  // Tab definitions
-                  const renderTabItem = (tabKey) => {
-                    if (tabKey === 'my_requests') {
-                      return (
-                        <div
-                          key="my_requests"
-                          className={`priest-dash-tab ${requestsTab === 'my_requests' ? 'active' : ''}`}
-                          onClick={() => setRequestsTab('my_requests')}
+                // Counts for Mode 1: "My Requests" (Posts I created)
+                const myAllPosts = bookings.filter(b => b.requester_id === user.id);
+                const myPendingPosts = myAllPosts.filter(b => b.status === 'pending');
+                const myResponsesCount = myPendingPosts.filter(b => (b.applicants || []).length > 0).length;
+                // Upcoming confirmed posts (status 'accepted', datetime is in the future or today)
+                const myConfirmedUpcoming = myAllPosts.filter(b => {
+                  if (b.status !== 'accepted' && b.status !== 'completed') return false;
+                  if (b.status === 'completed') return false;
+                  const endOrStartTime = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
+                  return endOrStartTime >= nowMs;
+                });
+                // Past completed history (status 'completed' OR confirmed celebration that has passed)
+                const myPastHistory = myAllPosts.filter(b => {
+                  if (b.status === 'completed') return true;
+                  if (b.status === 'accepted') {
+                    const endOrStartTime = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
+                    return endOrStartTime < nowMs;
+                  }
+                  return false;
+                });
+
+                // Counts for Mode 2: "My Availability" (Ministry I can offer / accept)
+                const openNeeds = bookings.filter(b => {
+                  if (b.status !== 'pending' || b.requester_id === user.id) return false;
+                  if (isSister) {
+                    const s = (b.service_type || '').toLowerCase();
+                    const isNonSacr = s.includes('anbiam') || s.includes('bcc') || s.includes('house visit') ||
+                                      s.includes('catechism') || s.includes('carol') || s.includes('sunday school');
+                    if (!isNonSacr) return false;
+                  }
+                  if (priestFilterRadius === 'all') return true;
+                  if (b.distance_km === null) return true;
+                  return b.distance_km <= priestFilterRadius;
+                });
+
+                // My active offers where I volunteered
+                const myOffers = bookings.filter(b => b.status === 'pending' && (b.applicants || []).some(a => a.priest_id === user.id));
+                // My confirmed assignments as the celebrant/minister
+                const myServingConfirmed = bookings.filter(b => {
+                  if (b.responder_id !== user.id) return false;
+                  if (b.status !== 'accepted' && b.status !== 'completed') return false;
+                  if (b.status === 'completed') return false;
+                  const endOrStartTime = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
+                  return endOrStartTime >= nowMs;
+                });
+                // My past completed ministries & withdrawn offers
+                const myServingHistory = bookings.filter(b => {
+                  const hasWithdrawn = (b.withdrawals || []).some(w => w.priest_id === user.id);
+                  if (hasWithdrawn) return true;
+                  if (b.responder_id !== user.id) return false;
+                  if (b.status === 'completed') return true;
+                  if (b.status === 'accepted') {
+                    const endOrStartTime = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
+                    return endOrStartTime < nowMs;
+                  }
+                  return false;
+                });
+
+                const userGreetingName = formatEcclesiasticalName(user?.title || (isSister ? 'Sr.' : 'Fr.'), user?.name, user?.congregation_abbr);
+
+                return (
+                  <div className="dash-nav-container">
+                    {/* TOP HEADER ROW: COMPACT SEGMENTED PILL + SALUTATION IN THE GAP + QUICK ACTION */}
+                    <div className="dash-header-bar">
+                      <div className="dash-mode-segmented" style={{ flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          className={`dash-mode-btn ${priestRolePerspective === 'request' ? 'active' : ''}`}
+                          onClick={() => {
+                            setPriestRolePerspective('request');
+                            setRequestsTab('my_requests');
+                          }}
                         >
-                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M12 20h9" />
                             <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
                           </svg>
-                          <span>My Posts</span>
-                          <span className="priest-dash-tab-badge" style={{ background: '#EFF6FF', color: '#1D4ED8' }}>{myOwnRequests.length}</span>
-                        </div>
-                      );
-                    }
-                    if (tabKey === 'open') {
-                      return (
-                        <div
-                          key="open"
-                          className={`priest-dash-tab ${requestsTab === 'open' ? 'active' : ''}`}
-                          onClick={() => setRequestsTab('open')}
+                          <span>My Requests</span>
+                          {myResponsesCount > 0 && (
+                            <span className="dash-mode-counter danger">{myResponsesCount}</span>
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`dash-mode-btn ${priestRolePerspective === 'celebrate' ? 'active' : ''}`}
+                          onClick={() => {
+                            setPriestRolePerspective('celebrate');
+                            setRequestsTab('open');
+                          }}
                         >
-                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                             <path d="M11 5L6 9H2v6h4l5 4V5z" />
                             <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
                             <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
                           </svg>
-                          <span>Ministry Requests</span>
-                          <span className={`priest-dash-tab-badge ${openNeeds.length > 0 ? 'badge-danger' : ''}`}>{openNeeds.length}</span>
+                          <span>My Availability</span>
+                          {openNeeds.length > 0 && (
+                            <span className="dash-mode-counter success">{openNeeds.length}</span>
+                          )}
+                        </button>
+                      </div>
+
+                      {/* UNBOXED, NATURAL TYPOGRAPHIC SALUTATION IN THE HEADER GAP */}
+                      <div className="dash-header-salutation">
+                        <div className="salutation-title">
+                          <span className="salutation-name">Hello, {userGreetingName}</span>
+                          <span className="salutation-sep">—</span>
+                          <span className="salutation-lead">
+                            {priestRolePerspective === 'request'
+                              ? 'Looking for a priest for a liturgy?'
+                              : 'Explore ministry requests from others...'}
+                          </span>
                         </div>
-                      );
-                    }
-                    if (tabKey === 'review') {
-                      return (
-                        <div
-                          key="review"
-                          className={`priest-dash-tab ${requestsTab === 'review' ? 'active' : ''}`}
-                          onClick={() => setRequestsTab('review')}
+                        <div className="salutation-sub">
+                          {priestRolePerspective === 'request'
+                            ? 'Post your request here.'
+                            : 'Are you willing to give a helping hand?'}
+                        </div>
+                      </div>
+
+                      {/* QUICK PRIMARY ACTION ON THE RIGHT (CONTEXT-AWARE FOR BOTH MODES) */}
+                      {priestRolePerspective === 'request' && user.is_verified === 1 ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary dash-quick-post-btn"
+                          onClick={() => setShowRequestModal(true)}
+                          style={{ flexShrink: 0 }}
                         >
-                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19" />
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                          </svg>
+                          <span>Post a Ministry Request</span>
+                        </button>
+                      ) : priestRolePerspective === 'celebrate' ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary dash-quick-post-btn"
+                          onClick={() => setRequestsTab('open')}
+                          style={{ flexShrink: 0 }}
+                          title="Explore open liturgical and pastoral needs from communities"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="11" cy="11" r="8" />
+                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                          </svg>
+                          <span>Explore Ministry Needs</span>
+                        </button>
+                      ) : null}
+                    </div>
+
+                    {/* MINIMALIST UNDERLINE SUB-TABS WITH PROCESS FLOW ARROWS */}
+                    {priestRolePerspective === 'request' ? (
+                      /* MODE 1 SUB-TABS: MY REQUESTS (MY POSTS ➔ CONFIRMED ➔ PAST HISTORY) */
+                      <div className="dash-underline-tabs">
+                        <button
+                          type="button"
+                          className={`dash-underline-tab ${requestsTab === 'my_requests' ? 'active' : ''}`}
+                          onClick={() => setRequestsTab('my_requests')}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                            <line x1="16" y1="13" x2="8" y2="13" />
+                            <line x1="16" y1="17" x2="8" y2="17" />
+                            <polyline points="10 9 9 9 8 9" />
+                          </svg>
+                          <span>My Posts</span>
+                          <span className={`dash-tab-pill ${myPendingPosts.length > 0 ? (myResponsesCount > 0 ? 'pill-danger' : '') : ''}`}>
+                            {myPendingPosts.length}
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`dash-underline-tab ${requestsTab === 'accepted' ? 'active' : ''}`}
+                          onClick={() => setRequestsTab('accepted')}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                            <polyline points="22 4 12 14.01 9 11.01" />
+                          </svg>
+                          <span>Confirmed</span>
+                          <span className={`dash-tab-pill ${myConfirmedUpcoming.length > 0 ? 'pill-success' : ''}`}>
+                            {myConfirmedUpcoming.length}
+                          </span>
+                        </button>
+
+                        <button
+                          type="button"
+                          className={`dash-underline-tab ${requestsTab === 'history' ? 'active' : ''}`}
+                          onClick={() => setRequestsTab('history')}
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                             <circle cx="12" cy="12" r="10" />
                             <polyline points="12 6 12 12 16 14" />
                           </svg>
-                          <span>Awaiting</span>
-                          <span className="priest-dash-tab-badge">{myApplications.length}</span>
-                        </div>
-                      );
-                    }
-                    if (tabKey === 'accepted') {
-                      return (
-                        <div
-                          key="accepted"
-                          className={`priest-dash-tab ${requestsTab === 'accepted' ? 'active' : ''}`}
-                          onClick={() => setRequestsTab('accepted')}
-                        >
-                          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="m11 17 2 2a1 1 0 0 0 1.4 0l4.3-4.3a1 1 0 0 0 0-1.4l-2.6-2.6a1 1 0 0 0-1.4 0l-1.4 1.4" />
-                            <path d="m18 10 1.3-1.3a1 1 0 0 0 0-1.4l-2.6-2.6a1 1 0 0 0-1.4 0L14 6" />
-                            <path d="m2 14 6 6" />
-                            <path d="M7 9 2 14" />
-                            <path d="M14 6 8.7 11.3a1 1 0 0 0 0 1.4l2.6 2.6" />
-                          </svg>
-                          <span>Confirmed</span>
-                          <span className="priest-dash-tab-badge" style={{ background: '#DCFCE7', color: '#166534' }}>{myScheduled.length}</span>
-                        </div>
-                      );
-                    }
-                    return null;
-                  };
-
-                  // Tab sequence:
-                  // For Diocesan Priests and Nuns (Sisters): My Posts -> Ministry Requests -> Awaiting -> Confirmed
-                  // For Religious Priests: Ministry Requests -> Awaiting -> Confirmed -> My Posts
-                  const tabOrder = isPosterRole
-                    ? ['my_requests', 'open', 'review', 'accepted']
-                    : ['open', 'review', 'accepted', 'my_requests'];
-
-                  return (
-                    <div>
-                      {/* SINGLE STREAMLINED 4-TAB SEGMENTED CONTROL WITH MODERN APP ICONS */}
-                      <div className="priest-dash-tabs">
-                        {tabOrder.map(tabKey => renderTabItem(tabKey))}
+                          <span>History</span>
+                          <span className={`dash-tab-pill ${myPastHistory.length > 0 ? 'pill-empty' : 'pill-empty'}`}>
+                            {myPastHistory.length}
+                          </span>
+                        </button>
                       </div>
+                    ) : (
+                      /* MODE 2 SUB-TABS: MY AVAILABILITY (EXPLORE, MY SCHEDULE, COMPLETED HISTORY) */
+                      <div className="dash-subtabs-toolbar-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.85rem', borderBottom: '1.5px solid #E2E8F0', marginBottom: '1.15rem' }}>
+                        <div className="dash-underline-tabs" style={{ borderBottom: 'none', marginBottom: 0, paddingBottom: 0 }}>
+                          <button
+                            type="button"
+                            className={`dash-underline-tab ${requestsTab === 'open' ? 'active' : ''}`}
+                            onClick={() => setRequestsTab('open')}
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                              <circle cx="11" cy="11" r="8" />
+                              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                            </svg>
+                            <span>Explore</span>
+                            <span className={`dash-tab-pill ${openNeeds.length > 0 ? 'pill-red' : 'pill-empty'}`}>
+                              {openNeeds.length}
+                            </span>
+                          </button>
 
-                      {/* TOP ACTION BAR: STREAMLINED COMPACT CONTROLS */}
-                      {requestsTab === 'open' ? (
-                        <div className="feed-controls-card" style={{ padding: '0.75rem 1rem' }}>
-                          {/* Primary Quick Row: Distance Pills + More Filters Toggle */}
-                          <div className="feed-controls-row" style={{ alignItems: 'center' }}>
-                            <div className="distance-slider-container">
-                              <span className="feed-control-label" style={{ fontSize: '0.74rem', letterSpacing: '0.04em', margin: 0 }}>
-                                Travel Distance:
+                          <button
+                            type="button"
+                            className={`dash-underline-tab ${requestsTab === 'accepted' ? 'active' : ''}`}
+                            onClick={() => setRequestsTab('accepted')}
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                              <polyline points="22 4 12 14.01 9 11.01" />
+                            </svg>
+                            <span>Confirmed</span>
+                            <span className={`dash-tab-pill ${myServingConfirmed.length > 0 ? 'pill-green' : 'pill-empty'}`}>
+                              {myServingConfirmed.length}
+                            </span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`dash-underline-tab ${requestsTab === 'history' ? 'active' : ''}`}
+                            onClick={() => setRequestsTab('history')}
+                          >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                              <circle cx="12" cy="12" r="10" />
+                              <polyline points="12 6 12 12 16 14" />
+                            </svg>
+                            <span>History</span>
+                            <span className={`dash-tab-pill ${myServingHistory.length > 0 ? 'pill-empty' : 'pill-empty'}`}>
+                              {myServingHistory.length}
+                            </span>
+                          </button>
+                        </div>
+
+                        {/* RIGHT-ALIGNED COMPACT TOOLBAR CONTROLS */}
+                        {requestsTab === 'open' && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginLeft: 'auto', paddingBottom: '0.35rem' }}>
+                            <div className="distance-slider-container" style={{ margin: 0, padding: '0.25rem 0.55rem', border: '1px solid #E2E8F0', borderRadius: '9999px', background: '#F8FAFC' }}>
+                              <span className="feed-control-label" style={{ fontSize: '0.68rem', letterSpacing: '0.03em', margin: 0 }}>
+                                Distance:
                               </span>
-                              <div className="distance-slider-track">
+                              <div className="distance-slider-track" style={{ width: '80px' }}>
                                 <input
                                   type="range"
                                   min="5"
@@ -2371,243 +3054,459 @@ export default function App() {
                                   title={priestFilterRadius === 'all' ? 'All Diocese' : `Within ${priestFilterRadius} km`}
                                 />
                               </div>
-                              <span className="distance-slider-badge">
-                                {priestFilterRadius === 'all' ? 'All Diocese' : `≤ ${priestFilterRadius} km`}
+                              <span className="distance-slider-badge" style={{ fontSize: '0.7rem', padding: '1px 6px' }}>
+                                {priestFilterRadius === 'all' ? 'All' : `≤${priestFilterRadius}km`}
                               </span>
                             </div>
 
-                            {/* Secondary Action: More Filters toggle & Active indicator */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginLeft: 'auto' }}>
+                            <button
+                              type="button"
+                              className={`feed-filter-toggle-btn ${showPriestFilterDrawer ? 'active' : ''}`}
+                              onClick={() => setShowPriestFilterDrawer(!showPriestFilterDrawer)}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '5px',
+                                padding: '0.32rem 0.65rem',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                borderRadius: '9999px',
+                                border: (priestFilterService !== 'all' || priestFilterLanguage !== 'all' || priestSortBy !== 'date_asc') ? '1px solid #D97706' : '1px solid #CBD5E1',
+                                background: (priestFilterService !== 'all' || priestFilterLanguage !== 'all' || priestSortBy !== 'date_asc') ? '#FEF3C7' : '#FFFFFF',
+                                color: (priestFilterService !== 'all' || priestFilterLanguage !== 'all' || priestSortBy !== 'date_asc') ? '#92400E' : '#475569',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="4" y1="21" x2="4" y2="14" />
+                                <line x1="4" y1="10" x2="4" y2="3" />
+                                <line x1="12" y1="21" x2="12" y2="12" />
+                                <line x1="12" y1="8" x2="12" y2="3" />
+                                <line x1="20" y1="21" x2="20" y2="16" />
+                                <line x1="20" y1="12" x2="20" y2="3" />
+                                <line x1="1" y1="14" x2="7" y2="14" />
+                                <line x1="9" y1="8" x2="15" y2="8" />
+                                <line x1="17" y1="16" x2="23" y2="16" />
+                              </svg>
+                              <span>Filters & Sort</span>
+                              {(priestFilterService !== 'all' || priestFilterLanguage !== 'all' || priestSortBy !== 'date_asc') && (
+                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#D97706' }}></span>
+                              )}
+                              <span style={{ fontSize: '0.65rem', color: '#64748B' }}>{showPriestFilterDrawer ? '▲' : '▼'}</span>
+                            </button>
+
+                            {(priestFilterRadius !== 5 || priestSortBy !== 'date_asc' || priestFilterService !== 'all' || priestFilterLanguage !== 'all') && (
                               <button
                                 type="button"
-                                className={`feed-filter-toggle-btn ${showPriestFilterDrawer ? 'active' : ''}`}
-                                onClick={() => setShowPriestFilterDrawer(!showPriestFilterDrawer)}
+                                className="feed-reset-btn"
+                                onClick={() => {
+                                  setPriestFilterRadius(25);
+                                  setPriestSortBy('smart_match');
+                                  setPriestSortOrder('asc');
+                                  setPriestFilterService('all');
+                                  setPriestFilterLanguage('all');
+                                }}
+                                title="Reset all filters to default"
+                                style={{ padding: '0.24rem 0.5rem', fontSize: '0.72rem', borderRadius: '9999px' }}
+                              >
+                                <span>Reset</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* EXPANDABLE SECONDARY FILTER PANEL (WHEN OPENED) */}
+                    {priestRolePerspective === 'celebrate' && requestsTab === 'open' && showPriestFilterDrawer && (
+                      <div className="feed-controls-card" style={{ padding: '0.75rem 1rem', marginTop: '-0.5rem', marginBottom: '1.25rem' }}>
+                        <div className="feed-filters-row">
+                          {/* Sort By */}
+                          <div className="feed-filter-item">
+                            <label className="feed-filter-label" htmlFor="feed-sort-select">
+                              Sort By
+                            </label>
+                            <div style={{ display: 'flex', alignItems: 'center', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', overflow: 'hidden', transition: 'border-color 0.15s ease' }}>
+                              <select
+                                id="feed-sort-select"
+                                className="feed-select"
+                                value={priestSortBy}
+                                onChange={(e) => setPriestSortBy(e.target.value)}
+                                style={{ flex: 1, border: 'none', background: 'transparent', borderRadius: 0, paddingRight: '0.4rem' }}
+                              >
+                                <option value="smart_match">Smart AI Match</option>
+                                <option value="awaiting_reply">Awaiting Reply</option>
+                                <option value="frequently_booked">Frequently Booked</option>
+                                <option value="distance_asc">Distance</option>
+                                <option value="recent_posted">Recent Posts</option>
+                                <option value="date_desc">Date of Need</option>
+                              </select>
+
+                              <button
+                                type="button"
+                                onClick={() => setPriestSortOrder(priestSortOrder === 'asc' ? 'desc' : 'asc')}
+                                title={priestSortOrder === 'asc' ? 'Top to Bottom / Earliest First (Click to reverse)' : 'Bottom to Top / Furthest First (Click to reverse)'}
+                                aria-label="Toggle sort order"
                                 style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '6px',
-                                  padding: '0.3rem 0.7rem',
-                                  fontSize: '0.76rem',
-                                  fontWeight: 600,
-                                  borderRadius: '6px',
-                                  border: (priestFilterService !== 'all' || priestFilterLanguage !== 'all' || priestSortBy !== 'date_asc') ? '1px solid #D97706' : '1px solid #CBD5E1',
-                                  background: (priestFilterService !== 'all' || priestFilterLanguage !== 'all' || priestSortBy !== 'date_asc') ? '#FEF3C7' : '#FFFFFF',
-                                  color: (priestFilterService !== 'all' || priestFilterLanguage !== 'all' || priestSortBy !== 'date_asc') ? '#92400E' : '#475569',
-                                  cursor: 'pointer'
+                                  justifyContent: 'center',
+                                  width: '36px',
+                                  height: '36px',
+                                  background: priestSortOrder === 'desc' ? '#EFF6FF' : '#F1F5F9',
+                                  color: priestSortOrder === 'desc' ? '#2563EB' : '#64748B',
+                                  border: 'none',
+                                  borderLeft: '1px solid #E2E8F0',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease',
+                                  flexShrink: 0
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = '#E2E8F0';
+                                  e.currentTarget.style.color = '#0F172A';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = priestSortOrder === 'desc' ? '#EFF6FF' : '#F1F5F9';
+                                  e.currentTarget.style.color = priestSortOrder === 'desc' ? '#2563EB' : '#64748B';
                                 }}
                               >
-                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                  <line x1="4" y1="21" x2="4" y2="14" />
-                                  <line x1="4" y1="10" x2="4" y2="3" />
-                                  <line x1="12" y1="21" x2="12" y2="12" />
-                                  <line x1="12" y1="8" x2="12" y2="3" />
-                                  <line x1="20" y1="21" x2="20" y2="16" />
-                                  <line x1="20" y1="12" x2="20" y2="3" />
-                                  <line x1="1" y1="14" x2="7" y2="14" />
-                                  <line x1="9" y1="8" x2="15" y2="8" />
-                                  <line x1="17" y1="16" x2="23" y2="16" />
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{ transition: 'transform 0.22s cubic-bezier(0.4, 0, 0.2, 1)', transform: priestSortOrder === 'desc' ? 'rotate(180deg)' : 'none' }}>
+                                  <line x1="12" y1="5" x2="12" y2="19" />
+                                  <polyline points="19 12 12 19 5 12" />
                                 </svg>
-                                <span>Filters & Sort</span>
-                                {(priestFilterService !== 'all' || priestFilterLanguage !== 'all' || priestSortBy !== 'date_asc') && (
-                                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#D97706' }}></span>
-                                )}
-                                <span style={{ fontSize: '0.68rem', color: '#64748B' }}>{showPriestFilterDrawer ? '▲' : '▼'}</span>
                               </button>
-
-                              {/* Reset Button (only shown when any filter is active) */}
-                              {(priestFilterRadius !== 5 || priestSortBy !== 'date_asc' || priestFilterService !== 'all' || priestFilterLanguage !== 'all') && (
-                                <button
-                                  type="button"
-                                  className="feed-reset-btn"
-                                  onClick={() => {
-                                    setPriestFilterRadius(5);
-                                    setPriestSortBy('date_asc');
-                                    setPriestFilterService('all');
-                                    setPriestFilterLanguage('all');
-                                  }}
-                                  title="Reset all filters to default"
-                                  style={{ padding: '0.24rem 0.5rem', fontSize: '0.74rem' }}
-                                >
-                                  <span>↺ Reset</span>
-                                </button>
-                              )}
                             </div>
                           </div>
 
-                          {/* Expandable Secondary Filter Panel */}
-                          {showPriestFilterDrawer && (
-                            <div className="feed-filters-row" style={{ marginTop: '0.65rem', paddingTop: '0.65rem', borderTop: '1px solid #F1F5F9' }}>
-                              {/* Sort By */}
-                              <div className="feed-filter-item">
-                                <label className="feed-filter-label" htmlFor="feed-sort-select">
-                                  Sort By
-                                </label>
-                                <select
-                                  id="feed-sort-select"
-                                  className="feed-select"
-                                  value={priestSortBy}
-                                  onChange={(e) => setPriestSortBy(e.target.value)}
-                                >
-                                  <option value="date_asc">Date of Need (Earliest)</option>
-                                  <option value="distance_asc">Distance (Nearest first)</option>
-                                  <option value="recent_posted">Recently Posted</option>
-                                  <option value="date_desc">Date of Need (Furthest)</option>
-                                </select>
-                              </div>
-
-                              {/* Sacrament / Service Filter */}
-                              <div className="feed-filter-item">
-                                <label className="feed-filter-label" htmlFor="feed-service-select">
-                                  Sacrament / Ministry
-                                </label>
-                                <select
-                                  id="feed-service-select"
-                                  className="feed-select"
-                                  value={priestFilterService}
-                                  onChange={(e) => setPriestFilterService(e.target.value)}
-                                >
-                                  <option value="all">All Sacraments & Services (Default)</option>
-                                  <optgroup label="Core Masses & Sacraments">
-                                    <option value="mass">Holy Mass (Parish / Convent)</option>
-                                    <option value="substation">Substation Mass</option>
-                                    <option value="concelebration">Concelebration (Feasts & Events)</option>
-                                    <option value="marriage">Marriage Mass</option>
-                                    <option value="funeral">Funeral / Requiem Mass</option>
-                                    <option value="confession">Confession Ministry</option>
-                                    <option value="recollection">Monthly Recollection Talk</option>
-                                    <option value="retreat">Annual Retreat Preacher</option>
-                                  </optgroup>
-                                  <optgroup label="Pastoral & Community Ministries">
-                                    <option value="anbiam">Anbiam Animation</option>
-                                    <option value="house_visit">House Visit</option>
-                                    <option value="catechism">Catechism</option>
-                                  </optgroup>
-                                  <optgroup label="Special Events & Blessings">
-                                    <option value="house_blessing">House Blessing</option>
-                                    <option value="easter">Easter Blessing</option>
-                                    <option value="carols">Christmas Carols</option>
-                                    <option value="sick">Communion to Sick</option>
-                                    <option value="others">Others</option>
-                                  </optgroup>
-                                </select>
-                              </div>
-
-                              {/* Liturgical Language Filter */}
-                              <div className="feed-filter-item">
-                                <label className="feed-filter-label" htmlFor="feed-language-select">
-                                  Liturgical Language
-                                </label>
-                                <select
-                                  id="feed-language-select"
-                                  className="feed-select"
-                                  value={priestFilterLanguage}
-                                  onChange={(e) => setPriestFilterLanguage(e.target.value)}
-                                >
-                                  <option value="all">All Languages</option>
-                                  {LANGUAGES.map(lang => (
-                                    <option key={lang} value={lang}>{lang}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : requestsTab === 'my_requests' ? (
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.15rem' }}>
-                          <span style={{ fontSize: '0.84rem', color: '#64748B' }}>
-                            Needs posted for your parish or community:
-                          </span>
-                          {user.is_verified === 1 && (
-                            <button
-                              type="button"
-                              className="btn btn-primary"
-                              onClick={() => setShowRequestModal(true)}
-                              style={{
-                                padding: '0.5rem 1.15rem',
-                                fontSize: '0.84rem',
-                                fontWeight: 700,
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                borderRadius: '9999px'
-                              }}
+                          {/* Sacrament / Service Filter */}
+                          <div className="feed-filter-item">
+                            <label className="feed-filter-label" htmlFor="feed-service-select">
+                              Sacrament / Ministry
+                            </label>
+                            <select
+                              id="feed-service-select"
+                              className="feed-select"
+                              value={priestFilterService}
+                              onChange={(e) => setPriestFilterService(e.target.value)}
                             >
-                              <span>➕</span>
-                              <span>Post a Ministry Request</span>
-                            </button>
-                          )}
+                              <option value="all">All Ministries & Sacraments (Default)</option>
+                              <optgroup label="A. Mass & Sacraments">
+                                <option value="mass">Holy Mass</option>
+                                <option value="concelebration">Concelebration</option>
+                                <option value="marriage">Marriage Mass</option>
+                                <option value="funeral">Funeral / Requiem Mass</option>
+                                <option value="confession">Confession Ministry</option>
+                                <option value="anointing">Anointing of the Sick</option>
+                              </optgroup>
+                              <option disabled style={{ fontSize: '6px', color: '#CBD5E1', lineHeight: '6px' }}>&nbsp;</option>
+                              <optgroup label="B. Paraliturgy & Blessings">
+                                <option value="adoration">Adoration Service</option>
+                                <option value="charismatic">Charismatic Prayer Service</option>
+                                <option value="house_blessing">House Blessing</option>
+                                <option value="recollection">Monthly Recollection Talk</option>
+                                <option value="retreat">Retreat</option>
+                              </optgroup>
+                              <option disabled style={{ fontSize: '6px', color: '#CBD5E1', lineHeight: '6px' }}>&nbsp;</option>
+                              <optgroup label="C. Pastoral Ministries">
+                                <option value="catechism">Catechism</option>
+                                <option value="altar_decoration">Altar Decoration</option>
+                                <option value="anbiam">BCC / Anbiam Animation</option>
+                                <option value="house_visit">House Visit</option>
+                                <option value="communion_sick">Communion to Sick</option>
+                                <option value="choir">Choir Animation</option>
+                                <option value="others">Others</option>
+                              </optgroup>
+                            </select>
+                          </div>
+
+                          {/* Liturgical Language Filter */}
+                          <div className="feed-filter-item">
+                            <label className="feed-filter-label" htmlFor="feed-language-select">
+                              Liturgical Language
+                            </label>
+                            <select
+                              id="feed-language-select"
+                              className="feed-select"
+                              value={priestFilterLanguage}
+                              onChange={(e) => setPriestFilterLanguage(e.target.value)}
+                            >
+                              <option value="all">All Languages</option>
+                              {LANGUAGES.map(lang => (
+                                <option key={lang} value={lang}>{lang}</option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
-                      ) : <div style={{ marginBottom: '0.5rem' }} />}
-                    </div>
-                  );
-                })()}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
                 {/* 3. PRIEST CARDS FEED */}
                 <div className="roster-grid">
                   {(() => {
                     let displayBookings = [];
-                    if (requestsTab === 'open') {
-                      displayBookings = bookings.filter(b => {
-                        if (b.status !== 'pending' || b.requester_id === user.id) return false;
-                        // Radius filter
-                        if (priestFilterRadius !== 'all') {
-                          if (b.distance_km !== null && b.distance_km > priestFilterRadius) return false;
-                        }
-                        // Sacrament / Service filter
-                        if (priestFilterService !== 'all') {
-                          const s = (b.service_type || '').toLowerCase();
-                          const f = priestFilterService.toLowerCase();
-                          let match = false;
-                          if (f === 'substation') match = s.includes('substation');
-                          else if (f === 'concelebration') match = s.includes('concelebration');
-                          else if (f === 'marriage') match = s.includes('marriage') || s.includes('matrimony') || s.includes('wedding');
-                          else if (f === 'funeral') match = s.includes('funeral') || s.includes('requiem') || s.includes('burial');
-                          else if (f === 'festival') match = s.includes('festival') || s.includes('feast') || s.includes('jubilee');
-                          else if (f === 'confession') match = s.includes('confession') || s.includes('penitential');
-                          else if (f === 'recollection') match = s.includes('recollection');
-                          else if (f === 'anbiam') match = s.includes('anbiam') || s.includes('bcc') || s.includes('small christian community');
-                          else if (f === 'house_visit') match = s.includes('house visit') || s.includes('home visit') || s.includes('family visit');
-                          else if (f === 'catechism') match = s.includes('catechism') || s.includes('sunday school') || s.includes('faith formation');
-                          else if (f === 'carols') match = s.includes('carol') || s.includes('christmas');
-                          else if (f === 'easter') match = s.includes('easter');
-                          else if (f === 'house_blessing') match = s.includes('house blessing') || s.includes('home blessing');
-                          else if (f === 'sick') match = s.includes('sick') || s.includes('communion to') || s.includes('viaticum') || s.includes('anointing');
-                          else if (f === 'retreat') match = s.includes('retreat');
-                          else if (f === 'mass') match = s.includes('holy mass') || (s.includes('mass') && !s.includes('substation') && !s.includes('marriage') && !s.includes('funeral') && !s.includes('festival'));
-                          else if (f === 'others') {
-                            const knownKeys = ['substation', 'concelebration', 'marriage', 'matrimony', 'funeral', 'requiem', 'festival', 'feast', 'confession', 'recollection', 'anbiam', 'house visit', 'catechism', 'carol', 'easter', 'house blessing', 'sick', 'retreat', 'holy mass'];
-                            match = s.includes('other') || !knownKeys.some(k => s.includes(k));
-                          } else match = s.includes(f);
-                          if (!match) return false;
-                        }
-                        // Language filter
-                        if (priestFilterLanguage !== 'all') {
-                          const l = (b.language || '').toLowerCase();
-                          if (!l.includes(priestFilterLanguage.toLowerCase())) return false;
-                        }
-                        return true;
-                      });
-                    } else if (requestsTab === 'accepted') {
-                      displayBookings = bookings.filter(b => (b.status === 'accepted' || b.status === 'completed') && (b.responder_id === user.id || b.requester_id === user.id));
-                    } else if (requestsTab === 'review') {
-                      // Awaiting tab:
-                      // If user is requester (Sister or Diocesan priest with posts), show user's pending requests that have applicants responding
-                      // If user is offering priest, show requests where Father offered to celebrate
-                      const isPoster = (user.title === 'Sr.' || user.clergy_type === 'convent' || user.clergy_type === 'convent_sister') ||
-                                       (user.title === 'Fr.' && user.clergy_type === 'diocesan');
-                      if (isPoster) {
-                        displayBookings = bookings.filter(b => b.status === 'pending' && b.requester_id === user.id && (b.applicants || []).length > 0);
-                      } else {
-                        displayBookings = bookings.filter(b => b.status === 'pending' && (b.applicants || []).some(a => a.priest_id === user.id));
+                    const isSister = user.title === 'Sr.' || user.clergy_type === 'convent' || user.clergy_type === 'convent_sister';
+
+                    const nowMs = Date.now();
+
+                    if (priestRolePerspective === 'request') {
+                      if (requestsTab === 'my_requests') {
+                        // All pending active requests created by this user
+                        displayBookings = bookings.filter(b => b.status === 'pending' && b.requester_id === user.id);
+                      } else if (requestsTab === 'accepted') {
+                        // Upcoming confirmed celebrations posted by this user
+                        displayBookings = bookings.filter(b => {
+                          if (b.requester_id !== user.id) return false;
+                          if (b.status !== 'accepted' && b.status !== 'completed') return false;
+                          if (b.status === 'completed') return false;
+                          const endOrStart = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
+                          return endOrStart >= nowMs;
+                        });
+                      } else if (requestsTab === 'history') {
+                        // Past completed celebrations posted by this user
+                        displayBookings = bookings.filter(b => {
+                          if (b.requester_id !== user.id) return false;
+                          if (b.status === 'completed') return true;
+                          if (b.status === 'accepted') {
+                            const endOrStart = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
+                            return endOrStart < nowMs;
+                          }
+                          return false;
+                        });
                       }
                     } else {
-                      // 'my_requests' tab: all requests created by this user
-                      displayBookings = bookings.filter(b => b.requester_id === user.id);
+                      // Serve Ministry Perspective
+                      if (requestsTab === 'open') {
+                        displayBookings = bookings.filter(b => {
+                          if (b.status !== 'pending' || b.requester_id === user.id) return false;
+                          // Sisters can only see designated non-sacramental ministries
+                          if (isSister) {
+                            const s = (b.service_type || '').toLowerCase();
+                            const isNonSacr = s.includes('catechism') || s.includes('sunday school') || s.includes('faith formation') ||
+                                              s.includes('altar decoration') || s.includes('decoration') ||
+                                              s.includes('anbiam') || s.includes('bcc') || s.includes('small christian community') ||
+                                              s.includes('house visit') || s.includes('home visit') || s.includes('family visit') ||
+                                              s.includes('communion to sick') || (s.includes('communion') && s.includes('sick')) ||
+                                              s.includes('choir') || s.includes('choir animation');
+                            if (!isNonSacr) return false;
+                          }
+                          // Radius filter
+                          if (priestFilterRadius !== 'all') {
+                            if (b.distance_km !== null && b.distance_km > priestFilterRadius) return false;
+                          }
+                          // Sacrament / Service filter
+                          if (priestFilterService !== 'all') {
+                            const s = (b.service_type || '').toLowerCase();
+                            const f = priestFilterService.toLowerCase();
+                            let match = false;
+                            if (f === 'mass') match = s.includes('holy mass') || s.includes('mass');
+                            else if (f === 'concelebration') match = s.includes('concelebration');
+                            else if (f === 'marriage') match = s.includes('marriage') || s.includes('matrimony');
+                            else if (f === 'funeral') match = s.includes('funeral') || s.includes('requiem');
+                            else if (f === 'confession') match = s.includes('confession');
+                            else if (f === 'anointing') match = s.includes('anointing') || s.includes('sick');
+                            else if (f === 'adoration') match = s.includes('adoration');
+                            else if (f === 'charismatic') match = s.includes('charismatic') || s.includes('prayer service');
+                            else if (f === 'house_blessing') match = s.includes('house blessing') || s.includes('blessing');
+                            else if (f === 'recollection') match = s.includes('recollection');
+                            else if (f === 'retreat') match = s.includes('retreat');
+                            else if (f === 'catechism') match = s.includes('catechism') || s.includes('sunday school');
+                            else if (f === 'altar_decoration') match = s.includes('altar decoration') || s.includes('decoration');
+                            else if (f === 'anbiam') match = s.includes('anbiam') || s.includes('bcc');
+                            else if (f === 'house_visit') match = s.includes('house visit') || s.includes('family visit');
+                            else if (f === 'communion_sick') match = s.includes('communion to sick') || (s.includes('communion') && s.includes('sick'));
+                            else if (f === 'choir') match = s.includes('choir');
+                            else if (f === 'others') match = s.includes('other');
+                            else match = s.includes(f);
+                            if (!match) return false;
+                          }
+                          // Language filter
+                          if (priestFilterLanguage !== 'all') {
+                            const l = (b.language || '').toLowerCase();
+                            if (!l.includes(priestFilterLanguage.toLowerCase())) return false;
+                          }
+                          return true;
+                        });
+                      } else if (requestsTab === 'review') {
+                        // My offers where I offered to minister/celebrate
+                        displayBookings = bookings.filter(b => b.status === 'pending' && (b.applicants || []).some(a => a.priest_id === user.id));
+                      } else if (requestsTab === 'accepted') {
+                        // Upcoming confirmed celebrations where I am the chosen celebrant/minister
+                        displayBookings = bookings.filter(b => {
+                          if (b.responder_id !== user.id) return false;
+                          if (b.status !== 'accepted' && b.status !== 'completed') return false;
+                          if (b.status === 'completed') return false;
+                          const endOrStart = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
+                          return endOrStart >= nowMs;
+                        });
+                      } else if (requestsTab === 'history') {
+                        // Past completed celebrations where I was the celebrant/minister OR offers I withdrew
+                        displayBookings = bookings.filter(b => {
+                          const hasWithdrawn = (b.withdrawals || []).some(w => w.priest_id === user.id);
+                          if (hasWithdrawn) return true;
+                          if (b.responder_id !== user.id) return false;
+                          if (b.status === 'completed') return true;
+                          if (b.status === 'accepted') {
+                            const endOrStart = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
+                            return endOrStart < nowMs;
+                          }
+                          return false;
+                        });
+                      }
                     }
 
-                    // Sorting logic across items
+                    // -------------------------------------------------------------
+                    // FINE-TUNED MULTI-FACTOR EXPLORE ALGORITHM
+                    // Factors: Liturgical Language (35%), Distance & Travel Radius (20%),
+                    //          Frequently Booked / Past Collaboration History (20%),
+                    //          Favorited Minister / Parish Connection (15%),
+                    //          Age Comfort Band (5%), Date Urgency (5%)
+                    // -------------------------------------------------------------
+                    const userLiturgicalLangs = Array.isArray(user.liturgical_languages) && user.liturgical_languages.length > 0
+                      ? user.liturgical_languages.map(l => l.toLowerCase())
+                      : (typeof user.liturgical_languages === 'string'
+                          ? (() => { try { return JSON.parse(user.liturgical_languages).map(l => l.toLowerCase()); } catch(e) { return ['english', 'tamil']; } })()
+                          : ['english', 'tamil']);
+
+                    const userFavorites = Array.isArray(user.favorite_ministers)
+                      ? user.favorite_ministers.map(Number)
+                      : (typeof user.favorite_ministers === 'string'
+                          ? (() => { try { return JSON.parse(user.favorite_ministers).map(Number); } catch(e) { return []; } })()
+                          : []);
+
+                    const userAge = calculateAge(user.dob);
+                    const userMaxKm = Number(user.max_travel_km) || 25;
+
+                    // Compute frequent collaborations: How many past bookings did user minister for each requester
+                    const requesterHistoryCounts = {};
+                    bookings.forEach(b => {
+                      if (b.responder_id === user.id && (b.status === 'completed' || b.status === 'accepted')) {
+                        const reqId = Number(b.requester_id);
+                        if (reqId) {
+                          requesterHistoryCounts[reqId] = (requesterHistoryCounts[reqId] || 0) + 1;
+                        }
+                      }
+                    });
+
+                    const computeExploreScore = (booking) => {
+                      let score = 0;
+                      const reasons = [];
+                      const reqId = Number(booking.requester_id);
+                      const pastCelebrationsCount = requesterHistoryCounts[reqId] || 0;
+                      const isFrequent = pastCelebrationsCount >= 2;
+
+                      // Factor 1: Liturgical Language Match (Weight: 35 points)
+                      const bLang = (booking.language || 'English').toLowerCase();
+                      const isLangMatch = userLiturgicalLangs.some(ul => bLang.includes(ul) || ul.includes(bLang));
+                      if (isLangMatch) {
+                        score += 35;
+                        reasons.push(`${booking.language || 'English'} Match`);
+                      }
+
+                      // Factor 2: Distance & Personal Travel Radius (Weight: 20 points)
+                      if (booking.distance_km !== null && booking.distance_km !== undefined) {
+                        const dist = booking.distance_km;
+                        if (dist <= 5) {
+                          score += 20;
+                          reasons.push('Very Close (≤5km)');
+                        } else if (dist <= 15) {
+                          score += 16;
+                          reasons.push('Nearby (≤15km)');
+                        } else if (dist <= userMaxKm) {
+                          score += 12;
+                          reasons.push(`Within Your ${userMaxKm}km Radius`);
+                        } else {
+                          // Decay score slightly if beyond personal preferred radius
+                          score += Math.max(0, 8 - Math.round((dist - userMaxKm) / 5));
+                        }
+                      } else {
+                        score += 8;
+                      }
+
+                      // Factor 3: Frequently Booked / Established Parish History (Weight: 20 points)
+                      if (isFrequent) {
+                        score += 20;
+                        reasons.push(`Frequent (${pastCelebrationsCount} Past Ministries)`);
+                      } else if (pastCelebrationsCount === 1) {
+                        score += 10;
+                        reasons.push('Previous Parish Collaborator');
+                      }
+
+                      // Factor 4: Mutual Favorite / Parish Connection (Weight: 15 points)
+                      const isFavParish = userFavorites.includes(reqId);
+                      if (isFavParish) {
+                        score += 15;
+                        reasons.push('★ Favorite Parish/Community');
+                      }
+
+                      // Factor 5: Minister Age Alignment / Pastoral Comfort (Weight: 5 points)
+                      if (userAge !== null) {
+                        if (userAge >= 70) {
+                          if (booking.distance_km !== null && booking.distance_km <= 10) {
+                            score += 5;
+                            reasons.push('Comfortable Distance for Senior Clergy');
+                          } else {
+                            score += 2;
+                          }
+                        } else {
+                          score += 5;
+                        }
+                      } else {
+                        score += 4;
+                      }
+
+                      // Factor 6: Date Urgency & Freshness (Weight: 5 points)
+                      if (booking.datetime) {
+                        const daysAway = (new Date(booking.datetime).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+                        if (daysAway >= 0 && daysAway <= 3) {
+                          score += 5;
+                          reasons.push('Upcoming Soon');
+                        } else if (daysAway > 3 && daysAway <= 14) {
+                          score += 3;
+                        }
+                      }
+
+                      return { score, reasons, isFrequent, pastCelebrationsCount };
+                    };
+
+                    // Attach smart scores for rendering badges
+                    displayBookings.forEach(b => {
+                      const matchData = computeExploreScore(b);
+                      b._smartScore = matchData.score;
+                      b._matchReasons = matchData.reasons;
+                      b._isFrequent = matchData.isFrequent;
+                      b._pastCelebrationsCount = matchData.pastCelebrationsCount;
+                    });
+
+                    // Sorting execution
                     displayBookings.sort((a, b) => {
-                      if (priestSortBy === 'distance_asc') {
+                      if (priestSortBy === 'smart_match') {
+                        // Float active awaiting offers to the very top in Explore
+                        const hasOfferedA = (a.applicants || []).some(ap => ap.priest_id === user.id) ? 1 : 0;
+                        const hasOfferedB = (b.applicants || []).some(ap => ap.priest_id === user.id) ? 1 : 0;
+                        if (hasOfferedB !== hasOfferedA) return hasOfferedB - hasOfferedA;
+
+                        // Intelligent AI matching score highest first
+                        if (b._smartScore !== a._smartScore) {
+                          return b._smartScore - a._smartScore;
+                        }
+                        // Secondary tie-breaker: nearest date of celebration
+                        return new Date(a.datetime).getTime() - new Date(b.datetime).getTime();
+                      } else if (priestSortBy === 'awaiting_reply') {
+                        // Posts where user is awaiting requester confirmation first
+                        const hasOfferedA = (a.applicants || []).some(ap => ap.priest_id === user.id) ? 1 : 0;
+                        const hasOfferedB = (b.applicants || []).some(ap => ap.priest_id === user.id) ? 1 : 0;
+                        if (hasOfferedB !== hasOfferedA) return hasOfferedB - hasOfferedA;
+                        return new Date(a.datetime).getTime() - new Date(b.datetime).getTime();
+                      } else if (priestSortBy === 'frequently_booked') {
+                        // Frequently collaborated requesters first
+                        const countA = a._pastCelebrationsCount || 0;
+                        const countB = b._pastCelebrationsCount || 0;
+                        if (countB !== countA) return countB - countA;
+                        return (b._smartScore || 0) - (a._smartScore || 0);
+                      } else if (priestSortBy === 'distance_asc') {
                         const distA = a.distance_km != null ? a.distance_km : 99999;
                         const distB = b.distance_km != null ? b.distance_km : 99999;
                         if (distA !== distB) return distA - distB;
@@ -2621,14 +3520,19 @@ export default function App() {
                         const timeB = b.datetime ? new Date(b.datetime).getTime() : 0;
                         return timeB - timeA;
                       } else {
-                        // Default: 'date_asc' (Earliest need date first)
+                        // 'date_asc' (Earliest need date first)
                         const timeA = a.datetime ? new Date(a.datetime).getTime() : 0;
                         const timeB = b.datetime ? new Date(b.datetime).getTime() : 0;
                         return timeA - timeB;
                       }
                     });
 
-                    const isFiltered = priestFilterRadius !== 5 || priestFilterService !== 'all' || priestFilterLanguage !== 'all' || priestSortBy !== 'date_asc';
+                    // Invert sort order if user toggled Up (descending / reverse order)
+                    if (priestSortOrder === 'desc') {
+                      displayBookings.reverse();
+                    }
+
+                    const isFiltered = priestFilterRadius !== 25 || priestFilterService !== 'all' || priestFilterLanguage !== 'all' || priestSortBy !== 'smart_match' || priestSortOrder !== 'asc';
 
                     if (displayBookings.length === 0) {
                       return (
@@ -2663,30 +3567,46 @@ export default function App() {
                             </div>
                           </div>
                           <h4 style={{ color: '#0F172A', marginBottom: '0.35rem' }}>
-                            {requestsTab === 'open'
+                            {priestRolePerspective === 'request'
+                              ? requestsTab === 'my_requests'
+                                ? 'No Ministry Requests Posted Yet'
+                                : requestsTab === 'review'
+                                ? 'No Available Ministers Responded Yet'
+                                : requestsTab === 'history'
+                                ? 'No Past Ministry History Yet'
+                                : 'No Confirmed Ministries Yet'
+                              : requestsTab === 'open'
                               ? isFiltered
                                 ? 'No Requests Match Your Filters'
                                 : `No Open Needs Found within ${priestFilterRadius === 'all' ? 'the Diocese' : `${priestFilterRadius} km`}`
-                              : requestsTab === 'accepted'
-                              ? 'No Confirmed Celebrations Yet'
-                              : requestsTab === 'my_requests'
-                              ? 'No Ministry Requests Posted Yet'
-                              : 'No Pending Responses'}
+                              : requestsTab === 'review'
+                              ? 'No Awaiting Offers'
+                              : requestsTab === 'history'
+                              ? 'No Past Celebrations in History'
+                              : 'No Confirmed Schedule Yet'}
                           </h4>
                           <p style={{ fontSize: '0.86rem', color: '#64748B', maxWidth: '440px', margin: '0 auto', marginBottom: '1rem' }}>
-                            {requestsTab === 'open'
+                            {priestRolePerspective === 'request'
+                              ? requestsTab === 'my_requests'
+                                ? 'Need a priest or sister for Holy Mass, Retreat, Anbiam, or Catechism? Post a request to notify available ministers.'
+                                : requestsTab === 'review'
+                                ? 'When priests or sisters mark themselves available for your posted requests, their profiles and contact options will appear here for your confirmation.'
+                                : requestsTab === 'history'
+                                ? 'Completed celebrations and past pastoral services are preserved here for your ecclesiastical records and quick re-invitation.'
+                                : 'Once you confirm an available priest or sister, your locked celebration appears here with 1-tap call, WhatsApp, and Google Maps.'
+                              : requestsTab === 'open'
                               ? isFiltered
                                 ? 'Try adjusting your distance slider, sacrament filter, or liturgical language to see more needs.'
                                 : priestFilterRadius !== 'all'
                                 ? `There are no requests within ${priestFilterRadius} km right now. Expand your travel distance to discover needs in nearby parishes.`
+                                : isSister
+                                ? 'No open pastoral needs (Anbiam, House Visit, Catechism) in the diocese right now. Check back soon.'
                                 : 'All parishes and convents in the diocese are currently covered. Check back soon for new requests.'
-                              : requestsTab === 'accepted'
-                              ? 'When an availability offer is confirmed, the celebration will appear here with WhatsApp, direct call, and Google Maps directions.'
-                              : requestsTab === 'my_requests'
-                              ? 'Need a priest for Holy Mass, Recollection, or Retreat? Post a request to broadcast to available priests.'
-                              : user.title === 'Fr.' && user.clergy_type === 'religious'
-                              ? 'Ministry needs where you marked your availability will stay listed here until confirmed by the Requester.'
-                              : 'Requests with responses from available priests waiting for your confirmation will appear here.'}
+                              : requestsTab === 'review'
+                              ? 'Ministry requests where you offered your availability will remain here awaiting confirmation from the requester.'
+                              : requestsTab === 'history'
+                              ? 'Your past celebrated Masses and completed ministries are cataloged here in your ministerial service history.'
+                              : 'When a parish or convent confirms your availability, your scheduled ministry will appear here with WhatsApp, direct call, and Google Maps directions.'}
                           </p>
 
                           {/* ACTIONABLE 1-TAP ENGAGEMENT SHORTCUTS */}
@@ -2739,7 +3659,7 @@ export default function App() {
                             </div>
                           )}
 
-                          {requestsTab === 'my_requests' && user.is_verified === 1 && (
+                          {priestRolePerspective === 'request' && requestsTab === 'my_requests' && user.is_verified === 1 && (
                             <button
                               type="button"
                               className="btn btn-primary"
@@ -2747,6 +3667,28 @@ export default function App() {
                               style={{ borderRadius: '9999px', padding: '0.6rem 1.25rem', fontWeight: 700 }}
                             >
                               ➕ Post a Ministry Request
+                            </button>
+                          )}
+
+                          {priestRolePerspective === 'request' && requestsTab === 'review' && (
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => setRequestsTab('my_requests')}
+                              style={{ borderRadius: '9999px', padding: '0.5rem 1.15rem', fontWeight: 600 }}
+                            >
+                              View All Posts
+                            </button>
+                          )}
+
+                          {priestRolePerspective === 'celebrate' && requestsTab === 'review' && (
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              onClick={() => setRequestsTab('open')}
+                              style={{ borderRadius: '9999px', padding: '0.5rem 1.15rem', fontWeight: 700 }}
+                            >
+                              Explore Ministry Needs ↗
                             </button>
                           )}
                         </div>
@@ -2757,326 +3699,860 @@ export default function App() {
                       const { date, time } = formatDateTime(b.datetime, b.datetime_end);
                       const isMyRequest = b.requester_id === user.id;
                       const isConfirmed = b.status === 'accepted' || b.status === 'completed';
-                      const urgency = isConfirmed ? getCelebrationUrgency(b.datetime) : null;
+                      const endOrStart = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
+                      const isPast = endOrStart < nowMs;
                       const isConfirmedPriest = b.responder_id === user.id;
                       const hasOffered = (b.applicants || []).some(a => a.priest_id === user.id);
                       const applicantsCount = (b.applicants || []).length;
+                      const isWithdrawnByMe = (b.withdrawals || []).some(w => w.priest_id === user.id);
+                      const myWithdrawalRecord = (b.withdrawals || []).find(w => w.priest_id === user.id);
+                      const isHistoryBooking = isWithdrawnByMe || b.status === 'completed' || (b.status === 'accepted' && isPast) || requestsTab === 'history';
+                      const urgency = (isConfirmed && !isHistoryBooking) ? getCelebrationUrgency(b.datetime) : null;
+                      const rawService = b.service_type || 'Holy Mass';
+                      const cleanServiceName = rawService.replace(/\s*\([^)]*\)/g, '').trim();
+
+                      const contextualAvailableText = `${applicantsCount} available`;
 
                       return (
                         <div
                           className="priest-card"
                           key={b.id}
                           style={{
-                            borderColor: isConfirmed ? '#BBF7D0' : hasOffered ? '#FDE68A' : '#E2E8F0',
-                            background: isConfirmed ? '#F0FDF4' : '#FFFFFF',
-                            boxShadow: isConfirmed ? '0 4px 14px rgba(22, 163, 74, 0.08)' : 'var(--shadow-sm)'
+                            borderColor: isHistoryBooking ? '#E2E8F0' : isConfirmed ? '#BBF7D0' : hasOffered ? '#FDE68A' : '#E2E8F0',
+                            background: isHistoryBooking ? '#F8FAFC' : isConfirmed ? '#F0FDF4' : '#FFFFFF',
+                            boxShadow: isHistoryBooking ? '0 1px 3px rgba(0,0,0,0.04)' : isConfirmed ? '0 4px 14px rgba(22, 163, 74, 0.08)' : 'var(--shadow-sm)'
                           }}
                         >
-                          {/* 1. HERO SCHEDULE STRIP: DATE, TIME & STATUS */}
-                          <div className="card-schedule-strip">
-                            <div className="card-schedule-datetime">
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                                <span className="card-schedule-date">{date}</span>
-                                {urgency && (
-                                  <span className={`urgency-pill ${urgency.badgeClass}`}>
-                                    {urgency.isPulsing && <span className="urgency-pulse-dot"></span>}
-                                    {urgency.label}
-                                  </span>
-                                )}
-                              </div>
-                              <span className="card-schedule-time">{time}</span>
-                            </div>
-                            <span
-                              className={`distance-badge ${isConfirmed ? 'badge-confirmed' : ''}`}
-                              style={{
-                                background: isConfirmed ? '#F0FDF4' : hasOffered ? '#FEFCE8' : '#F1F5F9',
-                                color: isConfirmed ? '#166534' : hasOffered ? '#854D0E' : '#0F172A',
-                                borderColor: isConfirmed ? '#86EFAC' : hasOffered ? '#FDE047' : '#CBD5E1',
-                                fontWeight: 700,
-                                fontSize: '0.78rem',
-                                padding: '0.28rem 0.7rem',
-                                borderRadius: '8px'
-                              }}
-                            >
-                              {isConfirmed
-                                ? `Confirmed: ${b.service_type || 'Holy Mass'}`
-                                : hasOffered
-                                ? `Marked as available: ${b.service_type || 'Holy Mass'}`
-                                : (b.service_type || 'Holy Mass')}
-                            </span>
-                          </div>
-
-                          {/* 2. LITURGICAL MODIFIERS, LANGUAGE & DISTANCE TAGS ROW */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-                            {(() => {
-                              const s = (b.service_type || '').toLowerCase();
-                              if (s.includes('substation')) {
-                                return <span className="card-tag-pill card-tag-substation">Substation</span>;
-                              }
-                              if (s.includes('concelebration')) {
-                                return <span className="card-tag-pill card-tag-concelebrant">Concelebrant</span>;
-                              }
-                              if (s.includes('funeral') || s.includes('requiem')) {
-                                return <span className="card-tag-pill card-tag-requiem">Requiem</span>;
-                              }
-                              if (s.includes('marriage') || s.includes('matrimony')) {
-                                return <span className="card-tag-pill card-tag-marriage">Marriage</span>;
-                              }
-                              if (s.includes('anbiam') || s.includes('bcc')) {
-                                return <span className="card-tag-pill card-tag-anbiam">Anbiam Animation</span>;
-                              }
-                              if (s.includes('house visit') || s.includes('home visit')) {
-                                return <span className="card-tag-pill card-tag-house-visit">House Visit</span>;
-                              }
-                              if (s.includes('catechism')) {
-                                return <span className="card-tag-pill card-tag-catechism">Catechism</span>;
-                              }
-                              return null;
-                            })()}
-
-                            <span className="card-tag-pill card-tag-language">
-                              {b.language || 'English'}
-                            </span>
-
-                            {b.distance_km !== null && (
-                              <span className="card-tag-pill card-tag-distance" style={{ marginLeft: 'auto' }}>
-                                {b.distance_km} km away
+                          {/* 1. PRIMARY CARD HEADER: MINISTRY TYPE + STATUS BADGE */}
+                          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                              {/* Prominent Ministry Title */}
+                              <span style={{ fontSize: '1.08rem', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.015em' }}>
+                                {cleanServiceName}
                               </span>
-                            )}
-                          </div>
+                              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', background: '#F1F5F9', border: '1px solid #E2E8F0', padding: '2px 7px', borderRadius: '4px' }}>
+                                {b.language || 'English'}
+                              </span>
+                              {priestRolePerspective === 'celebrate' && requestsTab === 'open' && b._isFrequent && (
+                                <span
+                                  title={`Frequently Booked: You have celebrated ${b._pastCelebrationsCount} past ministries for this parish/requester`}
+                                  style={{
+                                    fontSize: '0.68rem',
+                                    fontWeight: 800,
+                                    color: '#7C2D12',
+                                    background: '#FFEDD5',
+                                    border: '1px solid #FDBA74',
+                                    padding: '2px 8px',
+                                    borderRadius: '9999px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px'
+                                  }}
+                                >
+                                  <span>Frequent</span>
+                                </span>
+                              )}
 
-                          {/* 3. REQUESTER & VENUE IDENTITY ROW */}
-                          <div className="card-requester-row">
-                            <div className="avatar-badge" style={{ width: '36px', height: '36px', borderColor: '#CBD5E1', flexShrink: 0 }}>
-                              {b.requester_photo ? (
-                                <img src={b.requester_photo} alt={b.requester_name} />
-                              ) : (
-                                renderDefaultAvatar(b.requester_title, b.requester_clergy_type, 18)
+                              {priestRolePerspective === 'celebrate' && requestsTab === 'open' && b._smartScore >= 50 && (
+                                <span
+                                  title={b._matchReasons ? `Match breakdown: ${b._matchReasons.join(', ')}` : 'Recommended match'}
+                                  style={{
+                                    fontSize: '0.68rem',
+                                    fontWeight: 800,
+                                    color: b._smartScore >= 70 ? '#15803D' : '#0369A1',
+                                    background: b._smartScore >= 70 ? '#DCFCE7' : '#E0F2FE',
+                                    border: b._smartScore >= 70 ? '1px solid #86EFAC' : '1px solid #BAE6FD',
+                                    padding: '2px 8px',
+                                    borderRadius: '9999px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px'
+                                  }}
+                                >
+                                  <span>{b._smartScore >= 70 ? 'Best Match' : 'Good Match'}</span>
+                                </span>
                               )}
                             </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {formatEcclesiasticalName(b.requester_title || (b.requester_clergy_type === 'convent' ? 'Sr.' : 'Fr.'), b.requester_name, b.requester_congregation_abbr)}
-                              </div>
-                              <div style={{ fontSize: '0.76rem', color: '#64748B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {b.location ? `${b.location}` : (b.requester_order || b.requester_diocese || 'Parish Community')}
-                              </div>
+
+                            {/* Right Side Header: Status Tag & Edit Post Button for Requester */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {isMyRequest && !isConfirmed && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEditBookingModal(b);
+                                  }}
+                                  title="Edit ministry request details before confirmation (venue, date, time, language, notes)"
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px',
+                                    fontSize: '0.72rem',
+                                    fontWeight: 700,
+                                    color: '#2563EB',
+                                    background: '#EFF6FF',
+                                    border: '1px solid #BFDBFE',
+                                    padding: '2px 8px',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = '#DBEAFE';
+                                    e.currentTarget.style.borderColor = '#93C5FD';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = '#EFF6FF';
+                                    e.currentTarget.style.borderColor = '#BFDBFE';
+                                  }}
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                                  </svg>
+                                  <span>Edit</span>
+                                </button>
+                              )}
+
+                              {/* Status Tag (Contextual Addressing) */}
+                              {isWithdrawnByMe ? (
+                                <span
+                                  title="You previously offered availability and subsequently withdrew your offer."
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: '9999px',
+                                    background: '#FEF2F2',
+                                    color: '#DC2626',
+                                    whiteSpace: 'nowrap',
+                                    border: '1px solid #FECACA',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                >
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                    <circle cx="12" cy="12" r="10" />
+                                    <line x1="15" y1="9" x2="9" y2="15" />
+                                    <line x1="9" y1="9" x2="15" y2="15" />
+                                  </svg>
+                                  <span>Withdrawn</span>
+                                </span>
+                              ) : isHistoryBooking ? (
+                                <span
+                                  title="Completed and celebrated. Preserved for canonical and parish records."
+                                  style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: '9999px', background: '#F1F5F9', color: '#475569', whiteSpace: 'nowrap', border: '1px solid #CBD5E1', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                >
+                                  ✓ Completed
+                                </span>
+                              ) : isConfirmed ? (
+                                <span
+                                  title="Celebration confirmed & locked. Cannot be edited or deleted online. Any adjustments must be made directly with the minister via Call or WhatsApp."
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: '9999px',
+                                    background: '#DCFCE7',
+                                    color: '#15803D',
+                                    whiteSpace: 'nowrap',
+                                    border: '1px solid #86EFAC',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                >
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                  </svg>
+                                  <span>Confirmed</span>
+                                </span>
+                              ) : hasOffered ? (
+                                <span
+                                  title="Availability submitted. Awaiting confirmation from requester."
+                                  style={{
+                                    fontSize: '0.72rem',
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: '9999px',
+                                    background: '#FEFCE8',
+                                    color: '#854D0E',
+                                    whiteSpace: 'nowrap',
+                                    border: '1px solid #FDE047',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                >
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#854D0E" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                    <circle cx="12" cy="12" r="10" />
+                                    <polyline points="12 6 12 12 16 14" />
+                                  </svg>
+                                  <span>Awaiting</span>
+                                </span>
+                              ) : isMyRequest && applicantsCount > 0 ? (
+                                <span
+                                  title={`${applicantsCount} minister(s) responded & available to celebrate`}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    fontSize: '0.78rem',
+                                    fontWeight: 800,
+                                    color: '#DC2626',
+                                    background: '#FEF2F2',
+                                    border: '1.5px solid #FECACA',
+                                    padding: '2px 9px',
+                                    borderRadius: '9999px',
+                                    boxShadow: '0 1px 3px rgba(220, 38, 38, 0.12)'
+                                  }}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                    <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
+                                    <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
+                                    <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+                                    <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+                                  </svg>
+                                  <span>{applicantsCount}</span>
+                                </span>
+                              ) : isMyRequest && applicantsCount === 0 ? (
+                                <span style={{ fontSize: '0.72rem', fontWeight: 600, padding: '2px 8px', borderRadius: '9999px', background: '#FFFBEB', color: '#B45309', whiteSpace: 'nowrap', border: '1px solid #FDE68A', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#D97706" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                    <circle cx="12" cy="12" r="10" />
+                                    <polyline points="12 6 12 12 16 14" />
+                                  </svg>
+                                  <span>Waiting for Response</span>
+                                </span>
+                              ) : null}
                             </div>
                           </div>
 
-                          {/* 4. PROMINENT NOTE BOX */}
+                          {/* 2. DATE, TIME & VENUE ADDRESS (THE CORE 4 PRIEST SCANNING DETAILS) */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', padding: '0.6rem 0.75rem', background: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                            {/* Date & Urgency Row */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.88rem', fontWeight: 700, color: '#1E293B' }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                <line x1="16" y1="2" x2="16" y2="6" />
+                                <line x1="8" y1="2" x2="8" y2="6" />
+                                <line x1="3" y1="10" x2="21" y2="10" />
+                              </svg>
+                              <span>{date}</span>
+                              {urgency && (
+                                <span className={`urgency-pill ${urgency.badgeClass}`} style={{ fontSize: '0.66rem', padding: '1px 6px', marginLeft: '2px' }}>
+                                  {urgency.isPulsing && <span className="urgency-pulse-dot"></span>}
+                                  {urgency.label}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Dedicated Time Window Row */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.86rem', color: '#0369A1', fontWeight: 700 }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0284C7" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                <circle cx="12" cy="12" r="10" />
+                                <polyline points="12 6 12 12 16 14" />
+                              </svg>
+                              <span>{time}</span>
+                            </div>
+
+                            {/* Location / Address Row (1-Tap Direct Map Navigation) */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', fontSize: '0.84rem' }}>
+                              {b.location ? (
+                                <a
+                                  href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.location)}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  title="Click to open directions in Google Maps"
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    fontWeight: 600,
+                                    color: '#0F172A',
+                                    textDecoration: 'none',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    cursor: 'pointer'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.color = '#2563EB';
+                                    e.currentTarget.style.textDecoration = 'underline';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.color = '#0F172A';
+                                    e.currentTarget.style.textDecoration = 'none';
+                                  }}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E11D48" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                                    <circle cx="12" cy="10" r="3" />
+                                  </svg>
+                                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {b.location}
+                                  </span>
+                                </a>
+                              ) : (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600, color: '#64748B' }}>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E11D48" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                                    <circle cx="12" cy="10" r="3" />
+                                  </svg>
+                                  <span>Parish Church / Chapel</span>
+                                </span>
+                              )}
+
+                            </div>
+                          </div>
+
+                          {/* 3. OPTIONAL NOTE (if present) */}
                           {b.notes && (
-                            <div className="card-note-box">
-                              <span style={{ fontWeight: 700, marginRight: '4px' }}>Note:</span>
+                            <div style={{ fontSize: '0.76rem', color: '#475569', fontStyle: 'italic', background: '#FAF5FF', borderLeft: '3px solid #C084FC', padding: '0.35rem 0.65rem', borderRadius: '0 6px 6px 0', lineHeight: 1.4 }}>
                               "{b.notes}"
                             </div>
                           )}
 
-                          {/* CASE 1: CONFIRMED CELEBRATION - POST-CONFIRMATION ACTION HUB */}
-                          {isConfirmed && (
-                            <div style={{ background: '#F8FAFC', border: '1.5px solid #BBF7D0', borderRadius: '12px', padding: '0.9rem', marginTop: 'auto' }}>
-                              {/* Header: Celebrant / Requester Confirmation Badge */}
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', marginBottom: '0.65rem' }}>
-                                <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#166534', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                                    <polyline points="22 4 12 14.01 9 11.01" />
-                                  </svg>
-                                  <span>Confirmed with {formatEcclesiasticalName(isConfirmedPriest ? b.requester_title || 'Sr.' : b.responder_title || 'Fr.', isConfirmedPriest ? b.requester_name : b.responder_name, isConfirmedPriest ? b.requester_congregation_abbr : b.responder_congregation_abbr)}</span>
+                          {/* CASE 1: CONFIRMED OR COMPLETED CELEBRATION - ACTION HUB */}
+                          {isConfirmed && (() => {
+                            const personPhoto = isConfirmedPriest ? b.requester_photo : b.responder_photo;
+                            const personTitle = isConfirmedPriest ? b.requester_title || 'Sr.' : b.responder_title || 'Fr.';
+                            const personName = isConfirmedPriest ? b.requester_name : b.responder_name;
+                            const personCongregation = isConfirmedPriest ? b.requester_congregation_abbr : b.responder_congregation_abbr;
+                            const personClergyType = isConfirmedPriest ? b.requester_clergy_type : b.responder_clergy_type;
+                            const personDiocese = isConfirmedPriest ? (b.requester_order || b.requester_diocese) : (b.responder_order || b.responder_diocese);
+                            const roleLabel = isConfirmedPriest ? 'Requested by' : (isHistoryBooking ? 'Celebrated by' : 'Confirmed celebrant');
+                            const otherPersonId = isConfirmedPriest ? b.requester_id : b.responder_id;
+                            const isPersonFav = Array.isArray(user.favorites) && user.favorites.includes(otherPersonId);
+
+                            return (
+                              <div style={{ marginTop: 'auto', paddingTop: '0.65rem', borderTop: '1px solid #E2E8F0' }}>
+                                {/* 1. REQUESTER / CONFIRMED PERSON IDENTITY ROW (Above Contact Buttons) */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '0.65rem' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                                    <div className="avatar-badge" style={{ width: '36px', height: '36px', borderColor: '#CBD5E1', flexShrink: 0, borderRadius: '9999px', overflow: 'hidden' }}>
+                                      {personPhoto ? (
+                                        <img src={personPhoto} alt={personName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                      ) : (
+                                        renderDefaultAvatar(personTitle, personClergyType, 18)
+                                      )}
+                                    </div>
+                                    <div style={{ minWidth: 0, flex: 1 }}>
+                                      <div style={{ fontSize: '0.72rem', color: '#64748B', lineHeight: 1.2 }}>
+                                        {roleLabel}
+                                      </div>
+                                      <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {formatEcclesiasticalName(personTitle, personName, personCongregation)}
+                                      </div>
+                                      {personDiocese && (
+                                        <div style={{ fontSize: '0.72rem', color: '#94A3B8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                          {personDiocese}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                    {isMyRequest && otherPersonId && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleToggleFavorite(otherPersonId, formatEcclesiasticalName(personTitle, personName, personCongregation));
+                                        }}
+                                        title={isPersonFav ? 'Favorited minister (click to remove)' : 'Add to favorite ministers for quick future invites'}
+                                        style={{
+                                          background: isPersonFav ? '#FEF08A' : '#F8FAFC',
+                                          border: isPersonFav ? '1px solid #EAB308' : '1px solid #CBD5E1',
+                                          color: isPersonFav ? '#854D0E' : '#64748B',
+                                          borderRadius: '9999px',
+                                          padding: '2px 8px',
+                                          fontSize: '0.7rem',
+                                          fontWeight: 700,
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '3px',
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        <span>{isPersonFav ? '★ Fav' : '☆ Favorite'}</span>
+                                      </button>
+                                    )}
+
+                                    {isHistoryBooking && (
+                                      <span style={{
+                                        fontSize: '0.68rem',
+                                        fontWeight: 700,
+                                        padding: '2px 8px',
+                                        borderRadius: '9999px',
+                                        background: '#F1F5F9',
+                                        color: '#475569',
+                                        border: '1px solid #CBD5E1',
+                                        whiteSpace: 'nowrap'
+                                      }}>
+                                        Archived
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                                <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: '9999px', background: '#DCFCE7', color: '#15803D' }}>
-                                  Slot Locked
-                                </span>
-                              </div>
 
-                              {/* 1-Tap Quick Action Grid: Call, WhatsApp, Map Navigation, Add to Calendar */}
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.45rem', marginBottom: '0.65rem' }}>
-                                <a
-                                  href={`tel:${isConfirmedPriest ? b.requester_mobile : b.responder_mobile}`}
-                                  className="btn btn-call btn-sm"
-                                  style={{ padding: '0.5rem', fontWeight: 700, fontSize: '0.78rem', justifyContent: 'center' }}
-                                >
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-                                  </svg>
-                                  <span>Call Direct</span>
-                                </a>
-
-                                <a
-                                  href={getWhatsAppLink(isConfirmedPriest ? b.requester_mobile : b.responder_mobile, `Praised be Jesus Christ! Father here regarding our confirmed celebration for ${b.service_type || 'Holy Mass'} at ${b.location || 'Parish Chapel'} on ${date} (${time}).`)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="wa-btn"
-                                  style={{ padding: '0.5rem', fontWeight: 700, fontSize: '0.78rem', justifyContent: 'center' }}
-                                >
-                                  <span>WhatsApp</span>
-                                </a>
-
-                                {b.location && (
+                                {/* 2. 1-Tap Quick Action Row (Call, WhatsApp, Map, Calendar) */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.35rem' }}>
                                   <a
-                                    href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.location)}`}
+                                    href={`tel:${isConfirmedPriest ? b.requester_mobile : b.responder_mobile}`}
+                                    className="btn btn-call btn-sm"
+                                    style={{ padding: '0.42rem 0.2rem', fontWeight: 600, fontSize: '0.74rem', justifyContent: 'center' }}
+                                    title="Call directly"
+                                  >
+                                    Call
+                                  </a>
+
+                                  <a
+                                    href={getWhatsAppLink(
+                                      isConfirmedPriest ? b.requester_mobile : b.responder_mobile,
+                                      buildWhatsAppCelebrationMessage(b, !isHistoryBooking)
+                                    )}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="wa-btn"
+                                    style={{ padding: '0.42rem 0.2rem', fontWeight: 600, fontSize: '0.74rem', justifyContent: 'center', borderRadius: 'var(--radius-sm)' }}
+                                    title="Message on WhatsApp"
+                                  >
+                                    WhatsApp
+                                  </a>
+
+                                  {b.location ? (
+                                    <a
+                                      href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(b.location)}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="btn btn-secondary btn-sm"
+                                      style={{ padding: '0.42rem 0.2rem', fontWeight: 600, fontSize: '0.74rem', justifyContent: 'center', background: '#FFFFFF', borderColor: '#CBD5E1' }}
+                                      title="Open Google Maps Directions"
+                                    >
+                                      Map
+                                    </a>
+                                  ) : (
+                                    <div></div>
+                                  )}
+
+                                  <a
+                                    href={`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`${cleanServiceName} - ${b.location || 'Parish'}`)}&dates=${(() => {
+                                      const d = new Date(b.datetime);
+                                      const dEnd = new Date(b.datetime_end || d.getTime() + 3600000);
+                                      const fmt = dt => dt.toISOString().replace(/-|:|\.\d\d\d/g, '');
+                                      return `${fmt(d)}/${fmt(dEnd)}`;
+                                    })()}&details=${encodeURIComponent(`Confirmed ministry with ${formatEcclesiasticalName(isConfirmedPriest ? b.requester_title || 'Sr.' : b.responder_title || 'Fr.', isConfirmedPriest ? b.requester_name : b.responder_name, isConfirmedPriest ? b.requester_congregation_abbr : b.responder_congregation_abbr)}. Contact: ${isConfirmedPriest ? b.requester_mobile : b.responder_mobile}`)}&location=${encodeURIComponent(b.location || '')}`}
                                     target="_blank"
                                     rel="noreferrer"
                                     className="btn btn-secondary btn-sm"
-                                    style={{ padding: '0.5rem', fontWeight: 700, fontSize: '0.78rem', justifyContent: 'center', background: '#FFFFFF', borderColor: '#CBD5E1' }}
+                                    style={{ padding: '0.42rem 0.2rem', fontWeight: 600, fontSize: '0.74rem', justifyContent: 'center', background: '#FFFFFF', borderColor: '#CBD5E1' }}
+                                    title="Add celebration to Google Calendar"
                                   >
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                      <polygon points="3 11 22 2 13 21 11 13 3 11" />
-                                    </svg>
-                                    <span>Directions</span>
+                                    Calendar
                                   </a>
+                                </div>
+
+                                {!isHistoryBooking && (
+                                  <div
+                                    style={{
+                                      marginTop: '0.55rem',
+                                      padding: '0.35rem 0.6rem',
+                                      background: '#F8FAFC',
+                                      border: '1px solid #E2E8F0',
+                                      borderRadius: '6px',
+                                      fontSize: '0.72rem',
+                                      color: '#64748B',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '5px',
+                                      lineHeight: 1.35
+                                    }}
+                                  >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                      <circle cx="12" cy="12" r="10" />
+                                      <line x1="12" y1="16" x2="12" y2="12" />
+                                      <line x1="12" y1="8" x2="12.01" y2="8" />
+                                    </svg>
+                                    <span>
+                                      Confirmed bookings cannot be edited online. If you need any change, please contact the concerned person directly via Call or WhatsApp.
+                                    </span>
+                                  </div>
                                 )}
-
-                                <a
-                                  href={`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`${b.service_type || 'Holy Mass'} - ${b.location || 'Parish'}`)}&dates=${(() => {
-                                    const d = new Date(b.datetime);
-                                    const dEnd = new Date(b.datetime_end || d.getTime() + 3600000);
-                                    const fmt = dt => dt.toISOString().replace(/-|:|\.\d\d\d/g, '');
-                                    return `${fmt(d)}/${fmt(dEnd)}`;
-                                  })()}&details=${encodeURIComponent(`Confirmed ministry with ${formatEcclesiasticalName(isConfirmedPriest ? b.requester_title || 'Sr.' : b.responder_title || 'Fr.', isConfirmedPriest ? b.requester_name : b.responder_name, isConfirmedPriest ? b.requester_congregation_abbr : b.responder_congregation_abbr)}. Contact: ${isConfirmedPriest ? b.requester_mobile : b.responder_mobile}`)}&location=${encodeURIComponent(b.location || '')}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="btn btn-secondary btn-sm"
-                                  style={{ padding: '0.5rem', fontWeight: 700, fontSize: '0.78rem', justifyContent: 'center', background: '#FFFFFF', borderColor: '#CBD5E1' }}
-                                >
-                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                                    <line x1="16" y1="2" x2="16" y2="6" />
-                                    <line x1="8" y1="2" x2="8" y2="6" />
-                                    <line x1="3" y1="10" x2="21" y2="10" />
-                                  </svg>
-                                  <span>Add to Calendar</span>
-                                </a>
                               </div>
+                            );
+                          })()}
 
-                              {/* Pastoral Checklist: Next Steps Guide */}
-                              <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '0.55rem 0.75rem', fontSize: '0.74rem', color: '#475569', lineHeight: '1.45' }}>
-                                <div style={{ fontWeight: 700, color: '#0F172A', marginBottom: '0.25rem' }}>
-                                  ✓ Next Steps Checklist:
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                                  <span>1. Verify vestment/stole color & liturgy intentions via WhatsApp.</span>
-                                  <span>2. Recheck transit time ({b.distance_km ? `${b.distance_km} km` : 'destination distance'}) prior to celebration.</span>
-                                </div>
-                              </div>
-                            </div>
-                          )}
+                          {/* CASE 2: OPEN REQUEST FROM OTHERS - 1-TAP "I AM AVAILABLE" OR "WITHDRAW" (PRIESTS OR SISTERS FOR PASTORAL MINISTRIES) */}
+                          {!isConfirmed && !isMyRequest && user.is_verified === 1 && (() => {
+                            const serviceStr = (b.service_type || '').toLowerCase();
+                            const isNonSacr = ['catechism', 'altar decoration', 'decoration', 'anbiam', 'bcc', 'house visit', 'communion to sick', 'choir'].some(k => serviceStr.includes(k));
+                            const canVolunteer = (user.title === 'Fr.' || (!user.title && user.clergy_type !== 'convent' && user.clergy_type !== 'convent_sister')) || (isSister && isNonSacr);
+                            
+                            if (!canVolunteer) return null;
 
-                          {/* CASE 2: OPEN REQUEST FROM OTHERS - 1-TAP "I AM AVAILABLE" OR "WITHDRAW" (PRIESTS ONLY) */}
-                          {!isConfirmed && !isMyRequest && user.is_verified === 1 && (user.title === 'Fr.' || (!user.title && user.clergy_type !== 'convent' && user.clergy_type !== 'convent_sister')) && (
-                            <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid #F1F5F9' }}>
-                              {hasOffered ? (
-                                <div style={{ background: '#FFFDF5', border: '1px solid #FDE68A', padding: '0.65rem 0.85rem', borderRadius: 'var(--radius-sm)' }}>
-                                  <div style={{ color: '#92400E', fontSize: '0.84rem', fontWeight: 700, marginBottom: '0.35rem', textAlign: 'center' }}>
-                                    ✓ Marked as available for this Mass
-                                  </div>
-                                  <div style={{ fontSize: '0.75rem', color: '#78350F', textAlign: 'center', marginBottom: '0.5rem' }}>
-                                    Awaiting Requester to review and confirm.
-                                  </div>
-                                  <div style={{ textAlign: 'center' }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleWithdrawOffer(b.id)}
-                                      style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        color: '#DC2626',
-                                        fontSize: '0.76rem',
-                                        cursor: 'pointer',
-                                        textDecoration: 'underline',
-                                        fontWeight: 600
-                                      }}
-                                    >
-                                      ✕ Withdraw my availability
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <button
-                                  className="btn btn-primary"
-                                  onClick={() => handleOfferMinistry(b.id)}
-                                  style={{
-                                    width: '100%',
-                                    padding: '0.75rem',
-                                    fontWeight: 700,
-                                    fontSize: '0.92rem',
-                                    background: '#16A34A',
-                                    borderColor: '#15803D'
-                                  }}
-                                >
-                                  ✋ I Am Available to Celebrate
-                                </button>
-                              )}
-                            </div>
-                          )}
-
-                          {/* CASE 3: MY REQUEST (FATHER'S OWN POST) - REVIEW APPLICANTS & CONFIRM */}
-                          {!isConfirmed && isMyRequest && (
-                            <div className="applicants-box" style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid #F1F5F9' }}>
-                              <div style={{ fontSize: '0.86rem', fontWeight: 700, color: '#0F172A', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
-                                <span>🙌 Fathers Ready to Celebrate ({applicantsCount})</span>
-                                <span style={{ fontSize: '0.75rem', color: '#2563EB', fontWeight: 600 }}>Select a Father for this ministry</span>
-                              </div>
-
-                              {applicantsCount === 0 ? (
-                                <p style={{ fontSize: '0.8rem', color: '#94A3B8', margin: '0.5rem 0' }}>
-                                  Awaiting available priests to respond for this ministry.
-                                </p>
-                              ) : (
-                                (b.applicants || []).map(cand => (
-                                  <div className="applicant-card" key={cand.priest_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F8FAFC', padding: '0.65rem 0.85rem', borderRadius: '6px', marginBottom: '0.5rem', border: '1px solid #E2E8F0', flexWrap: 'wrap', gap: '0.5rem' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', minWidth: '220px', flex: 1 }}>
-                                      <div className="avatar-badge" style={{ width: '38px', height: '38px' }}>
-                                        {cand.profile_photo ? (
-                                          <img src={cand.profile_photo} alt={cand.priest_name} />
-                                        ) : (
-                                          renderDefaultAvatar(cand.priest_title || 'Fr.', cand.clergy_type, 18)
-                                        )}
-                                      </div>
-                                      <div>
-                                        <div className="applicant-name" style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.88rem' }}>
-                                          {formatEcclesiasticalName(cand.priest_title || 'Fr.', cand.priest_name, cand.congregation_abbr)}
-                                        </div>
-                                        <div className="applicant-sub" style={{ fontSize: '0.76rem', color: '#64748B' }}>
-                                          {cand.clergy_type === 'religious' ? cand.religious_order : cand.diocese_province}
-                                          {cand.residence_name ? ` • 📍 ${cand.residence_name}` : ''}
-                                          {cand.distance_km !== null ? ` (${cand.distance_km} km away)` : ''}
-                                        </div>
-                                      </div>
+                            return (
+                              <div style={{ marginTop: 'auto', paddingTop: '0.75rem', borderTop: '1px solid #F1F5F9' }}>
+                                {isWithdrawnByMe ? (
+                                  <div style={{
+                                    background: '#FEF2F2',
+                                    border: '1px solid #FECACA',
+                                    padding: '0.65rem 0.85rem',
+                                    borderRadius: 'var(--radius-sm)',
+                                    textAlign: 'center'
+                                  }}>
+                                    <div style={{ color: '#DC2626', fontSize: '0.82rem', fontWeight: 700, marginBottom: '0.25rem' }}>
+                                      You withdrew your availability
                                     </div>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                                      {cand.priest_mobile && (
+                                    <div style={{ fontSize: '0.74rem', color: '#7F1D1D', marginBottom: b.status === 'pending' ? '0.45rem' : 0 }}>
+                                      {myWithdrawalRecord?.withdrawn_at ? `Withdrawn on ${new Date(myWithdrawalRecord.withdrawn_at).toLocaleDateString()}` : 'Archived in your ministry records.'}
+                                    </div>
+                                    {b.status === 'pending' && (
+                                      <button
+                                        type="button"
+                                        className="btn btn-secondary btn-sm"
+                                        onClick={() => handleOfferMinistry(b.id)}
+                                        style={{ fontSize: '0.76rem', padding: '0.35rem 0.75rem', fontWeight: 600, background: '#FFFFFF', borderColor: '#FCA5A5', color: '#991B1B' }}
+                                      >
+                                        Re-Offer Availability
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : hasOffered ? (() => {
+                                  const myApp = (b.applicants || []).find(a => a.priest_id === user.id);
+                                  const hasEditNotice = myApp && myApp.has_post_edit;
+                                  return (
+                                    <div style={{
+                                      background: hasEditNotice ? '#FEF2F2' : '#FFFDF5',
+                                      border: hasEditNotice ? '1.5px solid #FCA5A5' : '1px solid #FDE68A',
+                                      padding: '0.65rem 0.85rem',
+                                      borderRadius: 'var(--radius-sm)'
+                                    }}>
+                                      {hasEditNotice ? (
+                                        <div style={{ marginBottom: '0.55rem' }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: '#991B1B', fontSize: '0.82rem', fontWeight: 800, marginBottom: '0.25rem' }}>
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+                                              <line x1="12" y1="9" x2="12" y2="13" />
+                                              <line x1="12" y1="17" x2="12.01" y2="17" />
+                                            </svg>
+                                            <span>Request Info Was Recently Edited</span>
+                                          </div>
+                                          {myApp.last_edit_notice && (
+                                            <div style={{ fontSize: '0.74rem', color: '#7F1D1D', background: '#FEE2E2', padding: '0.35rem 0.55rem', borderRadius: '4px', marginBottom: '0.45rem', lineHeight: '1.4' }}>
+                                              {myApp.last_edit_notice}
+                                            </div>
+                                          )}
+                                          <div style={{ fontSize: '0.74rem', color: '#B91C1C', marginBottom: '0.45rem', lineHeight: '1.35' }}>
+                                            Please review the updated date, time, or venue above. If you are no longer available for these new details, you can withdraw your offer below.
+                                          </div>
+                                        </div>
+                                      ) : (
                                         <>
-                                          <a
-                                            href={`tel:${cand.priest_mobile}`}
-                                            className="btn btn-call btn-sm"
-                                            style={{ padding: '0.4rem 0.6rem', fontSize: '0.78rem' }}
-                                            title="Call Father"
-                                          >
-                                            📞 Call
-                                          </a>
-                                          <a
-                                            href={getWhatsAppLink(cand.priest_mobile, `Praised be Jesus Christ! Father, regarding the ministry request for ${b.service_type || 'Holy Mass'} on ${date}.`)}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="wa-btn"
-                                            style={{ padding: '0.4rem 0.6rem', fontSize: '0.78rem' }}
-                                            title="WhatsApp Father"
-                                          >
-                                            💬
-                                          </a>
+                                          <div style={{ color: '#92400E', fontSize: '0.84rem', fontWeight: 700, marginBottom: '0.35rem', textAlign: 'center' }}>
+                                            ✓ Marked as available for this ministry
+                                          </div>
+                                          <div style={{ fontSize: '0.75rem', color: '#78350F', textAlign: 'center', marginBottom: '0.5rem' }}>
+                                            Awaiting Requester to review and confirm.
+                                          </div>
                                         </>
                                       )}
-                                      <button
-                                        className="btn btn-primary btn-sm"
-                                        onClick={() => handleConfirmApplicant(b.id, cand.priest_id, cand.priest_name)}
-                                        style={{ padding: '0.42rem 0.85rem', fontSize: '0.82rem', fontWeight: 700, background: '#16A34A', borderColor: '#15803D' }}
-                                      >
-                                        ✓ Select & Confirm
-                                      </button>
+                                      <div style={{ textAlign: 'center' }}>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleWithdrawOffer(b.id)}
+                                          style={{
+                                            background: hasEditNotice ? '#DC2626' : 'none',
+                                            border: hasEditNotice ? 'none' : 'none',
+                                            color: hasEditNotice ? '#FFFFFF' : '#DC2626',
+                                            padding: hasEditNotice ? '0.4rem 0.85rem' : '0',
+                                            borderRadius: hasEditNotice ? '6px' : '0',
+                                            fontSize: hasEditNotice ? '0.78rem' : '0.76rem',
+                                            cursor: 'pointer',
+                                            textDecoration: hasEditNotice ? 'none' : 'underline',
+                                            fontWeight: 700
+                                          }}
+                                        >
+                                          ✕ Withdraw my availability
+                                        </button>
+                                      </div>
                                     </div>
+                                  );
+                                })() : (
+                                  <button
+                                    className="btn btn-primary"
+                                    onClick={() => handleOfferMinistry(b.id)}
+                                    style={{
+                                      width: '100%',
+                                      padding: '0.75rem',
+                                      fontWeight: 700,
+                                      fontSize: '0.92rem',
+                                      background: '#16A34A',
+                                      borderColor: '#15803D'
+                                    }}
+                                  >
+                                    {isSister ? 'I Can Lead / Assist' : 'I Am Available to Celebrate'}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
+
+                           {/* CASE 3: MY REQUEST (OWN POST) - REVIEW APPLICANTS & CONFIRM */}
+                          {!isConfirmed && isMyRequest && (
+                            <div style={{ marginTop: 'auto', paddingTop: '0.85rem', borderTop: '1px dashed #CBD5E1' }}>
+                              {applicantsCount > 0 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                  {/* Visible Break & Available Option Header */}
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '2px' }}>
+                                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                                      <span style={{
+                                        fontSize: '0.74rem',
+                                        fontWeight: 800,
+                                        color: '#1D4ED8',
+                                        background: '#EFF6FF',
+                                        border: '1px solid #BFDBFE',
+                                        padding: '3px 10px',
+                                        borderRadius: '9999px',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '5px'
+                                      }}>
+                                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2563EB' }}></span>
+                                        {applicantsCount} {applicantsCount === 1 ? 'Minister Available' : 'Ministers Available'}
+                                      </span>
+                                    </div>
+                                    <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600 }}>
+                                      Select & Confirm below ↴
+                                    </span>
                                   </div>
-                                ))
+                                  {(() => {
+                                    const userFavs = Array.isArray(user?.favorite_ministers) ? user.favorite_ministers : [];
+                                    const sortedApplicants = [...(b.applicants || [])].sort((a, bCand) => {
+                                      const isAFav = userFavs.includes(Number(a.priest_id));
+                                      const isBFav = userFavs.includes(Number(bCand.priest_id));
+                                      if (isAFav && !isBFav) return -1;
+                                      if (!isAFav && isBFav) return 1;
+                                      return 0;
+                                    });
+
+                                    return sortedApplicants.map(cand => {
+                                      const isCandSister = cand.priest_title === 'Sr.' || cand.clergy_type === 'convent' || cand.clergy_type === 'convent_sister';
+                                      const candDisplayName = formatEcclesiasticalName(cand.priest_title || (isCandSister ? 'Sr.' : 'Fr.'), cand.priest_name, cand.congregation_abbr);
+                                      const candAffiliation = cand.clergy_type === 'religious' ? (cand.congregation_abbr || cand.religious_order) : cand.diocese_province;
+                                      const candAge = cand.age !== undefined && cand.age !== null ? cand.age : calculateAge(cand.dob);
+                                      const isFav = userFavs.includes(Number(cand.priest_id));
+
+                                      return (
+                                        <div
+                                          key={cand.priest_id}
+                                          style={{
+                                            background: isFav ? '#FEFCE8' : '#FFFFFF',
+                                            border: isFav ? '1.5px solid #FDE047' : '1.5px solid #E2E8F0',
+                                            borderRadius: '12px',
+                                            padding: '0.75rem 0.85rem',
+                                            boxShadow: isFav ? '0 2px 6px rgba(234, 179, 8, 0.12)' : '0 1px 3px rgba(0,0,0,0.04)',
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            gap: '0.65rem'
+                                          }}
+                                        >
+                                        {/* Row 1: Minister Identity (Clickable to open profile) */}
+                                        <div
+                                          onClick={() => setViewMinisterModal({ minister: cand, booking: b })}
+                                          style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '10px',
+                                            cursor: 'pointer'
+                                          }}
+                                          title="Tap to view ecclesiastical profile"
+                                        >
+                                          <div
+                                            style={{
+                                              position: 'relative',
+                                              width: '44px',
+                                              height: '44px',
+                                              borderRadius: '9999px',
+                                              flexShrink: 0,
+                                              overflow: 'hidden',
+                                              border: '2px solid #CBD5E1',
+                                              boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
+                                            }}
+                                          >
+                                            {cand.profile_photo ? (
+                                              <img src={cand.profile_photo} alt={cand.priest_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                            ) : (
+                                              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F1F5F9', color: '#475569' }}>
+                                                {renderDefaultAvatar(cand.priest_title || (isCandSister ? 'Sr.' : 'Fr.'), cand.clergy_type, 24)}
+                                              </div>
+                                            )}
+                                            <span
+                                              style={{
+                                                position: 'absolute',
+                                                bottom: 0,
+                                                right: 0,
+                                                background: '#16A34A',
+                                                color: '#FFF',
+                                                borderRadius: '9999px',
+                                                width: '13px',
+                                                height: '13px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontSize: '8px',
+                                                border: '1.5px solid #FFF'
+                                              }}
+                                            >
+                                              ✓
+                                            </span>
+                                          </div>
+
+                                          <div style={{ minWidth: 0, flex: 1 }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                                                <span style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.92rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                  {candDisplayName}
+                                                </span>
+                                                {isFav && (
+                                                  <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#854D0E', background: '#FEF9C3', border: '1px solid #FDE047', padding: '1px 6px', borderRadius: '9999px', display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                                                    ★ Favorite
+                                                  </span>
+                                                )}
+                                              </div>
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleToggleFavorite(cand.priest_id, candDisplayName);
+                                                }}
+                                                title={isFav ? "Remove from favorite ministers" : "Save as favorite minister for future requests"}
+                                                style={{
+                                                  background: 'none',
+                                                  border: 'none',
+                                                  cursor: 'pointer',
+                                                  padding: '2px',
+                                                  fontSize: '1.05rem',
+                                                  color: isFav ? '#EAB308' : '#CBD5E1',
+                                                  display: 'inline-flex',
+                                                  alignItems: 'center',
+                                                  justifyContent: 'center',
+                                                  transition: 'transform 0.15s ease'
+                                                }}
+                                                onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.2)'}
+                                                onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                                              >
+                                                {isFav ? '★' : '☆'}
+                                              </button>
+                                            </div>
+
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.76rem', color: '#64748B', marginTop: '2px', flexWrap: 'wrap' }}>
+                                              {candAffiliation && (
+                                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                                  {candAffiliation}
+                                                </span>
+                                              )}
+                                              {candAge !== null && (
+                                                <span style={{ color: '#92400E', background: '#FEF3C7', padding: '1px 6px', borderRadius: '4px', fontWeight: 700, fontSize: '0.7rem' }}>
+                                                  {candAge} yrs
+                                                </span>
+                                              )}
+                                              {cand.distance_km !== null && (
+                                                <span style={{ color: '#059669', fontWeight: 600, flexShrink: 0 }}>
+                                                  • {cand.distance_km} km
+                                                </span>
+                                              )}
+                                              {(() => {
+                                                const modes = Array.isArray(cand.transport_modes) && cand.transport_modes.length > 0
+                                                  ? cand.transport_modes
+                                                  : (cand.transport_mode ? [cand.transport_mode] : []);
+                                                if (modes.length === 0) return null;
+                                                const icons = modes.map(m => {
+                                                  const opt = TRANSPORT_OPTIONS.find(o => o.id === m);
+                                                  return opt ? opt.icon : '🚗';
+                                                }).slice(0, 3);
+                                                return (
+                                                  <span style={{ background: '#F1F5F9', padding: '1px 5px', borderRadius: '4px', fontSize: '0.68rem', display: 'inline-flex', alignItems: 'center', gap: '2px' }} title={modes.join(', ')}>
+                                                    {icons.join(' ')}{modes.length > 3 ? ` +${modes.length - 3}` : ''}
+                                                  </span>
+                                                );
+                                              })()}
+                                            </div>
+                                          </div>
+                                        </div>
+
+                                        {/* Row 2: Clean Actions Bar (View Profile, Contact, Confirm) */}
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', paddingTop: '0.45rem', borderTop: '1px solid #F1F5F9' }}>
+                                          <button
+                                            type="button"
+                                            onClick={() => setViewMinisterModal({ minister: cand, booking: b })}
+                                            style={{
+                                              background: 'transparent',
+                                              border: 'none',
+                                              color: '#0284C7',
+                                              fontSize: '0.76rem',
+                                              fontWeight: 600,
+                                              cursor: 'pointer',
+                                              padding: '0',
+                                              textDecoration: 'underline'
+                                            }}
+                                          >
+                                            View Profile ↗
+                                          </button>
+
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            {cand.priest_mobile && (
+                                              <>
+                                                <a
+                                                  href={`tel:${cand.priest_mobile}`}
+                                                  className="btn btn-call btn-sm"
+                                                  style={{ width: '32px', height: '32px', padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px' }}
+                                                  title={`Call ${candDisplayName}`}
+                                                >
+                                                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+                                                  </svg>
+                                                </a>
+                                                <a
+                                                  href={getWhatsAppLink(cand.priest_mobile, buildWhatsAppCelebrationMessage(b, false, cand.priest_name))}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                  className="wa-btn"
+                                                  style={{ width: '32px', height: '32px', padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px' }}
+                                                  title={`WhatsApp ${candDisplayName}`}
+                                                >
+                                                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                                    <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                                                  </svg>
+                                                </a>
+                                              </>
+                                            )}
+                                            <button
+                                              type="button"
+                                              className="btn btn-primary btn-sm"
+                                              onClick={() => handleConfirmApplicant(b.id, cand.priest_id, cand.priest_name)}
+                                              style={{
+                                                padding: '0.4rem 0.85rem',
+                                                fontSize: '0.8rem',
+                                                fontWeight: 800,
+                                                background: '#16A34A',
+                                                borderColor: '#15803D',
+                                                whiteSpace: 'nowrap',
+                                                borderRadius: '6px',
+                                                boxShadow: '0 1px 2px rgba(22, 163, 74, 0.25)'
+                                              }}
+                                            >
+                                              ✓ Confirm
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </div>
+                                      );
+                                    });
+                                  })()}
+                                </div>
                               )}
                             </div>
                           )}
@@ -3086,29 +4562,6 @@ export default function App() {
                   })()}
                 </div>
               </div>
-
-
-            {/* PLATFORM NOTICE & CANONICAL ADVISORY DISCLAIMER */}
-            <div className="platform-disclaimer-card">
-              <div className="disclaimer-header">
-                <span className="disclaimer-icon">📜</span>
-                <h4 className="disclaimer-title">Platform Notice & Canonical Advisory</h4>
-              </div>
-              <div className="disclaimer-content">
-                <p>
-                  <strong>Facilitation Forum Only:</strong> ArulApp is designed solely as a voluntary facilitation forum to help convents, parishes, and religious communities discover the liturgical availability of Catholic priests easily.
-                </p>
-                <p>
-                  <strong>Direct Communication Required Prior to Confirmation:</strong> Requesters must always converse directly with the priest (via WhatsApp or phone call) prior to finalizing or confirming any ministry. Direct communication is essential to verify mutual agreement, exact timing, honorarium, and liturgical details.
-                </p>
-                <p>
-                  <strong>No Guarantee or Platform Liability:</strong> ArulApp provides availability information in good faith but provides no assurance or guarantee regarding celebrant attendance, punctuality, or fulfillment, and assumes no responsibility or liability for cancellations, unforeseen absences, or travel disruptions.
-                </p>
-                <p>
-                  <strong>Direct Bilateral Arrangements:</strong> Once contact details are obtained, all arrangements and coordination take place directly between the requesting community and the priest through WhatsApp or direct call. The platform does not arbitrate or entertain grievances or disputes arising from individual engagements.
-                </p>
-              </div>
-            </div>
           </>
         )}
 
@@ -3167,7 +4620,7 @@ export default function App() {
                       <div className="admin-priest-meta">
                         <span>📱 {u.mobile}</span>
                         <span>⛪ {u.clergy_type === 'religious' ? u.religious_order : (u.diocese_province || u.religious_order)}</span>
-                        <span>📍 {u.residence_name || 'No residence set'} ({u.residence_address})</span>
+                        <span>📍 {u.residence_name ? `${u.residence_name}, ` : ''}{u.residence_address || 'No address set'}</span>
                         <span>{u.title === 'Fr.' ? `🏍️ ${u.transport_mode} | Max: ${u.max_travel_km} km` : '🕊️ Religious Community'}</span>
                       </div>
                     </div>
@@ -3187,6 +4640,32 @@ export default function App() {
         )}
       </main>
 
+      {/* --- APP FOOTER (SUBTLE, SLEEK & LOW-PROFILE) --- */}
+      <footer className="app-site-footer">
+        <div className="app-site-footer-inner">
+          <span className="footer-subtle-credits">
+            Developed &amp; Maintained by <strong>Fr. Joseph ArRa OFM Cap</strong>
+          </span>
+          <span className="footer-subtle-dot">&bull;</span>
+          <a
+            href="https://josephcap.com"
+            target="_blank"
+            rel="noreferrer"
+            className="footer-subtle-link"
+          >
+            josephcap.com
+          </a>
+          <span className="footer-subtle-dot">&bull;</span>
+          <button
+            type="button"
+            className="footer-subtle-btn"
+            onClick={() => setShowPrivacyPage(true)}
+          >
+            Privacy &amp; Authenticity Notes
+          </button>
+        </div>
+      </footer>
+
 
 
       {/* --- MODAL 2: CONFIRM VERBAL BOOKING --- */}
@@ -3203,42 +4682,35 @@ export default function App() {
                   Confirming this locks the slot, creates the booking record, and removes {formatEcclesiasticalName(showDirectConfirmModal.priest_title || 'Fr.', showDirectConfirmModal.priest_name, showDirectConfirmModal.congregation_abbr)} from the public roster for this date.
                 </p>
                 <div className="form-group">
-                  <label className="form-label">SERVICE TYPE REQUIRED</label>
-                  <div className="service-category-tabs">
-                    <button
-                      type="button"
-                      className={`service-category-tab ${confirmServiceCategory === 'core' ? 'active' : ''}`}
-                      onClick={() => {
-                        setConfirmServiceCategory('core');
-                        if (!CORE_SERVICES.includes(confirmServiceType)) {
-                          setConfirmServiceType(CORE_SERVICES[0]);
-                        }
-                      }}
-                    >
-                      ⛪ Core Masses & Sacraments
-                    </button>
-                    <button
-                      type="button"
-                      className={`service-category-tab ${confirmServiceCategory === 'special' ? 'active' : ''}`}
-                      onClick={() => {
-                        setConfirmServiceCategory('special');
-                        if (!SPECIAL_SERVICES.includes(confirmServiceType)) {
-                          setConfirmServiceType(SPECIAL_SERVICES[0]);
-                        }
-                      }}
-                    >
-                      🌟 Special Events & Blessings
-                    </button>
-                  </div>
+                  <label className="form-label">CHOOSE MINISTRY / SACRAMENT *</label>
                   <select
                     className="form-input"
                     value={confirmServiceType}
                     onChange={(e) => setConfirmServiceType(e.target.value)}
-                    style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                    style={{ background: '#FFFFFF', color: '#0F172A', fontWeight: 600, fontSize: '0.92rem' }}
+                    required
                   >
-                    {(confirmServiceCategory === 'core' ? CORE_SERVICES : SPECIAL_SERVICES).map(st => (
-                      <option key={st} value={st}>{st}</option>
-                    ))}
+                    <optgroup label="⛪ A. MASS & SACRAMENTS">
+                      {MASS_SACRAMENTS.filter(s => s !== 'Others').map(st => (
+                        <option key={`a-${st}`} value={st}>{st}</option>
+                      ))}
+                    </optgroup>
+                    <option disabled style={{ fontSize: '6px', color: '#CBD5E1', lineHeight: '6px' }}>&nbsp;</option>
+                    <optgroup label="🕯️ B. PARALITURGY & BLESSINGS">
+                      {PARALITURGY_BLESSINGS.filter(s => s !== 'Others').map(st => (
+                        <option key={`b-${st}`} value={st}>{st}</option>
+                      ))}
+                    </optgroup>
+                    <option disabled style={{ fontSize: '6px', color: '#CBD5E1', lineHeight: '6px' }}>&nbsp;</option>
+                    <optgroup label="🤝 C. PASTORAL MINISTRIES">
+                      {PASTORAL_MINISTRIES.filter(s => s !== 'Others').map(st => (
+                        <option key={`c-${st}`} value={st}>{st}</option>
+                      ))}
+                    </optgroup>
+                    <option disabled style={{ fontSize: '6px', color: '#CBD5E1', lineHeight: '6px' }}>&nbsp;</option>
+                    <optgroup label="✨ OTHER INTENTIONS">
+                      <option value="Others">Others</option>
+                    </optgroup>
                   </select>
                 </div>
                 {confirmServiceType === 'Others' && (
@@ -3288,7 +4760,7 @@ export default function App() {
                 </div>
 
                 <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '8px', padding: '0.65rem 0.85rem', fontSize: '0.76rem', color: '#92400E', lineHeight: '1.45', marginTop: '1rem' }}>
-                  ⚠️ <strong>Platform Advisory:</strong> ArulApp facilitates availability discovery only and assumes no liability for celebrant commitments. Always directly speak or chat with Father on WhatsApp prior to confirming to ensure mutual agreement on timing and logistics.
+                  ⚠️ <strong>Platform Advisory:</strong> Book a Priest facilitates availability discovery only and assumes no liability for celebrant commitments. Always directly speak or chat with Father on WhatsApp prior to confirming to ensure mutual agreement on timing and logistics.
                 </div>
 
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
@@ -3301,53 +4773,87 @@ export default function App() {
         </div>
       )}
 
-      {/* --- MODAL 3: POST BROADCAST MASS REQUEST --- */}
+      {/* --- MODAL 3: POST / EDIT BROADCAST MASS REQUEST --- */}
       {showRequestModal && (
         <div className="modal-overlay">
           <div className="modal-container">
             <div className="modal-header">
-              <h3 className="modal-title">📢 Post Request for Priest</h3>
-              <button className="modal-close" onClick={() => setShowRequestModal(false)}>&times;</button>
+              <h3 className="modal-title" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                {editingBooking ? (
+                  <>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#2563EB" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    <span>Edit Ministry Request Details</span>
+                  </>
+                ) : (
+                  'Post your Ministry Request'
+                )}
+              </h3>
+              <button className="modal-close" onClick={() => {
+                setShowRequestModal(false);
+                setEditingBooking(null);
+              }}>&times;</button>
             </div>
             <form onSubmit={handleCreateBooking}>
               <div className="modal-body">
-                <div className="form-group">
-                  <label className="form-label">LITURGICAL SERVICE TYPE</label>
-                  <div className="service-category-tabs">
-                    <button
-                      type="button"
-                      className={`service-category-tab ${bookingServiceCategory === 'core' ? 'active' : ''}`}
-                      onClick={() => {
-                        setBookingServiceCategory('core');
-                        if (!CORE_SERVICES.includes(bookingServiceType)) {
-                          setBookingServiceType(CORE_SERVICES[0]);
-                        }
-                      }}
-                    >
-                      ⛪ Core Masses & Sacraments
-                    </button>
-                    <button
-                      type="button"
-                      className={`service-category-tab ${bookingServiceCategory === 'special' ? 'active' : ''}`}
-                      onClick={() => {
-                        setBookingServiceCategory('special');
-                        if (!SPECIAL_SERVICES.includes(bookingServiceType)) {
-                          setBookingServiceType(SPECIAL_SERVICES[0]);
-                        }
-                      }}
-                    >
-                      🌟 Special Events & Blessings
-                    </button>
+                {editingBooking && (
+                  <div style={{
+                    marginBottom: '1rem',
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: '8px',
+                    background: (editingBooking.applicants || []).length > 0 ? '#FFFBEB' : '#EFF6FF',
+                    border: (editingBooking.applicants || []).length > 0 ? '1px solid #FDE68A' : '1px solid #BFDBFE',
+                    fontSize: '0.8rem',
+                    color: (editingBooking.applicants || []).length > 0 ? '#92400E' : '#1E40AF',
+                    lineHeight: '1.45'
+                  }}>
+                    {(editingBooking.applicants || []).length > 0 ? (
+                      <>
+                        ⚠️ <strong>Notice:</strong> {(editingBooking.applicants || []).length} minister(s) have already marked availability for this request. Saving changes will automatically notify them of the modifications so they can review and re-confirm or withdraw if the new details do not suit them.
+                      </>
+                    ) : editingBooking.status === 'accepted' ? (
+                      <>
+                        ℹ️ <strong>Confirmed Celebration:</strong> You are editing a confirmed ministry. The celebrant will see the updated details immediately.
+                      </>
+                    ) : (
+                      <>
+                        ℹ️ You are editing your open request. The updated information will reflect immediately on the parish ministry feed.
+                      </>
+                    )}
                   </div>
+                )}
+                <div className="form-group">
+                  <label className="form-label">CHOOSE MINISTRY / SACRAMENT TYPE *</label>
                   <select
                     className="form-input"
                     value={bookingServiceType}
                     onChange={(e) => setBookingServiceType(e.target.value)}
-                    style={{ background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                    style={{ background: '#FFFFFF', color: '#0F172A', fontWeight: 600, fontSize: '0.92rem' }}
+                    required
                   >
-                    {(bookingServiceCategory === 'core' ? CORE_SERVICES : SPECIAL_SERVICES).map(st => (
-                      <option key={st} value={st}>{st}</option>
-                    ))}
+                    <optgroup label="⛪ A. MASS & SACRAMENTS">
+                      {MASS_SACRAMENTS.filter(s => s !== 'Others').map(st => (
+                        <option key={`req-a-${st}`} value={st}>{st}</option>
+                      ))}
+                    </optgroup>
+                    <option disabled style={{ fontSize: '6px', color: '#CBD5E1', lineHeight: '6px' }}>&nbsp;</option>
+                    <optgroup label="🕯️ B. PARALITURGY & BLESSINGS">
+                      {PARALITURGY_BLESSINGS.filter(s => s !== 'Others').map(st => (
+                        <option key={`req-b-${st}`} value={st}>{st}</option>
+                      ))}
+                    </optgroup>
+                    <option disabled style={{ fontSize: '6px', color: '#CBD5E1', lineHeight: '6px' }}>&nbsp;</option>
+                    <optgroup label="🤝 C. PASTORAL MINISTRIES">
+                      {PASTORAL_MINISTRIES.filter(s => s !== 'Others').map(st => (
+                        <option key={`req-c-${st}`} value={st}>{st}</option>
+                      ))}
+                    </optgroup>
+                    <option disabled style={{ fontSize: '6px', color: '#CBD5E1', lineHeight: '6px' }}>&nbsp;</option>
+                    <optgroup label="✨ OTHER INTENTIONS">
+                      <option value="Others">Others</option>
+                    </optgroup>
                   </select>
                 </div>
                 {bookingServiceType === 'Others' && (
@@ -3363,26 +4869,48 @@ export default function App() {
                     />
                   </div>
                 )}
-                {bookingServiceType === 'Substation Mass' && (
-                  <div style={{ fontSize: '0.76rem', color: '#1D4ED8', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '6px', padding: '0.45rem 0.65rem', marginBottom: '0.75rem', lineHeight: '1.4' }}>
-                    🛵 <strong>Substation Note:</strong> Please specify the substation / village chapel name and distance from main parish in Venue Location below so Father is aware of travel.
-                  </div>
-                )}
-                {bookingServiceType === 'Concelebration (Feasts & Events)' && (
+                {(bookingServiceType === 'Concelebration' || bookingServiceType === 'Concelebration (Feasts & Events)') && (
                   <div style={{ fontSize: '0.76rem', color: '#6B21A8', background: '#FAF5FF', border: '1px solid #E9D5FF', borderRadius: '6px', padding: '0.45rem 0.65rem', marginBottom: '0.75rem', lineHeight: '1.4' }}>
                     🤝 <strong>Concelebration Note:</strong> Mention vestment/stole color or feast details in Notes so visiting Father can prepare accordingly.
                   </div>
                 )}
                 <div className="form-group">
-                  <label className="form-label">PARISH / CONVENT / VENUE LOCATION</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. St. Charles Convent / Infant Jesus Church"
-                    value={bookingLocation}
-                    onChange={(e) => setBookingLocation(e.target.value)}
-                    required
-                  />
+                  <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>PARISH / CONVENT / VENUE LOCATION *</span>
+                    {bookingLatitude && (
+                      <span style={{ color: '#166534', fontSize: '0.74rem', fontWeight: 600 }}>
+                        ✓ GPS Pin Set
+                      </span>
+                    )}
+                  </label>
+                  <div className="input-action-group">
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. St. Charles Convent / Infant Jesus Church"
+                      value={bookingLocation}
+                      onChange={(e) => setBookingLocation(e.target.value)}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className={`input-action-btn ${bookingLatitude ? 'active' : ''}`}
+                      onClick={() => handleDetectGPS('booking')}
+                      disabled={gpsDetecting}
+                      title={bookingLatitude ? "GPS Location Captured (Tap to update)" : "Get current GPS pin location"}
+                      style={{ padding: '0.35rem' }}
+                    >
+                      {gpsDetecting ? (
+                        <span style={{ fontSize: '0.9rem', animation: 'pulse 1s infinite' }}>⏳</span>
+                      ) : (
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" fill={bookingLatitude ? "#DCFCE7" : "none"} stroke={bookingLatitude ? "#16A34A" : "#0F172A"} />
+                          <circle cx="12" cy="10" r="3" stroke={bookingLatitude ? "#16A34A" : "#0F172A"} fill={bookingLatitude ? "#16A34A" : "none"} />
+                          <ellipse cx="12" cy="22" rx="6" ry="1.5" stroke={bookingLatitude ? "#16A34A" : "#94A3B8"} strokeWidth="1.5" fill="none" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <div className="form-group">
                   <label className="form-label">CHOOSE CELEBRATION DATE</label>
@@ -3449,13 +4977,14 @@ export default function App() {
                   />
                 </div>
 
-                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '0.65rem 0.85rem', fontSize: '0.75rem', color: '#64748B', lineHeight: '1.45', marginTop: '1rem' }}>
-                  💡 <strong>Facilitation Note:</strong> ArulApp broadcasts this need to nearby priests. Once priests respond, connect directly via WhatsApp or phone call to verify arrangements.
-                </div>
-
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem' }}>
-                  <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => setShowRequestModal(false)}>Cancel</button>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={formSubmitting}>Broadcast Request</button>
+                  <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => {
+                    setShowRequestModal(false);
+                    setEditingBooking(null);
+                  }}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={formSubmitting}>
+                    {editingBooking ? '💾 Save Changes & Notify' : 'Broadcast Request'}
+                  </button>
                 </div>
               </div>
             </form>
@@ -3513,7 +5042,14 @@ export default function App() {
                       style={{ display: 'none' }}
                       onChange={(e) => {
                         if (e.target.files && e.target.files[0]) {
-                          compressImage(e.target.files[0], (base64) => setEditProfilePhoto(base64));
+                          const file = e.target.files[0];
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            setCropZoom(1);
+                            setCropPan({ x: 0, y: 0 });
+                            setCropperModal({ rawImage: ev.target.result, target: 'edit' });
+                          };
+                          reader.readAsDataURL(file);
                         }
                       }}
                     />
@@ -3522,7 +5058,18 @@ export default function App() {
                     {editProfilePhoto ? 'Change your photo' : 'Upload your clerical photo'}
                   </span>
                   {editProfilePhoto && (
-                    <div style={{ marginTop: '0.35rem' }}>
+                    <div style={{ marginTop: '0.35rem', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCropZoom(1);
+                          setCropPan({ x: 0, y: 0 });
+                          setCropperModal({ rawImage: editProfilePhoto, target: 'edit' });
+                        }}
+                        style={{ background: 'none', border: 'none', color: '#0F766E', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
+                      >
+                        🔍 Adjust / Zoom
+                      </button>
                       <button
                         type="button"
                         onClick={() => setEditProfilePhoto(null)}
@@ -3699,27 +5246,44 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Residence Name & Locality */}
+                {/* Date of Birth & Live Age Calculation */}
                 <div className="form-group">
-                  <label className="form-label">RESIDENCE / CONVENT NAME</label>
+                  <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>DATE OF BIRTH *</span>
+                    {editDob && calculateAge(editDob) !== null && (
+                      <span style={{ color: '#166534', background: '#DCFCE7', padding: '2px 8px', borderRadius: '9999px', fontSize: '0.74rem', fontWeight: 700 }}>
+                        ✓ Age: {calculateAge(editDob)} years
+                      </span>
+                    )}
+                  </label>
+                  <input
+                    type="date"
+                    className="form-input"
+                    value={editDob}
+                    max={new Date().toISOString().split('T')[0]}
+                    onChange={(e) => setEditDob(e.target.value)}
+                    required
+                  />
+                  <span style={{ fontSize: '0.72rem', color: '#64748B', display: 'block', marginTop: '0.2rem' }}>
+                    Used to calculate age and ensure comfortable ministry schedules.
+                  </span>
+                </div>
+
+                {/* Parish / Convent Name */}
+                <div className="form-group">
+                  <label className="form-label">NAME OF THE PARISH / CONVENT</label>
                   <input
                     type="text"
                     className="form-input"
                     value={editResidenceName}
                     onChange={(e) => setEditResidenceName(e.target.value)}
-                    placeholder="e.g. Gnanalaya, Child Jesus Convent"
+                    placeholder="e.g. National Shrine of St. Thomas, Child Jesus Convent"
                   />
                 </div>
 
                 <div className="form-group">
                   <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>
-                      {editTitle === 'Sr.'
-                        ? 'CONVENT ADDRESS'
-                        : (editTitle === 'Fr.' && editClergyType === 'diocesan'
-                            ? 'PARISH ADDRESS'
-                            : 'RESIDENCE ADDRESS')}
-                    </span>
+                    <span>ADDRESS</span>
                     {editLatitude && (
                       <span style={{ color: '#166534', fontSize: '0.74rem', fontWeight: 600 }}>
                         ✓ GPS Pin Set
@@ -3756,7 +5320,6 @@ export default function App() {
                 </div>
 
                 {/* Postal PIN Code Field */}
-                {/* Postal PIN Code Field */}
                 <div className="form-group">
                   <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>POSTAL PIN CODE *</span>
@@ -3779,6 +5342,268 @@ export default function App() {
                   />
                 </div>
 
+                {/* Comfortable Modes of Travel (Multi-select) */}
+                <div className="form-group" style={{ marginTop: '0.65rem' }}>
+                  <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                      <span>🚀</span> COMFORTABLE MODES OF TRAVEL
+                    </span>
+                    <span style={{ fontSize: '0.72rem', color: '#166534', fontWeight: 700, background: '#DCFCE7', padding: '2px 8px', borderRadius: '9999px' }}>
+                      {editTransportModes.length} selected
+                    </span>
+                  </label>
+                  <span style={{ fontSize: '0.74rem', color: '#64748B', display: 'block', marginBottom: '0.55rem', lineHeight: '1.4' }}>
+                    Select all travel modes you are comfortable using for ministry assignments:
+                  </span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '0.45rem' }}>
+                    {TRANSPORT_OPTIONS.map(opt => {
+                      const isSelected = editTransportModes.includes(opt.id);
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              // Don't allow empty selection if it's the last one
+                              if (editTransportModes.length === 1) {
+                                showFeedback('error', 'Please select at least one travel option.');
+                                return;
+                              }
+                              setEditTransportModes(editTransportModes.filter(m => m !== opt.id));
+                            } else {
+                              setEditTransportModes([...editTransportModes, opt.id]);
+                            }
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            padding: '0.55rem 0.65rem',
+                            borderRadius: '8px',
+                            border: isSelected ? '1.5px solid #2563EB' : '1px solid #E2E8F0',
+                            background: isSelected ? '#EFF6FF' : '#FFFFFF',
+                            color: isSelected ? '#1E40AF' : '#334155',
+                            fontWeight: isSelected ? 700 : 500,
+                            fontSize: '0.78rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                            textAlign: 'left'
+                          }}
+                        >
+                          <span style={{ fontSize: '1.05rem', lineHeight: 1 }}>{opt.icon}</span>
+                          <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{opt.label}</span>
+                          {isSelected && (
+                            <span style={{ fontSize: '0.75rem', color: '#2563EB', fontWeight: 900 }}>✓</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Liturgical Languages (for priests and ministers) */}
+                <div className="form-group" style={{ marginTop: '0.65rem' }}>
+                  <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                      <span>🗣️</span> LITURGICAL LANGUAGES
+                    </span>
+                    <span style={{ fontSize: '0.72rem', color: '#1E40AF', fontWeight: 700, background: '#DBEAFE', padding: '2px 8px', borderRadius: '9999px' }}>
+                      {editLiturgicalLanguages.length} selected
+                    </span>
+                  </label>
+                  <span style={{ fontSize: '0.74rem', color: '#64748B', display: 'block', marginBottom: '0.55rem', lineHeight: '1.4' }}>
+                    Select all languages in which you can celebrate Holy Mass or conduct liturgical services (used to match explore feeds):
+                  </span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))', gap: '0.45rem' }}>
+                    {LANGUAGES.map(lang => {
+                      const isSelected = editLiturgicalLanguages.includes(lang);
+                      return (
+                        <button
+                          key={lang}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              if (editLiturgicalLanguages.length === 1) {
+                                showFeedback('error', 'Please keep at least one liturgical language selected.');
+                                return;
+                              }
+                              setEditLiturgicalLanguages(editLiturgicalLanguages.filter(l => l !== lang));
+                            } else {
+                              setEditLiturgicalLanguages([...editLiturgicalLanguages, lang]);
+                            }
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '0.5rem 0.65rem',
+                            borderRadius: '8px',
+                            border: isSelected ? '1.5px solid #2563EB' : '1px solid #E2E8F0',
+                            background: isSelected ? '#EFF6FF' : '#FFFFFF',
+                            color: isSelected ? '#1E40AF' : '#334155',
+                            fontWeight: isSelected ? 700 : 500,
+                            fontSize: '0.78rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease',
+                            textAlign: 'left'
+                          }}
+                        >
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lang}</span>
+                          {isSelected ? (
+                            <span style={{ fontSize: '0.75rem', color: '#2563EB', fontWeight: 900 }}>✓</span>
+                          ) : (
+                            <span style={{ fontSize: '0.75rem', color: '#CBD5E1' }}>+</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Maximum Travel Distance (for priests/ministers) */}
+                {editTitle === 'Fr.' && (
+                  <div className="form-group" style={{ marginTop: '0.5rem' }}>
+                    <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>MAXIMUM TRAVEL RADIUS</span>
+                      <span style={{ color: '#2563EB', fontWeight: 700 }}>{editMaxTravelKm} km</span>
+                    </label>
+                    <input
+                      type="range"
+                      min={5}
+                      max={100}
+                      step={5}
+                      value={editMaxTravelKm}
+                      onChange={(e) => setEditMaxTravelKm(Number(e.target.value))}
+                      style={{ width: '100%', accentColor: '#2563EB' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#94A3B8' }}>
+                      <span>5 km</span>
+                      <span>50 km</span>
+                      <span>100 km</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* About Me / Pastoral Ministry Statement */}
+                <div className="form-group" style={{ marginTop: '0.5rem' }}>
+                  <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>ABOUT ME / PASTORAL MINISTRY BIO</span>
+                    <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 500 }}>Optional</span>
+                  </label>
+                  <textarea
+                    className="form-input"
+                    rows={3}
+                    placeholder={editTitle === 'Sr.' ? 'e.g. Passionate catechist, family animator, hospital ministry and youth accompaniment...' : 'e.g. Preacher of retreats, charismatic renewal leader, parish missions, spiritual director...'}
+                    value={editAboutMe}
+                    onChange={(e) => setEditAboutMe(e.target.value)}
+                    style={{ resize: 'vertical', fontSize: '0.85rem', lineHeight: '1.45' }}
+                  />
+                </div>
+
+                {/* Social Media & Online Profiles (Collapsible) */}
+                <div style={{ marginTop: '0.85rem', background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', overflow: 'hidden' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowEditSocialLinks(!showEditSocialLinks)}
+                    style={{
+                      width: '100%',
+                      background: 'none',
+                      border: 'none',
+                      padding: '0.75rem 0.85rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      textAlign: 'left'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.95rem' }}>🌐</span>
+                      <div>
+                        <strong style={{ fontSize: '0.82rem', color: '#1E293B', display: 'block' }}>
+                          SOCIAL MEDIA & WEB LINKS
+                        </strong>
+                        <span style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                          {showEditSocialLinks
+                            ? 'Tap to collapse'
+                            : (editYoutube || editFacebook || editInstagram || editWebsite
+                                ? '✓ Links added (Tap to view / edit)'
+                                : 'Add YouTube, Facebook, Instagram, Website (Optional)')}
+                        </span>
+                      </div>
+                    </div>
+                    <span style={{ fontSize: '0.82rem', color: '#64748B', fontWeight: 700 }}>
+                      {showEditSocialLinks ? '▲' : '▼'}
+                    </span>
+                  </button>
+
+                  {showEditSocialLinks && (
+                    <div style={{ padding: '0 0.85rem 0.85rem', borderTop: '1px solid #E2E8F0', paddingTop: '0.75rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                        {/* YouTube */}
+                        <div>
+                          <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#DC2626', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
+                            <span>▶</span> YouTube (Sermons / Channel)
+                          </label>
+                          <input
+                            type="url"
+                            className="form-input"
+                            style={{ fontSize: '0.82rem', padding: '0.45rem 0.65rem' }}
+                            placeholder="https://youtube.com/@yourchannel or video link"
+                            value={editYoutube}
+                            onChange={(e) => setEditYoutube(e.target.value)}
+                          />
+                        </div>
+
+                        {/* Facebook */}
+                        <div>
+                          <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1D4ED8', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
+                            <span>f</span> Facebook Profile / Page
+                          </label>
+                          <input
+                            type="url"
+                            className="form-input"
+                            style={{ fontSize: '0.82rem', padding: '0.45rem 0.65rem' }}
+                            placeholder="https://facebook.com/yourprofile"
+                            value={editFacebook}
+                            onChange={(e) => setEditFacebook(e.target.value)}
+                          />
+                        </div>
+
+                        {/* Instagram */}
+                        <div>
+                          <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#DB2777', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
+                            <span>📷</span> Instagram Handle / URL
+                          </label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            style={{ fontSize: '0.82rem', padding: '0.45rem 0.65rem' }}
+                            placeholder="e.g. @father_arul or https://instagram.com/..."
+                            value={editInstagram}
+                            onChange={(e) => setEditInstagram(e.target.value)}
+                          />
+                        </div>
+
+                        {/* Website / Blog */}
+                        <div>
+                          <label style={{ fontSize: '0.72rem', fontWeight: 700, color: '#0F766E', display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
+                            <span>🔗</span> Personal Website / Blog
+                          </label>
+                          <input
+                            type="url"
+                            className="form-input"
+                            style={{ fontSize: '0.82rem', padding: '0.45rem 0.65rem' }}
+                            placeholder="https://yourministry.org or blog"
+                            value={editWebsite}
+                            onChange={(e) => setEditWebsite(e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Location & Clerical Status Accuracy Advisory Note */}
                 <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderLeft: '3.5px solid #2563EB', borderRadius: '8px', padding: '0.75rem 0.95rem', marginTop: '1.25rem', fontSize: '0.77rem', color: '#475569', lineHeight: '1.5' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: '#1E40AF', marginBottom: '0.2rem' }}>
@@ -3790,7 +5615,7 @@ export default function App() {
                     <span>Important Profile Accuracy Notice</span>
                   </div>
                   <span>
-                    Ministry suggestions, notifications, and celebration bookings are matched based on your <strong>clerical status</strong> and <strong>residence location</strong>. Please ensure this information is accurate so you receive relevant liturgical needs in your area.
+                    Ministry suggestions, notifications, and celebration bookings are matched based on your <strong>clerical status</strong> and <strong>address</strong>. Please ensure this information is accurate so you receive relevant liturgical needs in your area.
                   </span>
                 </div>
 
@@ -3882,7 +5707,9 @@ export default function App() {
                       boxShadow: '0 4px 12px rgba(37, 211, 102, 0.25)'
                     }}
                   >
-                    <span>💬</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                    </svg>
                     <span>Send Login Details via WhatsApp</span>
                   </a>
 
@@ -3967,6 +5794,25 @@ export default function App() {
                     </div>
                   </div>
 
+                  {/* Date of Birth & Live Age */}
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>DATE OF BIRTH</span>
+                      {onboardDob && calculateAge(onboardDob) !== null && (
+                        <span style={{ color: '#166534', background: '#DCFCE7', padding: '1px 7px', borderRadius: '9999px', fontSize: '0.72rem', fontWeight: 700 }}>
+                          Age: {calculateAge(onboardDob)} yrs
+                        </span>
+                      )}
+                    </label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={onboardDob}
+                      max={new Date().toISOString().split('T')[0]}
+                      onChange={(e) => setOnboardDob(e.target.value)}
+                    />
+                  </div>
+
                   {/* Sister/Religious Congregation & Abbreviation */}
                   <div className="form-row" style={{ marginBottom: 0 }}>
                     <div className="form-group" style={{ flex: 2, marginBottom: 0 }}>
@@ -3999,15 +5845,15 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Convent / Residence Name */}
+                  {/* Parish / Convent Name */}
                   <div className="form-group" style={{ marginBottom: 0 }}>
                     <label className="form-label">
-                      {onboardTitle === 'Sr.' ? 'CONVENT NAME' : 'PARISH / RESIDENCE NAME'}
+                      NAME OF THE PARISH / CONVENT
                     </label>
                     <input
                       type="text"
                       className="form-input"
-                      placeholder={onboardTitle === 'Sr.' ? 'e.g. St. Joseph’s Convent, Dindigul' : 'e.g. St. Anthony’s Church'}
+                      placeholder="e.g. National Shrine of St. Thomas, St. Joseph’s Convent"
                       value={onboardResidenceName}
                       onChange={(e) => setOnboardResidenceName(e.target.value)}
                     />
@@ -4016,7 +5862,7 @@ export default function App() {
                   {/* Postal PIN Code & City */}
                   <div className="form-row" style={{ marginBottom: 0 }}>
                     <div className="form-group" style={{ flex: 2, marginBottom: 0 }}>
-                      <label className="form-label">STREET ADDRESS / TOWN</label>
+                      <label className="form-label">ADDRESS</label>
                       <input
                         type="text"
                         className="form-input"
@@ -4312,63 +6158,82 @@ export default function App() {
                             );
                             const partnerMobile = isConfirmedPriest ? b.requester_mobile : b.responder_mobile;
 
-                            return (
-                              <div
-                                key={b.id}
-                                style={{
-                                  background: '#FFFFFF',
-                                  border: '1px solid #BBF7D0',
-                                  borderLeft: '4px solid #16A34A',
-                                  borderRadius: '8px',
-                                  padding: '0.75rem 0.9rem',
-                                  display: 'flex',
-                                  justifyContent: 'space-between',
-                                  alignItems: 'center',
-                                  gap: '0.75rem',
-                                  flexWrap: 'wrap'
-                                }}
-                              >
-                                <div style={{ flex: 1, minWidth: '200px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.2rem' }}>
-                                    <strong style={{ fontSize: '0.88rem', color: '#0F172A' }}>
-                                      {b.service_type || 'Holy Mass'}
-                                    </strong>
-                                    <span style={{ fontSize: '0.72rem', color: '#166534', background: '#DCFCE7', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
-                                      Confirmed
-                                    </span>
+                              return (
+                                <div
+                                  key={b.id}
+                                  style={{
+                                    background: '#FFFFFF',
+                                    border: isConfirmedPriest ? '1px solid #BBF7D0' : '1px solid #BFDBFE',
+                                    borderLeft: isConfirmedPriest ? '4px solid #16A34A' : '4px solid #2563EB',
+                                    borderRadius: '8px',
+                                    padding: '0.75rem 0.9rem',
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    gap: '0.75rem',
+                                    flexWrap: 'wrap'
+                                  }}
+                                >
+                                  <div style={{ flex: 1, minWidth: '200px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '0.2rem', flexWrap: 'wrap' }}>
+                                      <strong style={{ fontSize: '0.88rem', color: '#0F172A' }}>
+                                        {b.service_type || 'Holy Mass'}
+                                      </strong>
+                                      <span style={{ fontSize: '0.72rem', color: '#166534', background: '#DCFCE7', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                                        Confirmed
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: '0.70rem',
+                                          color: isConfirmedPriest ? '#15803D' : '#1D4ED8',
+                                          background: isConfirmedPriest ? '#F0FDF4' : '#EFF6FF',
+                                          border: isConfirmedPriest ? '1px solid #BBF7D0' : '1px solid #BFDBFE',
+                                          padding: '1px 6px',
+                                          borderRadius: '4px',
+                                          fontWeight: 700
+                                        }}
+                                      >
+                                        {isConfirmedPriest ? '🙏 Serving (In My Schedule)' : '📝 Requested by You (In My Requests)'}
+                                      </span>
+                                    </div>
+                                    <div style={{ fontSize: '0.78rem', color: '#0284C7', fontWeight: 700, marginBottom: '0.2rem' }}>
+                                      ⏰ {time}
+                                    </div>
+                                    <div style={{ fontSize: '0.76rem', color: '#475569' }}>
+                                      📍 {b.location || 'Parish Chapel'} • With {partnerName}
+                                    </div>
                                   </div>
-                                  <div style={{ fontSize: '0.78rem', color: '#0284C7', fontWeight: 700, marginBottom: '0.2rem' }}>
-                                    ⏰ {time}
-                                  </div>
-                                  <div style={{ fontSize: '0.76rem', color: '#475569' }}>
-                                    📍 {b.location || 'Parish Chapel'} • With {partnerName}
-                                  </div>
-                                </div>
 
-                                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                                  {partnerMobile && (
-                                    <a
-                                      href={`tel:${partnerMobile}`}
-                                      className="btn btn-call btn-sm"
+                                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                                    {partnerMobile && (
+                                      <a
+                                        href={`tel:${partnerMobile}`}
+                                        className="btn btn-call btn-sm"
+                                        style={{ padding: '0.4rem 0.65rem', fontSize: '0.74rem', fontWeight: 700 }}
+                                      >
+                                        📞 Call
+                                      </a>
+                                    )}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setShowCalendarModal(false);
+                                        if (b.responder_id === user.id) {
+                                          setPriestRolePerspective('celebrate');
+                                          setRequestsTab('accepted');
+                                        } else {
+                                          setPriestRolePerspective('request');
+                                          setRequestsTab('accepted');
+                                        }
+                                      }}
+                                      className="btn btn-secondary btn-sm"
                                       style={{ padding: '0.4rem 0.65rem', fontSize: '0.74rem', fontWeight: 700 }}
                                     >
-                                      📞 Call
-                                    </a>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setShowCalendarModal(false);
-                                      setRequestsTab('accepted');
-                                    }}
-                                    className="btn btn-secondary btn-sm"
-                                    style={{ padding: '0.4rem 0.65rem', fontSize: '0.74rem', fontWeight: 700 }}
-                                  >
-                                    View Card ↗
-                                  </button>
+                                      View in {isConfirmedPriest ? 'My Schedule' : 'My Requests'} ↗
+                                    </button>
+                                  </div>
                                 </div>
-                              </div>
-                            );
+                              );
                           })}
                         </div>
                       )}
@@ -4381,6 +6246,709 @@ export default function App() {
         </div>
       )}
       {/* --- INSTANT CLERICAL STATUS SELECTION LAYER PROMPT --- */}
+
+      {/* FAVORITE MINISTERS DIRECT DIRECTORY MODAL */}
+      {showFavoritesModal && (() => {
+        const userFavs = Array.isArray(user?.favorite_ministers) ? user.favorite_ministers.map(Number) : [];
+
+        // Collect all minister accounts matching favorite ids from availablePriests, bookings applicants, or users pool
+        const favoriteList = [];
+        const seenIds = new Set();
+
+        (availablePriests || []).forEach(p => {
+          const pId = Number(p.priest_id || p.id);
+          if (userFavs.includes(pId) && !seenIds.has(pId)) {
+            seenIds.add(pId);
+            favoriteList.push({
+              ...p,
+              priest_id: pId,
+              priest_name: p.priest_name || p.name,
+              priest_title: p.priest_title || p.title || 'Fr.',
+              clergy_type: p.clergy_type || 'religious',
+              congregation_abbr: p.congregation_abbr || '',
+              diocese_province: p.diocese_province || '',
+              religious_order: p.religious_order || '',
+              residence_name: p.residence_name || '',
+              residence_address: p.residence_address || '',
+              priest_mobile: p.priest_mobile || p.mobile || '',
+              priest_email: p.priest_email || p.email || '',
+              profile_photo: p.profile_photo || null,
+              about_me: p.about_me || '',
+              social_links: p.social_links || {},
+              transport_modes: p.transport_modes || [p.transport_mode || 'own_bike'],
+              dob: p.dob || null,
+              age: p.age !== undefined && p.age !== null ? p.age : calculateAge(p.dob)
+            });
+          }
+        });
+
+        (bookings || []).forEach(b => {
+          (b.applicants || []).forEach(cand => {
+            const cId = Number(cand.priest_id);
+            if (userFavs.includes(cId) && !seenIds.has(cId)) {
+              seenIds.add(cId);
+              favoriteList.push({ ...cand });
+            }
+          });
+        });
+
+        return (
+          <div className="modal-overlay" style={{ zIndex: 99980 }} onClick={() => setShowFavoritesModal(false)}>
+            <div
+              className="modal-container"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: '520px',
+                width: '94%',
+                maxHeight: '85vh',
+                display: 'flex',
+                flexDirection: 'column',
+                borderRadius: '18px',
+                padding: '0',
+                background: '#FFFFFF',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                overflow: 'hidden'
+              }}
+            >
+              {/* Modal Header */}
+              <div style={{ padding: '1.25rem 1.5rem', background: '#FEFCE8', borderBottom: '1px solid #FEF08A', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#FEF08A', color: '#854D0E', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>
+                    ★
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#854D0E' }}>
+                      Favorite Ministers
+                    </h3>
+                    <div style={{ fontSize: '0.78rem', color: '#A16207', fontWeight: 600 }}>
+                      {userFavs.length} {userFavs.length === 1 ? 'minister' : 'ministers'} saved for quick selection
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowFavoritesModal(false)}
+                  style={{
+                    background: '#FFFFFF',
+                    border: '1px solid #FEF08A',
+                    color: '#854D0E',
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '9999px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1rem',
+                    fontWeight: 700
+                  }}
+                  title="Close"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {userFavs.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: '#64748B' }}>
+                    <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem', opacity: 0.7 }}>⭐</div>
+                    <div style={{ fontWeight: 800, color: '#0F172A', fontSize: '1.05rem', marginBottom: '0.35rem' }}>
+                      No Favorite Ministers Yet
+                    </div>
+                    <div style={{ fontSize: '0.84rem', color: '#64748B', maxWidth: '320px', margin: '0 auto', lineHeight: 1.5 }}>
+                      When reviewing ministers who offer to celebrate, tap the <strong>☆</strong> star next to their name to save them as a favorite for future requests!
+                    </div>
+                  </div>
+                ) : favoriteList.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#64748B' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>★</div>
+                    <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.96rem' }}>
+                      {userFavs.length} Minister(s) Saved
+                    </div>
+                    <div style={{ fontSize: '0.82rem', color: '#64748B', marginTop: '4px' }}>
+                      Your favorited ministers will automatically be highlighted with a <strong>★ Favorite</strong> badge at the top whenever they volunteer for your requests.
+                    </div>
+                  </div>
+                ) : (
+                  favoriteList.map(cand => {
+                    const isCandSister = cand.priest_title === 'Sr.' || cand.clergy_type === 'convent' || cand.clergy_type === 'convent_sister';
+                    const candDisplayName = formatEcclesiasticalName(cand.priest_title || (isCandSister ? 'Sr.' : 'Fr.'), cand.priest_name, cand.congregation_abbr);
+                    const candAffiliation = cand.clergy_type === 'religious' ? (cand.congregation_abbr || cand.religious_order) : cand.diocese_province;
+                    const candAge = cand.age !== undefined && cand.age !== null ? cand.age : calculateAge(cand.dob);
+
+                    return (
+                      <div
+                        key={cand.priest_id}
+                        style={{
+                          background: '#FEFCE8',
+                          border: '1.5px solid #FDE047',
+                          borderRadius: '12px',
+                          padding: '0.85rem 1rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '12px'
+                        }}
+                      >
+                        <div
+                          style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1, cursor: 'pointer' }}
+                          onClick={() => {
+                            setShowFavoritesModal(false);
+                            setViewMinisterModal({ minister: cand, booking: null });
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: '42px',
+                              height: '42px',
+                              borderRadius: '9999px',
+                              overflow: 'hidden',
+                              background: '#FFFFFF',
+                              border: '2px solid #FDE047',
+                              flexShrink: 0,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            {cand.profile_photo ? (
+                              <img src={cand.profile_photo} alt={cand.priest_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              renderDefaultAvatar(cand.priest_title || (isCandSister ? 'Sr.' : 'Fr.'), cand.clergy_type, 22)
+                            )}
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontWeight: 800, color: '#0F172A', fontSize: '0.94rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {candDisplayName}
+                              </span>
+                              <span style={{ fontSize: '0.66rem', fontWeight: 800, color: '#854D0E', background: '#FEF9C3', border: '1px solid #FDE047', padding: '1px 5px', borderRadius: '9999px' }}>
+                                ★ Fav
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {candAffiliation || 'Catholic Clergy'}{candAge !== null ? ' • ' + candAge + ' yrs' : ''}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowFavoritesModal(false);
+                              setViewMinisterModal({ minister: cand, booking: null });
+                            }}
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '0.36rem 0.65rem', fontSize: '0.76rem', fontWeight: 700 }}
+                          >
+                            Profile ↗
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleFavorite(cand.priest_id, candDisplayName)}
+                            title="Remove from favorites"
+                            style={{
+                              background: '#FFFFFF',
+                              border: '1px solid #FDE047',
+                              color: '#EAB308',
+                              width: '32px',
+                              height: '32px',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '1rem'
+                            }}
+                          >
+                            ★
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 8. DETAILED MINISTER PROFILE MODAL (FOR REQUESTER TO INSPECT BEFORE CONFIRMING) */}
+      {viewMinisterModal && (() => {
+        const { minister: cand, booking: b } = viewMinisterModal;
+        const isCandSister = cand.priest_title === 'Sr.' || cand.clergy_type === 'convent' || cand.clergy_type === 'convent_sister';
+        const candTitle = cand.priest_title || (isCandSister ? 'Sr.' : 'Fr.');
+        const displayName = formatEcclesiasticalName(candTitle, cand.priest_name, cand.congregation_abbr);
+        const { date, time } = b ? formatDateTime(b.datetime, b.datetime_end) : { date: '', time: '' };
+        const cleanServiceName = b ? (b.service_type || 'Sacramental Ministry') : 'Ministry';
+        const candAge = cand.age !== undefined && cand.age !== null ? cand.age : calculateAge(cand.dob);
+
+        const soc = typeof cand.social_links === 'string'
+          ? (() => { try { return JSON.parse(cand.social_links); } catch(e) { return {}; } })()
+          : (cand.social_links || {});
+        const hasAnySocial = soc.youtube || soc.facebook || soc.instagram || soc.website || cand.priest_mobile;
+
+        const formatHref = (url, prefix = '') => {
+          if (!url) return '';
+          if (url.startsWith('http://') || url.startsWith('https://')) return url;
+          if (prefix && !url.startsWith('@')) return `${prefix}${url}`;
+          if (prefix && url.startsWith('@')) return `${prefix}${url.slice(1)}`;
+          return `https://${url}`;
+        };
+
+        return (
+          <div className="modal-overlay" style={{ zIndex: 99990 }} onClick={() => setViewMinisterModal(null)}>
+            <div
+              className="modal-container"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                maxWidth: '480px',
+                width: '94%',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+                borderRadius: '18px',
+                padding: '0',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                background: '#FFFFFF'
+              }}
+            >
+              {/* Minimal Clean Header with Close Button */}
+              <div style={{ position: 'relative', padding: '1.75rem 1.5rem 1.25rem', borderBottom: '1px solid #F1F5F9', background: '#FAFAFA' }}>
+                {/* Favorite Star Button in Modal Header */}
+                {(() => {
+                  const userFavs = Array.isArray(user?.favorite_ministers) ? user.favorite_ministers : [];
+                  const isModalFav = userFavs.includes(Number(cand.priest_id || cand.id));
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleFavorite(cand.priest_id || cand.id, displayName)}
+                      style={{
+                        position: 'absolute',
+                        top: '1rem',
+                        left: '1rem',
+                        background: isModalFav ? '#FEFCE8' : '#FFFFFF',
+                        border: isModalFav ? '1.5px solid #FDE047' : '1px solid #E2E8F0',
+                        color: isModalFav ? '#CA8A04' : '#94A3B8',
+                        height: '32px',
+                        padding: '0 10px',
+                        borderRadius: '9999px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '0.76rem',
+                        fontWeight: 700,
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                      }}
+                      title={isModalFav ? "Favorited Minister" : "Mark as Favorite Minister"}
+                    >
+                      <span style={{ fontSize: '1rem', color: isModalFav ? '#EAB308' : '#94A3B8' }}>{isModalFav ? '★' : '☆'}</span>
+                      <span>{isModalFav ? 'Favorite' : 'Add Favorite'}</span>
+                    </button>
+                  );
+                })()}
+
+                <button
+                  type="button"
+                  onClick={() => setViewMinisterModal(null)}
+                  style={{
+                    position: 'absolute',
+                    top: '1rem',
+                    right: '1rem',
+                    background: '#FFFFFF',
+                    border: '1px solid #E2E8F0',
+                    color: '#64748B',
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '9999px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '1rem',
+                    fontWeight: 600,
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                  }}
+                  title="Close"
+                >
+                  ✕
+                </button>
+
+                {/* Centered Avatar & Primary Clerical Profile */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+                  <div
+                    style={{
+                      width: '74px',
+                      height: '74px',
+                      borderRadius: '9999px',
+                      overflow: 'hidden',
+                      border: '3px solid #FFFFFF',
+                      boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
+                      background: '#F1F5F9',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: '0.75rem'
+                    }}
+                  >
+                    {cand.profile_photo ? (
+                      <img src={cand.profile_photo} alt={cand.priest_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      renderDefaultAvatar(candTitle, cand.clergy_type, 68)
+                    )}
+                  </div>
+
+                  <h3 style={{ margin: '0 0 0.2rem', fontSize: '1.25rem', fontWeight: 800, color: '#0F172A', letterSpacing: '-0.01em' }}>
+                    {displayName}
+                  </h3>
+
+                  <div style={{ fontSize: '0.84rem', color: '#64748B', fontWeight: 600, marginBottom: '0.5rem' }}>
+                    {cand.clergy_type === 'religious'
+                      ? (cand.religious_order || 'Religious Congregation')
+                      : (cand.diocese_province?.toLowerCase().includes('diocese')
+                          ? cand.diocese_province
+                          : `Diocese of ${cand.diocese_province || 'Madras-Mylapore'}`)}
+                  </div>
+
+                  {/* Clean Subtle Badges Row (Role + Age) */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                    <span
+                      style={{
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        color: isCandSister ? '#9D174D' : '#1E40AF',
+                        background: isCandSister ? '#FDF2F8' : '#EFF6FF',
+                        border: isCandSister ? '1px solid #FBCFE8' : '1px solid #DBEAFE',
+                        padding: '2px 10px',
+                        borderRadius: '9999px'
+                      }}
+                    >
+                      {isCandSister
+                        ? 'Catholic Religious Sister'
+                        : (cand.clergy_type === 'diocesan' ? 'Diocesan Priest' : 'Religious Priest')}
+                    </span>
+                    {candAge !== null && (
+                      <span
+                        style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          color: '#92400E',
+                          background: '#FEF3C7',
+                          border: '1px solid #FDE68A',
+                          padding: '2px 9px',
+                          borderRadius: '9999px'
+                        }}
+                      >
+                        Age : {candAge} Yrs
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Details Body */}
+              <div style={{ padding: '1.25rem 1.5rem 1.5rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+
+                  {/* 1. Address & Proximity */}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#475569' }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                        <circle cx="12" cy="10" r="3" />
+                      </svg>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          Address
+                        </div>
+                        {cand.distance_km !== null && (
+                          <div style={{ fontSize: '0.74rem', fontWeight: 700, color: '#15803D', background: '#DCFCE7', padding: '2px 8px', borderRadius: '9999px', whiteSpace: 'nowrap' }}>
+                            {cand.distance_km} km away
+                          </div>
+                        )}
+                      </div>
+                      {cand.residence_name && (
+                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>
+                          {cand.residence_name}
+                        </div>
+                      )}
+                      <div style={{ fontSize: cand.residence_name ? '0.8rem' : '0.9rem', fontWeight: cand.residence_name ? 400 : 600, color: cand.residence_name ? '#64748B' : '#0F172A', marginTop: '1px', lineHeight: '1.4' }}>
+                        {cand.residence_address || 'Address not specified'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 2. Comfortable Modes of Transport */}
+                  {(() => {
+                    const candModes = Array.isArray(cand.transport_modes) && cand.transport_modes.length > 0
+                      ? cand.transport_modes
+                      : (cand.transport_mode ? [cand.transport_mode] : ['own_bike']);
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#475569' }}>
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="4" width="18" height="12" rx="2" />
+                            <circle cx="7" cy="18" r="2" />
+                            <path d="M9 18h6" />
+                            <circle cx="17" cy="18" r="2" />
+                          </svg>
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
+                            Comfortable Travel Modes
+                          </div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                            {candModes.map(mId => {
+                              const found = TRANSPORT_OPTIONS.find(o => o.id === mId);
+                              const label = found ? found.label : mId.replace(/_/g, ' ');
+                              return (
+                                <span
+                                  key={mId}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '5px',
+                                    padding: '4px 10px',
+                                    borderRadius: '6px',
+                                    background: '#F8FAFC',
+                                    border: '1px solid #E2E8F0',
+                                    color: '#334155',
+                                    fontSize: '0.76rem',
+                                    fontWeight: 600
+                                  }}
+                                >
+                                  <span>{label}</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* 3. About Me / Pastoral Statement */}
+                  {cand.about_me && cand.about_me.trim() ? (
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                      <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#475569' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
+                        </svg>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '2px' }}>
+                          About Ministry
+                        </div>
+                        <div style={{ fontSize: '0.82rem', color: '#334155', lineHeight: '1.5', whiteSpace: 'pre-line' }}>
+                          {cand.about_me}
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {/* 4. Contact Details (Phone & Email) */}
+                  {(cand.priest_mobile || cand.priest_email) && (
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                      <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#475569' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                        </svg>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
+                          Direct Contact
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', fontSize: '0.82rem' }}>
+                          {cand.priest_mobile && (
+                            <a
+                              href={`tel:${cand.priest_mobile}`}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#0F766E', fontWeight: 700, textDecoration: 'none' }}
+                            >
+                              <span>{formatMobileDisplay(cand.priest_mobile)}</span>
+                            </a>
+                          )}
+                          {cand.priest_email && (
+                            <a
+                              href={`mailto:${cand.priest_email}`}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#2563EB', fontWeight: 600, textDecoration: 'none' }}
+                            >
+                              <span>{cand.priest_email}</span>
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 5. Web & Social Media */}
+                  {hasAnySocial && (
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                      <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#F1F5F9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#475569' }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="2" y1="12" x2="22" y2="12" />
+                          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                        </svg>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
+                          Social Media Links
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                          {cand.priest_mobile && (
+                            <a
+                              href={`https://wa.me/${cand.priest_mobile.replace(/\D/g, '')}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Chat on WhatsApp"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '34px',
+                                height: '34px',
+                                borderRadius: '9999px',
+                                background: '#F0FDF4',
+                                border: '1px solid #BBF7D0',
+                                color: '#16A34A',
+                                textDecoration: 'none'
+                              }}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                              </svg>
+                            </a>
+                          )}
+                          {soc.youtube && (
+                            <a
+                              href={formatHref(soc.youtube)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="YouTube"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '34px',
+                                height: '34px',
+                                borderRadius: '9999px',
+                                background: '#FEF2F2',
+                                border: '1px solid #FECACA',
+                                color: '#DC2626',
+                                textDecoration: 'none'
+                              }}
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                              </svg>
+                            </a>
+                          )}
+                          {soc.facebook && (
+                            <a
+                              href={formatHref(soc.facebook)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Facebook"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '34px',
+                                height: '34px',
+                                borderRadius: '9999px',
+                                background: '#EFF6FF',
+                                border: '1px solid #BFDBFE',
+                                color: '#1D4ED8',
+                                textDecoration: 'none'
+                              }}
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
+                              </svg>
+                            </a>
+                          )}
+                          {soc.instagram && (
+                            <a
+                              href={formatHref(soc.instagram, 'https://instagram.com/')}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Instagram"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '34px',
+                                height: '34px',
+                                borderRadius: '9999px',
+                                background: '#FDF2F8',
+                                border: '1px solid #FBCFE8',
+                                color: '#DB2777',
+                                textDecoration: 'none'
+                              }}
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                                <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/>
+                                <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/>
+                              </svg>
+                            </a>
+                          )}
+                          {soc.website && (
+                            <a
+                              href={formatHref(soc.website)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Official Website / Blog"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '34px',
+                                height: '34px',
+                                borderRadius: '9999px',
+                                background: '#F0FDFA',
+                                border: '1px solid #99F6E4',
+                                color: '#0F766E',
+                                textDecoration: 'none'
+                              }}
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                              </svg>
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Close Button */}
+                <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid #F1F5F9' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-block"
+                    onClick={() => setViewMinisterModal(null)}
+                    style={{ padding: '0.65rem', fontSize: '0.86rem', fontWeight: 600, borderRadius: '8px' }}
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+
       {showTitlePickerModal && (
         <div
           className="modal-overlay"
@@ -4500,6 +7068,167 @@ export default function App() {
             >
               Dismiss
             </button>
+          </div>
+        </div>
+      )}
+      {/* --- PHOTO CROP & ZOOM MODAL --- */}
+      {cropperModal && (
+        <div
+          className="modal-overlay"
+          style={{ zIndex: 999999, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setCropperModal(null)}
+        >
+          <div
+            className="modal-container"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '380px',
+              width: '92%',
+              borderRadius: '20px',
+              padding: '1.5rem',
+              background: '#FFFFFF',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              textAlign: 'center'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 800, color: '#0F172A', fontSize: '1.05rem' }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7" />
+                  <line x1="16" y1="5" x2="22" y2="5" />
+                  <line x1="19" y1="2" x2="19" y2="8" />
+                  <circle cx="9" cy="9" r="2" />
+                  <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+                </svg>
+                <span>Adjust Clerical Photo</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCropperModal(null)}
+                style={{
+                  background: '#F1F5F9',
+                  border: 'none',
+                  color: '#64748B',
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '9999px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 700
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Circular Viewport Preview with Drag-to-Pan */}
+            <div
+              style={{
+                position: 'relative',
+                width: '240px',
+                height: '240px',
+                margin: '0 auto 1.25rem',
+                borderRadius: '50%',
+                overflow: 'hidden',
+                background: '#0F172A',
+                boxShadow: '0 0 0 4px #0F766E, 0 10px 25px rgba(0,0,0,0.2)',
+                cursor: cropDragging ? 'grabbing' : 'grab',
+                userSelect: 'none',
+                touchAction: 'none'
+              }}
+              onMouseDown={(e) => {
+                setCropDragging(true);
+                setCropDragStart({ x: e.clientX - cropPan.x, y: e.clientY - cropPan.y });
+              }}
+              onMouseMove={(e) => {
+                if (!cropDragging) return;
+                setCropPan({
+                  x: e.clientX - cropDragStart.x,
+                  y: e.clientY - cropDragStart.y
+                });
+              }}
+              onMouseUp={() => setCropDragging(false)}
+              onMouseLeave={() => setCropDragging(false)}
+              onTouchStart={(e) => {
+                if (e.touches && e.touches[0]) {
+                  setCropDragging(true);
+                  setCropDragStart({ x: e.touches[0].clientX - cropPan.x, y: e.touches[0].clientY - cropPan.y });
+                }
+              }}
+              onTouchMove={(e) => {
+                if (!cropDragging || !e.touches || !e.touches[0]) return;
+                setCropPan({
+                  x: e.touches[0].clientX - cropDragStart.x,
+                  y: e.touches[0].clientY - cropDragStart.y
+                });
+              }}
+              onTouchEnd={() => setCropDragging(false)}
+            >
+              <img
+                src={cropperModal.rawImage}
+                alt="Adjust preview"
+                draggable={false}
+                style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: `translate(-50%, -50%) translate(${cropPan.x}px, ${cropPan.y}px) scale(${cropZoom})`,
+                  transformOrigin: 'center center',
+                  maxWidth: '100%',
+                  maxHeight: '100%',
+                  objectFit: 'contain',
+                  pointerEvents: 'none',
+                  transition: cropDragging ? 'none' : 'transform 0.05s ease'
+                }}
+              />
+            </div>
+
+            <div style={{ fontSize: '0.74rem', color: '#64748B', marginBottom: '1rem', fontWeight: 500 }}>
+              💡 Drag to reposition &bull; Use slider below to zoom
+            </div>
+
+            {/* Zoom Slider Control */}
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '0.75rem 1rem', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.76rem', fontWeight: 700, color: '#334155' }}>
+                <span>Zoom Level</span>
+                <span style={{ color: '#0F766E' }}>{Math.round(cropZoom * 100)}%</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '0.85rem', color: '#94A3B8' }}>🔍-</span>
+                <input
+                  type="range"
+                  min="1"
+                  max="3"
+                  step="0.05"
+                  value={cropZoom}
+                  onChange={(e) => setCropZoom(parseFloat(e.target.value))}
+                  style={{ flex: 1, accentColor: '#0F766E', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: '0.85rem', color: '#94A3B8' }}>🔍+</span>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setCropperModal(null)}
+                style={{ flex: 1, padding: '0.65rem', borderRadius: '10px', fontSize: '0.86rem' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleApplyCroppedImage}
+                style={{ flex: 2, padding: '0.65rem', borderRadius: '10px', fontSize: '0.86rem', fontWeight: 700, background: '#0F766E' }}
+              >
+                ✓ Apply & Crop Photo
+              </button>
+            </div>
           </div>
         </div>
       )}
