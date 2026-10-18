@@ -46,6 +46,7 @@ export default function App() {
   const [myStatus, setMyStatus] = useState('available');
   const [requestsTab, setRequestsTab] = useState('open'); // 'open' (Explore) vs 'my_requests' vs 'accepted' (Confirmed) vs 'history'
   const [confirmedRoleFilter, setConfirmedRoleFilter] = useState('all'); // 'all', 'serving' (I am celebrant/minister), 'request' (I posted the request)
+  const [historyRoleFilter, setHistoryRoleFilter] = useState('all'); // 'all', 'serving' (celebrated by me), 'request' (requested by me)
   const [priestFilterRadius, setPriestFilterRadius] = useState(25); // 25 km default, up to 100 or 'all' km
   const [priestSortBy, setPriestSortBy] = useState('smart_match'); // 'smart_match' (intelligent explore score), 'date_asc', 'distance_asc', 'recent_posted', 'date_desc'
   const [priestSortOrder, setPriestSortOrder] = useState('asc'); // 'asc' (normal) vs 'desc' (reversed)
@@ -2813,6 +2814,8 @@ export default function App() {
                   }
                   return false;
                 });
+                const myHistoryServing = myHistoryAll.filter(b => b.responder_id === user.id || (b.withdrawals || []).some(w => w.priest_id === user.id));
+                const myHistoryRequested = myHistoryAll.filter(b => b.requester_id === user.id);
 
                 const userGreetingName = formatEcclesiasticalName(user?.title || (isSister ? 'Sr.' : 'Fr.'), user?.name, user?.congregation_abbr);
 
@@ -3001,6 +3004,77 @@ export default function App() {
                               }}
                             >
                               <span>📋 My Posts ({myConfirmedRequested.length})</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* RIGHT-ALIGNED COMPACT TOOLBAR CONTROLS: HISTORY ROLE FILTER CHIPS */}
+                        {requestsTab === 'history' && (myHistoryServing.length > 0 && myHistoryRequested.length > 0) && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginLeft: 'auto', paddingBottom: '0.35rem' }}>
+                            <span className="feed-control-label" style={{ fontSize: '0.68rem', letterSpacing: '0.03em', margin: '0 4px 0 0', color: '#64748B' }}>
+                              Show:
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setHistoryRoleFilter('all')}
+                              style={{
+                                border: '1px solid',
+                                borderColor: historyRoleFilter === 'all' ? '#475569' : '#CBD5E1',
+                                background: historyRoleFilter === 'all' ? '#F1F5F9' : '#FFFFFF',
+                                color: historyRoleFilter === 'all' ? '#0F172A' : '#475569',
+                                fontWeight: historyRoleFilter === 'all' ? 700 : 500,
+                                fontSize: '0.74rem',
+                                padding: '0.22rem 0.55rem',
+                                borderRadius: '9999px',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              All ({myHistoryAll.length})
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setHistoryRoleFilter('serving')}
+                              style={{
+                                border: '1px solid',
+                                borderColor: historyRoleFilter === 'serving' ? '#1D4ED8' : '#CBD5E1',
+                                background: historyRoleFilter === 'serving' ? '#EFF6FF' : '#FFFFFF',
+                                color: historyRoleFilter === 'serving' ? '#1D4ED8' : '#475569',
+                                fontWeight: historyRoleFilter === 'serving' ? 700 : 500,
+                                fontSize: '0.74rem',
+                                padding: '0.22rem 0.55rem',
+                                borderRadius: '9999px',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <span>🤝 Celebrated ({myHistoryServing.length})</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setHistoryRoleFilter('request')}
+                              style={{
+                                border: '1px solid',
+                                borderColor: historyRoleFilter === 'request' ? '#7C3AED' : '#CBD5E1',
+                                background: historyRoleFilter === 'request' ? '#F5F3FF' : '#FFFFFF',
+                                color: historyRoleFilter === 'request' ? '#7C3AED' : '#475569',
+                                fontWeight: historyRoleFilter === 'request' ? 700 : 500,
+                                fontSize: '0.74rem',
+                                padding: '0.22rem 0.55rem',
+                                borderRadius: '9999px',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <span>📋 My Posts ({myHistoryRequested.length})</span>
                             </button>
                           </div>
                         )}
@@ -3300,14 +3374,27 @@ export default function App() {
                       // 4. History: past completed celebrations & archives (requester OR celebrant OR withdrawn offer)
                       displayBookings = bookings.filter(b => {
                         const hasWithdrawn = (b.withdrawals || []).some(w => w.priest_id === user.id);
-                        if (hasWithdrawn) return true;
-                        if (b.responder_id !== user.id && b.requester_id !== user.id) return false;
-                        if (b.status === 'completed') return true;
-                        if (b.status === 'accepted') {
-                          const endOrStart = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
-                          return endOrStart < nowMs;
+                        if (!hasWithdrawn && b.responder_id !== user.id && b.requester_id !== user.id) return false;
+                        
+                        let isEligible = hasWithdrawn;
+                        if (!isEligible) {
+                          if (b.status === 'completed') isEligible = true;
+                          else if (b.status === 'accepted') {
+                            const endOrStart = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
+                            isEligible = endOrStart < nowMs;
+                          }
                         }
-                        return false;
+                        if (!isEligible) return false;
+
+                        // Role filter: 'all', 'serving' (celebrant/withdrawn), 'request' (requester)
+                        if (historyRoleFilter === 'serving') {
+                          const isServing = b.responder_id === user.id || hasWithdrawn;
+                          if (!isServing) return false;
+                        } else if (historyRoleFilter === 'request') {
+                          if (b.requester_id !== user.id) return false;
+                        }
+
+                        return true;
                       });
                     }
 
@@ -3768,12 +3855,34 @@ export default function App() {
                                   <span>Withdrawn</span>
                                 </span>
                               ) : isHistoryBooking ? (
-                                <span
-                                  title="Completed and celebrated. Preserved for canonical and parish records."
-                                  style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: '9999px', background: '#F1F5F9', color: '#475569', whiteSpace: 'nowrap', border: '1px solid #CBD5E1', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-                                >
-                                  ✓ Completed
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  {/* Contextual Role Badge in History */}
+                                  <span
+                                    title={isConfirmedPriest ? "Celebrated by you." : "Posted by you for your parish or community."}
+                                    style={{
+                                      fontSize: '0.7rem',
+                                      fontWeight: 700,
+                                      padding: '2px 7px',
+                                      borderRadius: '9999px',
+                                      background: isConfirmedPriest ? '#EFF6FF' : '#F5F3FF',
+                                      color: isConfirmedPriest ? '#1D4ED8' : '#7C3AED',
+                                      border: isConfirmedPriest ? '1px solid #BFDBFE' : '1px solid #DDD6FE',
+                                      whiteSpace: 'nowrap',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '3px'
+                                    }}
+                                  >
+                                    <span>{isConfirmedPriest ? '🤝 Celebrated' : '📋 My Request'}</span>
+                                  </span>
+
+                                  <span
+                                    title="Completed and celebrated. Preserved for canonical and parish records."
+                                    style={{ fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: '9999px', background: '#F1F5F9', color: '#475569', whiteSpace: 'nowrap', border: '1px solid #CBD5E1', display: 'inline-flex', alignItems: 'center', gap: '3px' }}
+                                  >
+                                    ✓ Completed
+                                  </span>
+                                </div>
                               ) : isConfirmed ? (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                                   {/* Contextual Role Badge */}
