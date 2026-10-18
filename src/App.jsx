@@ -45,6 +45,7 @@ export default function App() {
   const [pendingUsers, setPendingUsers] = useState([]);
   const [myStatus, setMyStatus] = useState('available');
   const [requestsTab, setRequestsTab] = useState('open'); // 'open' (Explore) vs 'my_requests' vs 'accepted' (Confirmed) vs 'history'
+  const [confirmedRoleFilter, setConfirmedRoleFilter] = useState('all'); // 'all', 'serving' (I am celebrant/minister), 'request' (I posted the request)
   const [priestFilterRadius, setPriestFilterRadius] = useState(25); // 25 km default, up to 100 or 'all' km
   const [priestSortBy, setPriestSortBy] = useState('smart_match'); // 'smart_match' (intelligent explore score), 'date_asc', 'distance_asc', 'recent_posted', 'date_desc'
   const [priestSortOrder, setPriestSortOrder] = useState('asc'); // 'asc' (normal) vs 'desc' (reversed)
@@ -2797,6 +2798,8 @@ export default function App() {
                   const endOrStartTime = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
                   return endOrStartTime >= nowMs;
                 });
+                const myConfirmedServing = myConfirmedAll.filter(b => b.responder_id === user.id);
+                const myConfirmedRequested = myConfirmedAll.filter(b => b.requester_id === user.id);
 
                 // 4. History: past completed celebrations & records (requester OR celebrant OR withdrawn)
                 const myHistoryAll = bookings.filter(b => {
@@ -2932,6 +2935,76 @@ export default function App() {
                       </div>
 
                         {/* RIGHT-ALIGNED COMPACT TOOLBAR CONTROLS */}
+                        {requestsTab === 'accepted' && (myConfirmedServing.length > 0 && myConfirmedRequested.length > 0) && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginLeft: 'auto', paddingBottom: '0.35rem' }}>
+                            <span className="feed-control-label" style={{ fontSize: '0.68rem', letterSpacing: '0.03em', margin: '0 4px 0 0', color: '#64748B' }}>
+                              Show:
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmedRoleFilter('all')}
+                              style={{
+                                border: '1px solid',
+                                borderColor: confirmedRoleFilter === 'all' ? '#15803D' : '#CBD5E1',
+                                background: confirmedRoleFilter === 'all' ? '#DCFCE7' : '#FFFFFF',
+                                color: confirmedRoleFilter === 'all' ? '#15803D' : '#475569',
+                                fontWeight: confirmedRoleFilter === 'all' ? 700 : 500,
+                                fontSize: '0.74rem',
+                                padding: '0.22rem 0.55rem',
+                                borderRadius: '9999px',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              All ({myConfirmedAll.length})
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setConfirmedRoleFilter('serving')}
+                              style={{
+                                border: '1px solid',
+                                borderColor: confirmedRoleFilter === 'serving' ? '#1D4ED8' : '#CBD5E1',
+                                background: confirmedRoleFilter === 'serving' ? '#EFF6FF' : '#FFFFFF',
+                                color: confirmedRoleFilter === 'serving' ? '#1D4ED8' : '#475569',
+                                fontWeight: confirmedRoleFilter === 'serving' ? 700 : 500,
+                                fontSize: '0.74rem',
+                                padding: '0.22rem 0.55rem',
+                                borderRadius: '9999px',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <span>🤝 Serving ({myConfirmedServing.length})</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setConfirmedRoleFilter('request')}
+                              style={{
+                                border: '1px solid',
+                                borderColor: confirmedRoleFilter === 'request' ? '#7C3AED' : '#CBD5E1',
+                                background: confirmedRoleFilter === 'request' ? '#F5F3FF' : '#FFFFFF',
+                                color: confirmedRoleFilter === 'request' ? '#7C3AED' : '#475569',
+                                fontWeight: confirmedRoleFilter === 'request' ? 700 : 500,
+                                fontSize: '0.74rem',
+                                padding: '0.22rem 0.55rem',
+                                borderRadius: '9999px',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '3px',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <span>📋 My Posts ({myConfirmedRequested.length})</span>
+                            </button>
+                          </div>
+                        )}
+
                         {requestsTab === 'open' && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginLeft: 'auto', paddingBottom: '0.35rem' }}>
                             <div className="distance-slider-container" style={{ margin: 0, padding: '0.25rem 0.55rem', border: '1px solid #E2E8F0', borderRadius: '9999px', background: '#F8FAFC' }}>
@@ -3215,7 +3288,13 @@ export default function App() {
                         if (b.status !== 'accepted' && b.status !== 'completed') return false;
                         if (b.status === 'completed') return false;
                         const endOrStart = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
-                        return endOrStart >= nowMs;
+                        if (endOrStart < nowMs) return false;
+
+                        // Role filter: 'all', 'serving' (celebrant), 'request' (requester)
+                        if (confirmedRoleFilter === 'serving' && b.responder_id !== user.id) return false;
+                        if (confirmedRoleFilter === 'request' && b.requester_id !== user.id) return false;
+
+                        return true;
                       });
                     } else if (requestsTab === 'history') {
                       // 4. History: past completed celebrations & archives (requester OR celebrant OR withdrawn offer)
@@ -3696,28 +3775,50 @@ export default function App() {
                                   ✓ Completed
                                 </span>
                               ) : isConfirmed ? (
-                                <span
-                                  title="Celebration confirmed & locked. Cannot be edited or deleted online. Any adjustments must be made directly with the minister via Call or WhatsApp."
-                                  style={{
-                                    fontSize: '0.72rem',
-                                    fontWeight: 700,
-                                    padding: '2px 8px',
-                                    borderRadius: '9999px',
-                                    background: '#DCFCE7',
-                                    color: '#15803D',
-                                    whiteSpace: 'nowrap',
-                                    border: '1px solid #86EFAC',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px'
-                                  }}
-                                >
-                                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                                  </svg>
-                                  <span>Confirmed</span>
-                                </span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                  {/* Contextual Role Badge */}
+                                  <span
+                                    title={isConfirmedPriest ? "You offered availability and were confirmed as the celebrating minister." : "You posted this request and confirmed a minister."}
+                                    style={{
+                                      fontSize: '0.7rem',
+                                      fontWeight: 700,
+                                      padding: '2px 7px',
+                                      borderRadius: '9999px',
+                                      background: isConfirmedPriest ? '#EFF6FF' : '#F5F3FF',
+                                      color: isConfirmedPriest ? '#1D4ED8' : '#7C3AED',
+                                      border: isConfirmedPriest ? '1px solid #BFDBFE' : '1px solid #DDD6FE',
+                                      whiteSpace: 'nowrap',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '3px'
+                                    }}
+                                  >
+                                    <span>{isConfirmedPriest ? '🤝 Serving' : '📋 My Request'}</span>
+                                  </span>
+
+                                  <span
+                                    title="Celebration confirmed & locked. Cannot be edited or deleted online. Any adjustments must be made directly with the minister via Call or WhatsApp."
+                                    style={{
+                                      fontSize: '0.72rem',
+                                      fontWeight: 700,
+                                      padding: '2px 8px',
+                                      borderRadius: '9999px',
+                                      background: '#DCFCE7',
+                                      color: '#15803D',
+                                      whiteSpace: 'nowrap',
+                                      border: '1px solid #86EFAC',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '4px'
+                                    }}
+                                  >
+                                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                                    </svg>
+                                    <span>Confirmed</span>
+                                  </span>
+                                </div>
                               ) : hasOffered ? (
                                 <span
                                   title="Availability submitted. Awaiting confirmation from requester."
