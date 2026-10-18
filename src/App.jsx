@@ -44,8 +44,7 @@ export default function App() {
   const [bookings, setBookings] = useState([]);
   const [pendingUsers, setPendingUsers] = useState([]);
   const [myStatus, setMyStatus] = useState('available');
-  const [requestsTab, setRequestsTab] = useState('open'); // 'open' (open to opt-in) vs 'review' (priests opted in, awaiting requester to lock) vs 'accepted' (locked/confirmed)
-  const [priestRolePerspective, setPriestRolePerspective] = useState('celebrate'); // 'celebrate' (Serve: ministry needs & offers) vs 'request' (Supply: needs Father posted)
+  const [requestsTab, setRequestsTab] = useState('open'); // 'open' (Explore) vs 'my_requests' vs 'accepted' (Confirmed) vs 'history'
   const [priestFilterRadius, setPriestFilterRadius] = useState(25); // 25 km default, up to 100 or 'all' km
   const [priestSortBy, setPriestSortBy] = useState('smart_match'); // 'smart_match' (intelligent explore score), 'date_asc', 'distance_asc', 'recent_posted', 'date_desc'
   const [priestSortOrder, setPriestSortOrder] = useState('asc'); // 'asc' (normal) vs 'desc' (reversed)
@@ -473,16 +472,14 @@ export default function App() {
       try {
         const parsed = JSON.parse(cached);
         setUser(parsed);
-        // Default landing perspective:
-        // Sisters and Diocesan Priests: default to 'request' (My Requests)
-        // Religious Priests: default to 'celebrate' (Serve Ministry)
+        // Default landing tab:
+        // Sisters and Diocesan Priests: start on 'my_requests'
+        // Religious Priests: start on 'open' (Explore)
         const isRequesterFirst = (parsed.title === 'Sr.' || parsed.clergy_type === 'convent' || parsed.clergy_type === 'convent_sister') ||
                                  (parsed.title === 'Fr.' && parsed.clergy_type === 'diocesan');
         if (isRequesterFirst) {
-          setPriestRolePerspective('request');
           setRequestsTab('my_requests');
         } else {
-          setPriestRolePerspective('celebrate');
           setRequestsTab('open');
         }
         loadDashboardData(parsed);
@@ -687,10 +684,8 @@ export default function App() {
         const isRequesterFirst = (data.user.title === 'Sr.' || data.user.clergy_type === 'convent' || data.user.clergy_type === 'convent_sister') ||
                                  (data.user.title === 'Fr.' && data.user.clergy_type === 'diocesan');
         if (isRequesterFirst) {
-          setPriestRolePerspective('request');
           setRequestsTab('my_requests');
         } else {
-          setPriestRolePerspective('celebrate');
           setRequestsTab('open');
         }
         showFeedback('success', `Welcome back, ${data.user.title || ''} ${data.user.name}!`);
@@ -2774,28 +2769,8 @@ export default function App() {
                 // Current timestamp for separating upcoming confirmed vs past history
                 const nowMs = Date.now();
 
-                // Counts for Mode 1: "My Requests" (Posts I created)
-                const myAllPosts = bookings.filter(b => b.requester_id === user.id);
-                const myPendingPosts = myAllPosts.filter(b => b.status === 'pending');
-                const myResponsesCount = myPendingPosts.filter(b => (b.applicants || []).length > 0).length;
-                // Upcoming confirmed posts (status 'accepted', datetime is in the future or today)
-                const myConfirmedUpcoming = myAllPosts.filter(b => {
-                  if (b.status !== 'accepted' && b.status !== 'completed') return false;
-                  if (b.status === 'completed') return false;
-                  const endOrStartTime = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
-                  return endOrStartTime >= nowMs;
-                });
-                // Past completed history (status 'completed' OR confirmed celebration that has passed)
-                const myPastHistory = myAllPosts.filter(b => {
-                  if (b.status === 'completed') return true;
-                  if (b.status === 'accepted') {
-                    const endOrStartTime = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
-                    return endOrStartTime < nowMs;
-                  }
-                  return false;
-                });
-
-                // Counts for Mode 2: "My Availability" (Ministry I can offer / accept)
+                // Counts for Unified 4-Tab Navigation:
+                // 1. Explore: open community needs (excluding user's own)
                 const openNeeds = bookings.filter(b => {
                   if (b.status !== 'pending' || b.requester_id === user.id) return false;
                   if (isSister) {
@@ -2809,21 +2784,25 @@ export default function App() {
                   return b.distance_km <= priestFilterRadius;
                 });
 
-                // My active offers where I volunteered
-                const myOffers = bookings.filter(b => b.status === 'pending' && (b.applicants || []).some(a => a.priest_id === user.id));
-                // My confirmed assignments as the celebrant/minister
-                const myServingConfirmed = bookings.filter(b => {
-                  if (b.responder_id !== user.id) return false;
+                // 2. My Requests: posts created by this user that are active/pending
+                const myAllPosts = bookings.filter(b => b.requester_id === user.id);
+                const myPendingPosts = myAllPosts.filter(b => b.status === 'pending');
+                const myResponsesCount = myPendingPosts.filter(b => (b.applicants || []).length > 0).length;
+
+                // 3. Confirmed: all upcoming locked celebrations (requester OR celebrant)
+                const myConfirmedAll = bookings.filter(b => {
+                  if (b.responder_id !== user.id && b.requester_id !== user.id) return false;
                   if (b.status !== 'accepted' && b.status !== 'completed') return false;
                   if (b.status === 'completed') return false;
                   const endOrStartTime = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
                   return endOrStartTime >= nowMs;
                 });
-                // My past completed ministries & withdrawn offers
-                const myServingHistory = bookings.filter(b => {
+
+                // 4. History: past completed celebrations & records (requester OR celebrant OR withdrawn)
+                const myHistoryAll = bookings.filter(b => {
                   const hasWithdrawn = (b.withdrawals || []).some(w => w.priest_id === user.id);
                   if (hasWithdrawn) return true;
-                  if (b.responder_id !== user.id) return false;
+                  if (b.responder_id !== user.id && b.requester_id !== user.id) return false;
                   if (b.status === 'completed') return true;
                   if (b.status === 'accepted') {
                     const endOrStartTime = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
@@ -2836,72 +2815,41 @@ export default function App() {
 
                 return (
                   <div className="dash-nav-container">
-                    {/* TOP HEADER ROW: COMPACT SEGMENTED PILL + SALUTATION IN THE GAP + QUICK ACTION */}
+                    {/* TOP HEADER ROW: UNBOXED SALUTATION + PERSISTENT QUICK POST BUTTON */}
                     <div className="dash-header-bar">
-                      <div className="dash-mode-segmented" style={{ flexShrink: 0 }}>
-                        <button
-                          type="button"
-                          className={`dash-mode-btn ${priestRolePerspective === 'request' ? 'active' : ''}`}
-                          onClick={() => {
-                            setPriestRolePerspective('request');
-                            setRequestsTab('my_requests');
-                          }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 20h9" />
-                            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                          </svg>
-                          <span>My Requests</span>
-                          {myResponsesCount > 0 && (
-                            <span className="dash-mode-counter danger">{myResponsesCount}</span>
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          className={`dash-mode-btn ${priestRolePerspective === 'celebrate' ? 'active' : ''}`}
-                          onClick={() => {
-                            setPriestRolePerspective('celebrate');
-                            setRequestsTab('open');
-                          }}
-                        >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                          </svg>
-                          <span>My Availability</span>
-                          {openNeeds.length > 0 && (
-                            <span className="dash-mode-counter success">{openNeeds.length}</span>
-                          )}
-                        </button>
-                      </div>
-
-                      {/* UNBOXED, NATURAL TYPOGRAPHIC SALUTATION IN THE HEADER GAP */}
                       <div className="dash-header-salutation">
                         <div className="salutation-title">
                           <span className="salutation-name">Hello, {userGreetingName}</span>
                           <span className="salutation-sep">—</span>
                           <span className="salutation-lead">
-                            {priestRolePerspective === 'request'
-                              ? 'Looking for a priest for a liturgy?'
-                              : 'Explore ministry requests from others...'}
+                            {requestsTab === 'open'
+                              ? 'Explore ministry requests from parishes & communities'
+                              : requestsTab === 'my_requests'
+                              ? 'Manage your posted ministry needs & applicant responses'
+                              : requestsTab === 'accepted'
+                              ? 'Your upcoming confirmed liturgical celebrations'
+                              : 'Your past celebrated ministries and archives'}
                           </span>
                         </div>
                         <div className="salutation-sub">
-                          {priestRolePerspective === 'request'
-                            ? 'Post your request here.'
-                            : 'Are you willing to give a helping hand?'}
+                          {requestsTab === 'open'
+                            ? 'Are you available to extend a helping hand in celebration?'
+                            : requestsTab === 'my_requests'
+                            ? 'Review volunteers, confirm priests, and keep liturgies covered.'
+                            : requestsTab === 'accepted'
+                            ? 'Direct contact, GPS directions, and calendar reminders ready.'
+                            : 'Historical records of all pastoral and community services.'}
                         </div>
                       </div>
 
-                      {/* QUICK PRIMARY ACTION ON THE RIGHT (CONTEXT-AWARE FOR BOTH MODES) */}
-                      {priestRolePerspective === 'request' && user.is_verified === 1 ? (
+                      {/* PERSISTENT QUICK ACTION ON THE RIGHT */}
+                      {user.is_verified === 1 && (
                         <button
                           type="button"
                           className="btn btn-primary dash-quick-post-btn"
                           onClick={() => setShowRequestModal(true)}
                           style={{ flexShrink: 0 }}
+                          title="Post a new ministry request for your parish or convent"
                         >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                             <line x1="12" y1="5" x2="12" y2="19" />
@@ -2909,27 +2857,29 @@ export default function App() {
                           </svg>
                           <span>Post a Ministry Request</span>
                         </button>
-                      ) : priestRolePerspective === 'celebrate' ? (
+                      )}
+                    </div>
+
+                    {/* UNIFIED SINGLE-ROW APP BAR (4 CLEAR DIRECT TABS + CONTROLS) */}
+                    <div className="dash-subtabs-toolbar-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.85rem', borderBottom: '1.5px solid #E2E8F0', marginBottom: '1.15rem' }}>
+                      <div className="dash-underline-tabs" style={{ borderBottom: 'none', marginBottom: 0, paddingBottom: 0 }}>
+                        {/* TAB 1: EXPLORE */}
                         <button
                           type="button"
-                          className="btn btn-primary dash-quick-post-btn"
+                          className={`dash-underline-tab ${requestsTab === 'open' ? 'active' : ''}`}
                           onClick={() => setRequestsTab('open')}
-                          style={{ flexShrink: 0 }}
-                          title="Explore open liturgical and pastoral needs from communities"
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                             <circle cx="11" cy="11" r="8" />
                             <line x1="21" y1="21" x2="16.65" y2="16.65" />
                           </svg>
-                          <span>Explore Ministry Needs</span>
+                          <span>Explore</span>
+                          <span className={`dash-tab-pill ${openNeeds.length > 0 ? 'pill-green' : 'pill-empty'}`}>
+                            {openNeeds.length}
+                          </span>
                         </button>
-                      ) : null}
-                    </div>
 
-                    {/* MINIMALIST UNDERLINE SUB-TABS WITH PROCESS FLOW ARROWS */}
-                    {priestRolePerspective === 'request' ? (
-                      /* MODE 1 SUB-TABS: MY REQUESTS (MY POSTS ➔ CONFIRMED ➔ PAST HISTORY) */
-                      <div className="dash-underline-tabs">
+                        {/* TAB 2: MY REQUESTS */}
                         <button
                           type="button"
                           className={`dash-underline-tab ${requestsTab === 'my_requests' ? 'active' : ''}`}
@@ -2942,12 +2892,13 @@ export default function App() {
                             <line x1="16" y1="17" x2="8" y2="17" />
                             <polyline points="10 9 9 9 8 9" />
                           </svg>
-                          <span>My Posts</span>
-                          <span className={`dash-tab-pill ${myPendingPosts.length > 0 ? (myResponsesCount > 0 ? 'pill-danger' : '') : ''}`}>
+                          <span>My Requests</span>
+                          <span className={`dash-tab-pill ${myPendingPosts.length > 0 ? (myResponsesCount > 0 ? 'pill-danger' : '') : 'pill-empty'}`}>
                             {myPendingPosts.length}
                           </span>
                         </button>
 
+                        {/* TAB 3: CONFIRMED */}
                         <button
                           type="button"
                           className={`dash-underline-tab ${requestsTab === 'accepted' ? 'active' : ''}`}
@@ -2958,11 +2909,12 @@ export default function App() {
                             <polyline points="22 4 12 14.01 9 11.01" />
                           </svg>
                           <span>Confirmed</span>
-                          <span className={`dash-tab-pill ${myConfirmedUpcoming.length > 0 ? 'pill-success' : ''}`}>
-                            {myConfirmedUpcoming.length}
+                          <span className={`dash-tab-pill ${myConfirmedAll.length > 0 ? 'pill-success' : 'pill-empty'}`}>
+                            {myConfirmedAll.length}
                           </span>
                         </button>
 
+                        {/* TAB 4: HISTORY */}
                         <button
                           type="button"
                           className={`dash-underline-tab ${requestsTab === 'history' ? 'active' : ''}`}
@@ -2973,60 +2925,11 @@ export default function App() {
                             <polyline points="12 6 12 12 16 14" />
                           </svg>
                           <span>History</span>
-                          <span className={`dash-tab-pill ${myPastHistory.length > 0 ? 'pill-empty' : 'pill-empty'}`}>
-                            {myPastHistory.length}
+                          <span className={`dash-tab-pill ${myHistoryAll.length > 0 ? 'pill-empty' : 'pill-empty'}`}>
+                            {myHistoryAll.length}
                           </span>
                         </button>
                       </div>
-                    ) : (
-                      /* MODE 2 SUB-TABS: MY AVAILABILITY (EXPLORE, MY SCHEDULE, COMPLETED HISTORY) */
-                      <div className="dash-subtabs-toolbar-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.85rem', borderBottom: '1.5px solid #E2E8F0', marginBottom: '1.15rem' }}>
-                        <div className="dash-underline-tabs" style={{ borderBottom: 'none', marginBottom: 0, paddingBottom: 0 }}>
-                          <button
-                            type="button"
-                            className={`dash-underline-tab ${requestsTab === 'open' ? 'active' : ''}`}
-                            onClick={() => setRequestsTab('open')}
-                          >
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                              <circle cx="11" cy="11" r="8" />
-                              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                            </svg>
-                            <span>Explore</span>
-                            <span className={`dash-tab-pill ${openNeeds.length > 0 ? 'pill-red' : 'pill-empty'}`}>
-                              {openNeeds.length}
-                            </span>
-                          </button>
-
-                          <button
-                            type="button"
-                            className={`dash-underline-tab ${requestsTab === 'accepted' ? 'active' : ''}`}
-                            onClick={() => setRequestsTab('accepted')}
-                          >
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-                              <polyline points="22 4 12 14.01 9 11.01" />
-                            </svg>
-                            <span>Confirmed</span>
-                            <span className={`dash-tab-pill ${myServingConfirmed.length > 0 ? 'pill-green' : 'pill-empty'}`}>
-                              {myServingConfirmed.length}
-                            </span>
-                          </button>
-
-                          <button
-                            type="button"
-                            className={`dash-underline-tab ${requestsTab === 'history' ? 'active' : ''}`}
-                            onClick={() => setRequestsTab('history')}
-                          >
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-                              <circle cx="12" cy="12" r="10" />
-                              <polyline points="12 6 12 12 16 14" />
-                            </svg>
-                            <span>History</span>
-                            <span className={`dash-tab-pill ${myServingHistory.length > 0 ? 'pill-empty' : 'pill-empty'}`}>
-                              {myServingHistory.length}
-                            </span>
-                          </button>
-                        </div>
 
                         {/* RIGHT-ALIGNED COMPACT TOOLBAR CONTROLS */}
                         {requestsTab === 'open' && (
@@ -3115,10 +3018,9 @@ export default function App() {
                           </div>
                         )}
                       </div>
-                    )}
 
                     {/* EXPANDABLE SECONDARY FILTER PANEL (WHEN OPENED) */}
-                    {priestRolePerspective === 'celebrate' && requestsTab === 'open' && showPriestFilterDrawer && (
+                    {requestsTab === 'open' && showPriestFilterDrawer && (
                       <div className="feed-controls-card" style={{ padding: '0.75rem 1rem', marginTop: '-0.5rem', marginBottom: '1.25rem' }}>
                         <div className="feed-filters-row">
                           {/* Sort By */}
@@ -3251,110 +3153,83 @@ export default function App() {
 
                     const nowMs = Date.now();
 
-                    if (priestRolePerspective === 'request') {
-                      if (requestsTab === 'my_requests') {
-                        // All pending active requests created by this user
-                        displayBookings = bookings.filter(b => b.status === 'pending' && b.requester_id === user.id);
-                      } else if (requestsTab === 'accepted') {
-                        // Upcoming confirmed celebrations posted by this user
-                        displayBookings = bookings.filter(b => {
-                          if (b.requester_id !== user.id) return false;
-                          if (b.status !== 'accepted' && b.status !== 'completed') return false;
-                          if (b.status === 'completed') return false;
+                    if (requestsTab === 'open') {
+                      // 1. Explore feed: open community requests from others
+                      displayBookings = bookings.filter(b => {
+                        if (b.status !== 'pending' || b.requester_id === user.id) return false;
+                        // Sisters can only see designated non-sacramental ministries
+                        if (isSister) {
+                          const s = (b.service_type || '').toLowerCase();
+                          const isNonSacr = s.includes('catechism') || s.includes('sunday school') || s.includes('faith formation') ||
+                                            s.includes('altar decoration') || s.includes('decoration') ||
+                                            s.includes('anbiam') || s.includes('bcc') || s.includes('small christian community') ||
+                                            s.includes('house visit') || s.includes('home visit') || s.includes('family visit') ||
+                                            s.includes('communion to sick') || (s.includes('communion') && s.includes('sick')) ||
+                                            s.includes('choir') || s.includes('choir animation');
+                          if (!isNonSacr) return false;
+                        }
+                        // Radius filter
+                        if (priestFilterRadius !== 'all') {
+                          if (b.distance_km !== null && b.distance_km > priestFilterRadius) return false;
+                        }
+                        // Sacrament / Service filter
+                        if (priestFilterService !== 'all') {
+                          const s = (b.service_type || '').toLowerCase();
+                          const f = priestFilterService.toLowerCase();
+                          let match = false;
+                          if (f === 'mass') match = s.includes('holy mass') || s.includes('mass');
+                          else if (f === 'concelebration') match = s.includes('concelebration');
+                          else if (f === 'marriage') match = s.includes('marriage') || s.includes('matrimony');
+                          else if (f === 'funeral') match = s.includes('funeral') || s.includes('requiem');
+                          else if (f === 'confession') match = s.includes('confession');
+                          else if (f === 'anointing') match = s.includes('anointing') || s.includes('sick');
+                          else if (f === 'adoration') match = s.includes('adoration');
+                          else if (f === 'charismatic') match = s.includes('charismatic') || s.includes('prayer service');
+                          else if (f === 'house_blessing') match = s.includes('house blessing') || s.includes('blessing');
+                          else if (f === 'recollection') match = s.includes('recollection');
+                          else if (f === 'retreat') match = s.includes('retreat');
+                          else if (f === 'catechism') match = s.includes('catechism') || s.includes('sunday school');
+                          else if (f === 'altar_decoration') match = s.includes('altar decoration') || s.includes('decoration');
+                          else if (f === 'anbiam') match = s.includes('anbiam') || s.includes('bcc');
+                          else if (f === 'house_visit') match = s.includes('house visit') || s.includes('family visit');
+                          else if (f === 'communion_sick') match = s.includes('communion to sick') || (s.includes('communion') && s.includes('sick'));
+                          else if (f === 'choir') match = s.includes('choir');
+                          else if (f === 'others') match = s.includes('other');
+                          else match = s.includes(f);
+                          if (!match) return false;
+                        }
+                        // Language filter
+                        if (priestFilterLanguage !== 'all') {
+                          const l = (b.language || '').toLowerCase();
+                          if (!l.includes(priestFilterLanguage.toLowerCase())) return false;
+                        }
+                        return true;
+                      });
+                    } else if (requestsTab === 'my_requests') {
+                      // 2. My Requests: all pending active requests created by this user
+                      displayBookings = bookings.filter(b => b.status === 'pending' && b.requester_id === user.id);
+                    } else if (requestsTab === 'accepted') {
+                      // 3. Confirmed: upcoming celebrations where user is either the requester OR the celebrant/minister
+                      displayBookings = bookings.filter(b => {
+                        if (b.responder_id !== user.id && b.requester_id !== user.id) return false;
+                        if (b.status !== 'accepted' && b.status !== 'completed') return false;
+                        if (b.status === 'completed') return false;
+                        const endOrStart = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
+                        return endOrStart >= nowMs;
+                      });
+                    } else if (requestsTab === 'history') {
+                      // 4. History: past completed celebrations & archives (requester OR celebrant OR withdrawn offer)
+                      displayBookings = bookings.filter(b => {
+                        const hasWithdrawn = (b.withdrawals || []).some(w => w.priest_id === user.id);
+                        if (hasWithdrawn) return true;
+                        if (b.responder_id !== user.id && b.requester_id !== user.id) return false;
+                        if (b.status === 'completed') return true;
+                        if (b.status === 'accepted') {
                           const endOrStart = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
-                          return endOrStart >= nowMs;
-                        });
-                      } else if (requestsTab === 'history') {
-                        // Past completed celebrations posted by this user
-                        displayBookings = bookings.filter(b => {
-                          if (b.requester_id !== user.id) return false;
-                          if (b.status === 'completed') return true;
-                          if (b.status === 'accepted') {
-                            const endOrStart = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
-                            return endOrStart < nowMs;
-                          }
-                          return false;
-                        });
-                      }
-                    } else {
-                      // Serve Ministry Perspective
-                      if (requestsTab === 'open') {
-                        displayBookings = bookings.filter(b => {
-                          if (b.status !== 'pending' || b.requester_id === user.id) return false;
-                          // Sisters can only see designated non-sacramental ministries
-                          if (isSister) {
-                            const s = (b.service_type || '').toLowerCase();
-                            const isNonSacr = s.includes('catechism') || s.includes('sunday school') || s.includes('faith formation') ||
-                                              s.includes('altar decoration') || s.includes('decoration') ||
-                                              s.includes('anbiam') || s.includes('bcc') || s.includes('small christian community') ||
-                                              s.includes('house visit') || s.includes('home visit') || s.includes('family visit') ||
-                                              s.includes('communion to sick') || (s.includes('communion') && s.includes('sick')) ||
-                                              s.includes('choir') || s.includes('choir animation');
-                            if (!isNonSacr) return false;
-                          }
-                          // Radius filter
-                          if (priestFilterRadius !== 'all') {
-                            if (b.distance_km !== null && b.distance_km > priestFilterRadius) return false;
-                          }
-                          // Sacrament / Service filter
-                          if (priestFilterService !== 'all') {
-                            const s = (b.service_type || '').toLowerCase();
-                            const f = priestFilterService.toLowerCase();
-                            let match = false;
-                            if (f === 'mass') match = s.includes('holy mass') || s.includes('mass');
-                            else if (f === 'concelebration') match = s.includes('concelebration');
-                            else if (f === 'marriage') match = s.includes('marriage') || s.includes('matrimony');
-                            else if (f === 'funeral') match = s.includes('funeral') || s.includes('requiem');
-                            else if (f === 'confession') match = s.includes('confession');
-                            else if (f === 'anointing') match = s.includes('anointing') || s.includes('sick');
-                            else if (f === 'adoration') match = s.includes('adoration');
-                            else if (f === 'charismatic') match = s.includes('charismatic') || s.includes('prayer service');
-                            else if (f === 'house_blessing') match = s.includes('house blessing') || s.includes('blessing');
-                            else if (f === 'recollection') match = s.includes('recollection');
-                            else if (f === 'retreat') match = s.includes('retreat');
-                            else if (f === 'catechism') match = s.includes('catechism') || s.includes('sunday school');
-                            else if (f === 'altar_decoration') match = s.includes('altar decoration') || s.includes('decoration');
-                            else if (f === 'anbiam') match = s.includes('anbiam') || s.includes('bcc');
-                            else if (f === 'house_visit') match = s.includes('house visit') || s.includes('family visit');
-                            else if (f === 'communion_sick') match = s.includes('communion to sick') || (s.includes('communion') && s.includes('sick'));
-                            else if (f === 'choir') match = s.includes('choir');
-                            else if (f === 'others') match = s.includes('other');
-                            else match = s.includes(f);
-                            if (!match) return false;
-                          }
-                          // Language filter
-                          if (priestFilterLanguage !== 'all') {
-                            const l = (b.language || '').toLowerCase();
-                            if (!l.includes(priestFilterLanguage.toLowerCase())) return false;
-                          }
-                          return true;
-                        });
-                      } else if (requestsTab === 'review') {
-                        // My offers where I offered to minister/celebrate
-                        displayBookings = bookings.filter(b => b.status === 'pending' && (b.applicants || []).some(a => a.priest_id === user.id));
-                      } else if (requestsTab === 'accepted') {
-                        // Upcoming confirmed celebrations where I am the chosen celebrant/minister
-                        displayBookings = bookings.filter(b => {
-                          if (b.responder_id !== user.id) return false;
-                          if (b.status !== 'accepted' && b.status !== 'completed') return false;
-                          if (b.status === 'completed') return false;
-                          const endOrStart = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
-                          return endOrStart >= nowMs;
-                        });
-                      } else if (requestsTab === 'history') {
-                        // Past completed celebrations where I was the celebrant/minister OR offers I withdrew
-                        displayBookings = bookings.filter(b => {
-                          const hasWithdrawn = (b.withdrawals || []).some(w => w.priest_id === user.id);
-                          if (hasWithdrawn) return true;
-                          if (b.responder_id !== user.id) return false;
-                          if (b.status === 'completed') return true;
-                          if (b.status === 'accepted') {
-                            const endOrStart = b.datetime_end ? new Date(b.datetime_end).getTime() : new Date(b.datetime).getTime() + 3600000;
-                            return endOrStart < nowMs;
-                          }
-                          return false;
-                        });
-                      }
+                          return endOrStart < nowMs;
+                        }
+                        return false;
+                      });
                     }
 
                     // -------------------------------------------------------------
@@ -3567,34 +3442,18 @@ export default function App() {
                             </div>
                           </div>
                           <h4 style={{ color: '#0F172A', marginBottom: '0.35rem' }}>
-                            {priestRolePerspective === 'request'
-                              ? requestsTab === 'my_requests'
-                                ? 'No Ministry Requests Posted Yet'
-                                : requestsTab === 'review'
-                                ? 'No Available Ministers Responded Yet'
-                                : requestsTab === 'history'
-                                ? 'No Past Ministry History Yet'
-                                : 'No Confirmed Ministries Yet'
-                              : requestsTab === 'open'
+                            {requestsTab === 'open'
                               ? isFiltered
                                 ? 'No Requests Match Your Filters'
                                 : `No Open Needs Found within ${priestFilterRadius === 'all' ? 'the Diocese' : `${priestFilterRadius} km`}`
-                              : requestsTab === 'review'
-                              ? 'No Awaiting Offers'
-                              : requestsTab === 'history'
-                              ? 'No Past Celebrations in History'
-                              : 'No Confirmed Schedule Yet'}
+                              : requestsTab === 'my_requests'
+                              ? 'No Ministry Requests Posted Yet'
+                              : requestsTab === 'accepted'
+                              ? 'No Confirmed Ministries Yet'
+                              : 'No Past History in Records'}
                           </h4>
                           <p style={{ fontSize: '0.86rem', color: '#64748B', maxWidth: '440px', margin: '0 auto', marginBottom: '1rem' }}>
-                            {priestRolePerspective === 'request'
-                              ? requestsTab === 'my_requests'
-                                ? 'Need a priest or sister for Holy Mass, Retreat, Anbiam, or Catechism? Post a request to notify available ministers.'
-                                : requestsTab === 'review'
-                                ? 'When priests or sisters mark themselves available for your posted requests, their profiles and contact options will appear here for your confirmation.'
-                                : requestsTab === 'history'
-                                ? 'Completed celebrations and past pastoral services are preserved here for your ecclesiastical records and quick re-invitation.'
-                                : 'Once you confirm an available priest or sister, your locked celebration appears here with 1-tap call, WhatsApp, and Google Maps.'
-                              : requestsTab === 'open'
+                            {requestsTab === 'open'
                               ? isFiltered
                                 ? 'Try adjusting your distance slider, sacrament filter, or liturgical language to see more needs.'
                                 : priestFilterRadius !== 'all'
@@ -3602,11 +3461,11 @@ export default function App() {
                                 : isSister
                                 ? 'No open pastoral needs (Anbiam, House Visit, Catechism) in the diocese right now. Check back soon.'
                                 : 'All parishes and convents in the diocese are currently covered. Check back soon for new requests.'
-                              : requestsTab === 'review'
-                              ? 'Ministry requests where you offered your availability will remain here awaiting confirmation from the requester.'
-                              : requestsTab === 'history'
-                              ? 'Your past celebrated Masses and completed ministries are cataloged here in your ministerial service history.'
-                              : 'When a parish or convent confirms your availability, your scheduled ministry will appear here with WhatsApp, direct call, and Google Maps directions.'}
+                              : requestsTab === 'my_requests'
+                              ? 'Need a priest or sister for Holy Mass, Retreat, Anbiam, or Catechism? Post a request to notify available ministers.'
+                              : requestsTab === 'accepted'
+                              ? 'Once a celebration is confirmed between you and another minister/parish, it appears here with 1-tap call, WhatsApp, and Google Maps directions.'
+                              : 'Your past celebrated Masses, completed ministries, and archive records will appear here.'}
                           </p>
 
                           {/* ACTIONABLE 1-TAP ENGAGEMENT SHORTCUTS */}
@@ -3659,7 +3518,7 @@ export default function App() {
                             </div>
                           )}
 
-                          {priestRolePerspective === 'request' && requestsTab === 'my_requests' && user.is_verified === 1 && (
+                          {requestsTab === 'my_requests' && user.is_verified === 1 && (
                             <button
                               type="button"
                               className="btn btn-primary"
@@ -3670,25 +3529,14 @@ export default function App() {
                             </button>
                           )}
 
-                          {priestRolePerspective === 'request' && requestsTab === 'review' && (
+                          {requestsTab === 'accepted' && (
                             <button
                               type="button"
                               className="btn btn-secondary btn-sm"
-                              onClick={() => setRequestsTab('my_requests')}
+                              onClick={() => setRequestsTab('open')}
                               style={{ borderRadius: '9999px', padding: '0.5rem 1.15rem', fontWeight: 600 }}
                             >
-                              View All Posts
-                            </button>
-                          )}
-
-                          {priestRolePerspective === 'celebrate' && requestsTab === 'review' && (
-                            <button
-                              type="button"
-                              className="btn btn-primary btn-sm"
-                              onClick={() => setRequestsTab('open')}
-                              style={{ borderRadius: '9999px', padding: '0.5rem 1.15rem', fontWeight: 700 }}
-                            >
-                              Explore Ministry Needs ↗
+                              Explore Available Needs ↗
                             </button>
                           )}
                         </div>
@@ -3733,7 +3581,7 @@ export default function App() {
                               <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569', background: '#F1F5F9', border: '1px solid #E2E8F0', padding: '2px 7px', borderRadius: '4px' }}>
                                 {b.language || 'English'}
                               </span>
-                              {priestRolePerspective === 'celebrate' && requestsTab === 'open' && b._isFrequent && (
+                              {requestsTab === 'open' && b._isFrequent && (
                                 <span
                                   title={`Frequently Booked: You have celebrated ${b._pastCelebrationsCount} past ministries for this parish/requester`}
                                   style={{
@@ -3753,7 +3601,7 @@ export default function App() {
                                 </span>
                               )}
 
-                              {priestRolePerspective === 'celebrate' && requestsTab === 'open' && b._smartScore >= 50 && (
+                              {requestsTab === 'open' && b._smartScore >= 50 && (
                                 <span
                                   title={b._matchReasons ? `Match breakdown: ${b._matchReasons.join(', ')}` : 'Recommended match'}
                                   style={{
@@ -6218,18 +6066,12 @@ export default function App() {
                                       type="button"
                                       onClick={() => {
                                         setShowCalendarModal(false);
-                                        if (b.responder_id === user.id) {
-                                          setPriestRolePerspective('celebrate');
-                                          setRequestsTab('accepted');
-                                        } else {
-                                          setPriestRolePerspective('request');
-                                          setRequestsTab('accepted');
-                                        }
+                                        setRequestsTab('accepted');
                                       }}
                                       className="btn btn-secondary btn-sm"
                                       style={{ padding: '0.4rem 0.65rem', fontSize: '0.74rem', fontWeight: 700 }}
                                     >
-                                      View in {isConfirmedPriest ? 'My Schedule' : 'My Requests'} ↗
+                                      View in Confirmed ↗
                                     </button>
                                   </div>
                                 </div>
