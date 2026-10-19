@@ -124,14 +124,26 @@ app.post('/api/auth/wa-request-code', (req, res) => {
     expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
   });
 
+  const cleanHelpline = HELPLINE_WHATSAPP.replace(/\D/g, '');
   const messageText = `Praise be Jesus! Verify my BookaPriest account: #${code}`;
-  const waLink = `https://wa.me/${HELPLINE_WHATSAPP.replace(/\D/g, '')}?text=${encodeURIComponent(messageText)}`;
+  const encodedMsg = encodeURIComponent(messageText);
+
+  // Universal deep-link (triggers OS App Chooser if multiple handlers exist)
+  const waLink = `https://wa.me/${cleanHelpline}?text=${encodedMsg}`;
+
+  // Direct URI scheme for standard WhatsApp:
+  const waStandardScheme = `whatsapp://send?phone=${cleanHelpline}&text=${encodedMsg}`;
+
+  // Direct Android intent for WhatsApp Business:
+  const waBusinessScheme = `intent://send?phone=${cleanHelpline}&text=${encodedMsg}#Intent;package=com.whatsapp.w4b;scheme=whatsapp;end`;
 
   return res.json({
     challengeId,
     code,
     mobile: canonicalMobile,
     waLink,
+    waStandardScheme,
+    waBusinessScheme,
     helpline: HELPLINE_WHATSAPP,
     messageText,
     isExistingUser: !!existingUser
