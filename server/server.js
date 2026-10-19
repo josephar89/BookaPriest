@@ -149,27 +149,31 @@ app.get('/api/auth/wa-check-status/:code', (req, res) => {
 
   if (challenge.verified) {
     let userResponse = null;
-    if (challenge.userId) {
-      const u = db.getUserById(challenge.userId);
-      if (u) {
-        const { password_hash, ...clean } = u;
-        userResponse = clean;
-      }
+    const finalMobile = challenge.actualSenderMobile || challenge.mobile;
+    const existing = db.getUserByMobile(finalMobile);
+    if (existing) {
+      const { password_hash, ...clean } = existing;
+      userResponse = clean;
     }
     return res.json({
       verified: true,
-      mobile: challenge.mobile,
-      isExistingUser: challenge.isExistingUser,
+      mobile: finalMobile,
+      requestedMobile: challenge.mobile,
+      hasMismatch: !!challenge.actualSenderMobile && challenge.actualSenderMobile !== challenge.mobile,
+      isExistingUser: !!existing,
       user: userResponse
     });
   }
 
-  return res.json({ verified: false, mobile: challenge.mobile });
+  return res.json({
+    verified: false,
+    mobile: challenge.mobile
+  });
 });
 
-// 3. Confirm / Simulate WhatsApp verification (Triggered when WhatsApp message arrives or via direct 1-tap test)
+// 3. Confirm / Simulate WhatsApp verification (Triggered when WhatsApp message arrives)
 app.post('/api/auth/wa-confirm', (req, res) => {
-  const { code } = req.body;
+  const { code, senderMobile } = req.body;
   if (!code) return res.status(400).json({ error: 'Verification code is required.' });
 
   const challenge = pendingWaChallenges.get(String(code).trim());
@@ -177,21 +181,36 @@ app.post('/api/auth/wa-confirm', (req, res) => {
     return res.status(404).json({ error: 'Code not found or expired.' });
   }
 
-  challenge.verified = true;
-  let userResponse = null;
-  if (challenge.userId) {
-    const u = db.getUserById(challenge.userId);
-    if (u) {
-      const { password_hash, ...clean } = u;
-      userResponse = clean;
+  // If a senderMobile arrived (from actual webhook or test)
+  if (senderMobile) {
+    let digits = senderMobile.replace(/\D/g, '');
+    if (digits.length > 10 && digits.startsWith('91')) digits = digits.slice(2);
+    else if (digits.length > 10 && digits.startsWith('0')) digits = digits.slice(1);
+    digits = digits.slice(-10);
+    if (digits.length === 10) {
+      challenge.actualSenderMobile = `+91${digits}`;
+    } else {
+      challenge.actualSenderMobile = senderMobile;
     }
+  }
+
+  challenge.verified = true;
+  const verifiedMobile = challenge.actualSenderMobile || challenge.mobile;
+  const existingUser = db.getUserByMobile(verifiedMobile);
+
+  let userResponse = null;
+  if (existingUser) {
+    const { password_hash, ...clean } = existingUser;
+    userResponse = clean;
   }
 
   return res.json({
     message: 'WhatsApp verification confirmed successfully!',
     verified: true,
-    mobile: challenge.mobile,
-    isExistingUser: challenge.isExistingUser,
+    mobile: verifiedMobile,
+    requestedMobile: challenge.mobile,
+    hasMismatch: !!challenge.actualSenderMobile && challenge.actualSenderMobile !== challenge.mobile,
+    isExistingUser: !!existingUser,
     user: userResponse
   });
 });

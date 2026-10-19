@@ -762,7 +762,11 @@ export default function App() {
                 setAuthMode('register');
                 setWaAuthModal(null);
                 setWaVerifiedSuccess(false);
-                showFeedback('success', '✓ WhatsApp number verified! Please complete your clerical profile details.');
+                if (data.hasMismatch) {
+                  showFeedback('success', `✓ WhatsApp verified using ${data.mobile}! Please complete your clerical profile details.`);
+                } else {
+                  showFeedback('success', '✓ WhatsApp number verified! Please complete your clerical profile details.');
+                }
               }, 1200);
             }
           }
