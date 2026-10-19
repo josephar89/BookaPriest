@@ -2845,93 +2845,37 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Main Action: Open WhatsApp */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '1rem' }}>
-                    <a
-                      href={waAuthModal.waStandardScheme || waAuthModal.waLink}
-                      className="btn"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px',
-                        background: '#25D366',
-                        borderColor: '#22C55E',
-                        color: '#FFFFFF',
-                        fontSize: '0.96rem',
-                        fontWeight: 700,
-                        padding: '0.8rem 1.25rem',
-                        borderRadius: '10px',
-                        textDecoration: 'none',
-                        boxShadow: '0 4px 12px rgba(37, 211, 102, 0.28)'
-                      }}
-                    >
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2M12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.58 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 15 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67M8.53 7.33C8.37 7.33 8.1 7.39 7.87 7.64C7.65 7.89 7.02 8.48 7.02 9.69C7.02 10.9 7.9 12.07 8.02 12.23C8.15 12.4 9.73 14.82 12.16 15.86C12.74 16.11 13.19 16.26 13.54 16.37C14.12 16.56 14.65 16.53 15.07 16.47C15.54 16.4 16.51 15.88 16.71 15.31C16.92 14.74 16.92 14.26 16.86 14.16C16.79 14.05 16.63 13.99 16.39 13.87C16.15 13.75 14.97 13.17 14.75 13.09C14.53 13.01 14.37 12.97 14.21 13.22C14.05 13.46 13.59 14.01 13.45 14.17C13.31 14.33 13.17 14.35 12.93 14.23C12.69 14.11 11.91 13.86 10.99 13.04C10.28 12.4 9.8 11.62 9.66 11.38C9.52 11.14 9.65 11.01 9.77 10.89C9.88 10.78 10.02 10.6 10.14 10.46C10.26 10.32 10.3 10.22 10.38 10.06C10.46 9.9 10.42 9.76 10.36 9.64C10.3 9.52 9.84 8.38 9.64 7.91C9.45 7.46 9.26 7.52 9.11 7.51C8.97 7.51 8.81 7.51 8.65 7.51L8.53 7.33Z" />
-                      </svg>
-                      <span>Open in WhatsApp</span>
-                    </a>
+                  {/* Single Clean Action: Opens Native OS Chooser */}
+                  <a
+                    href={`whatsapp://send?phone=${waAuthModal.helpline.replace(/\D/g, '')}&text=${encodeURIComponent(waAuthModal.messageText)}`}
+                    className="btn"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      background: '#25D366',
+                      borderColor: '#22C55E',
+                      color: '#FFFFFF',
+                      fontSize: '1rem',
+                      fontWeight: 700,
+                      padding: '0.85rem 1.25rem',
+                      borderRadius: '12px',
+                      textDecoration: 'none',
+                      boxShadow: '0 4px 14px rgba(37, 211, 102, 0.35)',
+                      marginBottom: '1rem'
+                    }}
+                  >
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2M12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.58 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 15 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67M8.53 7.33C8.37 7.33 8.1 7.39 7.87 7.64C7.65 7.89 7.02 8.48 7.02 9.69C7.02 10.9 7.9 12.07 8.02 12.23C8.15 12.4 9.73 14.82 12.16 15.86C12.74 16.11 13.19 16.26 13.54 16.37C14.12 16.56 14.65 16.53 15.07 16.47C15.54 16.4 16.51 15.88 16.71 15.31C16.92 14.74 16.92 14.26 16.86 14.16C16.79 14.05 16.63 13.99 16.39 13.87C16.15 13.75 14.97 13.17 14.75 13.09C14.53 13.01 14.37 12.97 14.21 13.22C14.05 13.46 13.59 14.01 13.45 14.17C13.31 14.33 13.17 14.35 12.93 14.23C12.69 14.11 11.91 13.86 10.99 13.04C10.28 12.4 9.8 11.62 9.66 11.38C9.52 11.14 9.65 11.01 9.77 10.89C9.88 10.78 10.02 10.6 10.14 10.46C10.26 10.32 10.3 10.22 10.38 10.06C10.46 9.9 10.42 9.76 10.36 9.64C10.3 9.52 9.84 8.38 9.64 7.91C9.45 7.46 9.26 7.52 9.11 7.51C8.97 7.51 8.81 7.51 8.65 7.51L8.53 7.33Z" />
+                    </svg>
+                    <span>Send via WhatsApp</span>
+                  </a>
 
-                    {/* Dual WhatsApp or Business WhatsApp Chooser Button */}
-                    <a
-                      href={waAuthModal.waBusinessScheme || waAuthModal.waLink}
-                      className="btn"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px',
-                        background: '#F0FDF4',
-                        border: '1.5px solid #86EFAC',
-                        color: '#15803D',
-                        fontSize: '0.9rem',
-                        fontWeight: 700,
-                        padding: '0.75rem 1.25rem',
-                        borderRadius: '10px',
-                        textDecoration: 'none'
-                      }}
-                    >
-                      <span>💼</span>
-                      <span>Open in WhatsApp Business / Dual App</span>
-                    </a>
-                  </div>
-
-                  {/* Manual Copy Fallback for Dual Samsung Messenger */}
-                  <div style={{
-                    background: '#F8FAFC',
-                    border: '1px solid #E2E8F0',
-                    borderRadius: '8px',
-                    padding: '0.65rem 0.85rem',
-                    marginBottom: '0.85rem',
-                    textAlign: 'left'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569' }}>
-                        📋 Or Copy & Paste Directly:
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          navigator.clipboard.writeText(waAuthModal.messageText);
-                          showFeedback('success', '✓ Verification message copied! Open your preferred WhatsApp and paste.');
-                        }}
-                        style={{
-                          background: '#E0F2FE',
-                          border: '1px solid #BAE6FD',
-                          color: '#0369A1',
-                          fontSize: '0.72rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          padding: '2px 8px',
-                          borderRadius: '4px'
-                        }}
-                      >
-                        Copy Message
-                      </button>
-                    </div>
-                    <div style={{ fontSize: '0.74rem', color: '#64748B', lineHeight: 1.4 }}>
-                      Send to helpline: <strong>{waAuthModal.helpline}</strong>
-                    </div>
+                  {/* Listening Status */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.8rem', color: '#64748B', margin: '0.85rem 0' }}>
+                    <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#22C55E', animation: 'pulse 1.2s infinite' }}></span>
+                    <span>Listening for incoming message...</span>
                   </div>
 
                   {/* Polling / Listening Radar Status */}
