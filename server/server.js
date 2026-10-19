@@ -84,8 +84,8 @@ const cleanupExpiredChallenges = () => {
 };
 setInterval(cleanupExpiredChallenges, 60000);
 
-// Admin WhatsApp Hotline number for Book a Priest
-const HELPLINE_WHATSAPP = process.env.HELPLINE_WHATSAPP || '919999999999';
+// Admin WhatsApp Hotline number for Book a Priest (+33 759857131)
+const HELPLINE_WHATSAPP = process.env.HELPLINE_WHATSAPP || '33759857131';
 
 // 1. Request WhatsApp Verification Code & Link
 app.post('/api/auth/wa-request-code', (req, res) => {

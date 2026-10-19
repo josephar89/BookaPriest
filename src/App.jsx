@@ -704,8 +704,20 @@ export default function App() {
       });
       setWaAuthPolling(true);
 
-      // Display verification modal with App Chooser & Auto-Polling
-      // (User taps their preferred app button: WhatsApp or WhatsApp Business)
+      // Immediately trigger WhatsApp OS intent so Android prompts the app chooser (Dual WhatsApp / Business / Default)
+      const helplineClean = (data.helpline || '33759857131').replace(/\D/g, '');
+      const encodedMsg = encodeURIComponent(data.messageText || `Praise be Jesus! Verify my BookaPriest account: #${data.code}`);
+      const waIntentUrl = `whatsapp://send?phone=${helplineClean}&text=${encodedMsg}`;
+
+      // Open WhatsApp directly via hidden trigger
+      const link = document.createElement('a');
+      link.href = waIntentUrl;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        if (document.body.contains(link)) document.body.removeChild(link);
+      }, 500);
     } catch (err) {
       showFeedback('error', 'Network error requesting WhatsApp verification.');
     } finally {
@@ -2873,12 +2885,6 @@ export default function App() {
                   </a>
 
                   {/* Listening Status */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.8rem', color: '#64748B', margin: '0.85rem 0' }}>
-                    <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#22C55E', animation: 'pulse 1.2s infinite' }}></span>
-                    <span>Listening for incoming message...</span>
-                  </div>
-
-                  {/* Polling / Listening Radar Status */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.8rem', color: '#64748B', margin: '0.85rem 0' }}>
                     <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#22C55E', animation: 'pulse 1.2s infinite' }}></span>
                     <span>Waiting for your WhatsApp message to arrive...</span>
