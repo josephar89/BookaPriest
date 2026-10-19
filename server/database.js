@@ -429,6 +429,170 @@ class RelationalDatabase {
     return null;
   }
 
+  // --- Super-Admin Operations ---
+
+  getAllUsersForAdmin() {
+    return this.data.users.map(u => {
+      const { password_hash, ...rest } = u;
+      const bookedCount = this.data.bookings.filter(b => b.responder_id === u.id && (b.status === 'accepted' || b.status === 'completed')).length;
+      const requestedCount = this.data.bookings.filter(b => b.requester_id === u.id).length;
+      return {
+        ...rest,
+        ministries_celebrated: bookedCount,
+        requests_posted: requestedCount
+      };
+    });
+  }
+
+  async adminResetPassword(userId, newPassword) {
+    const user = this.data.users.find(u => u.id === parseInt(userId));
+    if (!user) return null;
+    user.password_hash = hashPassword(newPassword || 'Jesus@123');
+    this.saveLocal();
+
+    if (tursoClient) {
+      tursoClient.execute({
+        sql: 'UPDATE users SET password_hash = ? WHERE id = ?',
+        args: [user.password_hash, user.id]
+      }).catch(err => console.error('Turso admin reset password failed:', err));
+    }
+    return user;
+  }
+
+  async adminToggleRole(userId, field, val) {
+    const user = this.data.users.find(u => u.id === parseInt(userId));
+    if (!user) return null;
+    user[field] = val ? 1 : 0;
+    this.saveLocal();
+
+    if (tursoClient && (field === 'is_admin' || field === 'is_verified')) {
+      tursoClient.execute({
+        sql: `UPDATE users SET ${field} = ? WHERE id = ?`,
+        args: [user[field], user.id]
+      }).catch(err => console.error(`Turso toggle ${field} failed:`, err));
+    }
+    return user;
+  }
+
+  async adminDeleteUser(userId) {
+    const uId = parseInt(userId);
+    const userIndex = this.data.users.findIndex(u => u.id === uId);
+    if (userIndex === -1) return false;
+
+    this.data.users.splice(userIndex, 1);
+    // Clean up slots
+    this.data.availability_slots = this.data.availability_slots.filter(s => s.priest_id !== uId);
+    this.saveLocal();
+
+    if (tursoClient) {
+      tursoClient.execute({
+        sql: 'DELETE FROM users WHERE id = ?',
+        args: [uId]
+      }).catch(err => console.error('Turso admin delete user failed:', err));
+      tursoClient.execute({
+        sql: 'DELETE FROM availability_slots WHERE priest_id = ?',
+        args: [uId]
+      }).catch(err => console.error('Turso admin delete slots failed:', err));
+    }
+    return true;
+  }
+
+  getAllBookingsForAdmin() {
+    return this.getBookings();
+  }
+
+  async adminOverrideBooking(bookingId, updates) {
+    const booking = this.data.bookings.find(b => b.id === parseInt(bookingId));
+    if (!booking) return null;
+
+    if (updates.status !== undefined) booking.status = updates.status;
+    if (updates.responder_id !== undefined) {
+      booking.responder_id = updates.responder_id ? parseInt(updates.responder_id) : null;
+    }
+    if (updates.location !== undefined) booking.location = updates.location;
+    if (updates.datetime !== undefined) booking.datetime = updates.datetime;
+    if (updates.datetime_end !== undefined) booking.datetime_end = updates.datetime_end;
+    if (updates.honorarium !== undefined) booking.honorarium = updates.honorarium;
+    if (updates.service_type !== undefined) booking.service_type = updates.service_type;
+    if (updates.notes !== undefined) booking.notes = updates.notes;
+
+    this.saveLocal();
+
+    if (tursoClient) {
+      tursoClient.execute({
+        sql: `UPDATE bookings SET status = ?, responder_id = ?, location = ?, datetime = ?, datetime_end = ?, honorarium = ?, service_type = ?, notes = ? WHERE id = ?`,
+        args: [
+          booking.status,
+          booking.responder_id,
+          booking.location,
+          booking.datetime,
+          booking.datetime_end || null,
+          booking.honorarium,
+          booking.service_type,
+          booking.notes || '',
+          booking.id
+        ]
+      }).catch(err => console.error('Turso admin override booking failed:', err));
+    }
+
+    return booking;
+  }
+
+  async adminDeleteBooking(bookingId) {
+    const bId = parseInt(bookingId);
+    const index = this.data.bookings.findIndex(b => b.id === bId);
+    if (index === -1) return false;
+
+    this.data.bookings.splice(index, 1);
+    this.saveLocal();
+
+    if (tursoClient) {
+      tursoClient.execute({
+        sql: 'DELETE FROM bookings WHERE id = ?',
+        args: [bId]
+      }).catch(err => console.error('Turso admin delete booking failed:', err));
+    }
+    return true;
+  }
+
+  getDatabaseRawSnapshot() {
+    return {
+      stats: {
+        total_users: this.data.users.length,
+        verified_users: this.data.users.filter(u => u.is_verified === 1).length,
+        admin_users: this.data.users.filter(u => u.is_admin === 1).length,
+        total_bookings: this.data.bookings.length,
+        open_bookings: this.data.bookings.filter(b => b.status === 'pending').length,
+        accepted_bookings: this.data.bookings.filter(b => b.status === 'accepted').length,
+        completed_bookings: this.data.bookings.filter(b => b.status === 'completed').length,
+        availability_slots: this.data.availability_slots.length,
+        turso_connected: !!tursoClient
+      },
+      tables: {
+        users: this.data.users.map(({ password_hash, ...u }) => u),
+        bookings: this.data.bookings,
+        availability_slots: this.data.availability_slots
+      }
+    };
+  }
+
+  async adminUpdateRawRecord(table, recordId, updatedFields) {
+    const id = parseInt(recordId);
+    if (!this.data[table]) return null;
+
+    const record = this.data[table].find(item => item.id === id);
+    if (!record) return null;
+
+    Object.keys(updatedFields).forEach(key => {
+      if (key !== 'id' && key !== 'password_hash') {
+        record[key] = updatedFields[key];
+      }
+    });
+
+    this.saveLocal();
+    return record;
+  }
+
   // --- Availability Roster Operations ---
 
   getAvailabilitySlots(filter = {}) {

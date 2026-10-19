@@ -10,6 +10,14 @@ export default function App() {
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [usePasswordLogin, setUsePasswordLogin] = useState(false); // Default to WhatsApp 1-Tap Login
+
+  // WhatsApp Route 3 Instant Verification States
+  const [waAuthModal, setWaAuthModal] = useState(null); // { code, waLink, mobile, isExistingUser, messageText, mode }
+  const [waAuthPolling, setWaAuthPolling] = useState(false);
+  const [waVerifiedSuccess, setWaVerifiedSuccess] = useState(false);
+  const [regWaVerifiedCode, setRegWaVerifiedCode] = useState(null); // stores code when phone verified for new registration
+  const [resetPasswordModal, setResetPasswordModal] = useState(null); // { code, mobile, newPassword }
 
   // Register Form States (Diocesan & Religious Clergy)
   const [regTitle, setRegTitle] = useState(''); // mandatory choice: 'Fr.' or 'Sr.'
@@ -474,6 +482,13 @@ export default function App() {
       try {
         const parsed = JSON.parse(cached);
         setUser(parsed);
+        // If user is admin, directly open the Admin Dashboard
+        if (parsed.is_admin === 1) {
+          setActiveMode('admin');
+        } else {
+          setActiveMode('broadcast');
+        }
+
         // Default landing tab:
         // Sisters and Diocesan Priests: start on 'my_requests'
         // Religious Priests: start on 'open' (Explore)
@@ -517,12 +532,13 @@ export default function App() {
         setBookings(await resBookings.json());
       }
 
-      // 3. Fetch Admin Queue if Admin
+      // 3. Fetch Admin Queue & Admin Suite Data if Admin
       if (u.is_admin === 1) {
         const resPending = await fetch('/api/users/pending', { headers: getHeaders(u) });
         if (resPending.ok) {
           setPendingUsers(await resPending.json());
         }
+        fetchAdminData();
       }
 
       // 4. Fetch Priest's Own Status & Future Unavailability
@@ -663,6 +679,160 @@ export default function App() {
     );
   };
 
+  // --- WhatsApp Route 3 Instant Authentication Handlers ---
+  const handleRequestWhatsAppAuth = async (mobileToVerify, mode = 'login') => {
+    if (!mobileToVerify || mobileToVerify.replace(/\D/g, '').length < 10) {
+      showFeedback('error', 'Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    setFormSubmitting(true);
+    try {
+      const res = await fetch('/api/auth/wa-request-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mobile: mobileToVerify })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showFeedback('error', data.error || 'Failed to initialize WhatsApp verification.');
+        return;
+      }
+
+      setWaAuthModal({
+        ...data,
+        mode // 'login' or 'register'
+      });
+      setWaAuthPolling(true);
+
+      // Automatically trigger WhatsApp URL on mobile devices
+      if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        window.open(data.waLink, '_blank');
+      }
+    } catch (err) {
+      showFeedback('error', 'Network error requesting WhatsApp verification.');
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
+
+  // Poll for WhatsApp verification confirmation while modal is open
+  useEffect(() => {
+    let timer = null;
+    if (waAuthModal && waAuthPolling) {
+      timer = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/auth/wa-check-status/${waAuthModal.code}`);
+          const data = await res.json();
+          if (data && data.verified) {
+            clearInterval(timer);
+            setWaAuthPolling(false);
+            setWaVerifiedSuccess(true);
+
+            if (waAuthModal.mode === 'reset_password') {
+              // WhatsApp verified for password reset! Open Set New Password dialog
+              setTimeout(() => {
+                setResetPasswordModal({ code: waAuthModal.code, mobile: data.mobile, newPassword: '' });
+                setWaAuthModal(null);
+                setWaVerifiedSuccess(false);
+                showFeedback('success', '✓ WhatsApp identity verified! You can now choose a new password.');
+              }, 1200);
+            } else if (waAuthModal.mode === 'login' && data.user) {
+              // Direct Instant Login
+              setTimeout(() => {
+                localStorage.setItem('bookapriest_user', JSON.stringify(data.user));
+                setUser(data.user);
+                if (data.user.is_admin === 1) {
+                  setActiveMode('admin');
+                } else {
+                  setActiveMode('broadcast');
+                  const isRequesterFirst = (data.user.title === 'Sr.' || data.user.clergy_type === 'convent' || data.user.clergy_type === 'convent_sister') ||
+                                           (data.user.title === 'Fr.' && data.user.clergy_type === 'diocesan');
+                  setRequestsTab(isRequesterFirst ? 'my_requests' : 'open');
+                }
+                setWaAuthModal(null);
+                setWaVerifiedSuccess(false);
+                showFeedback('success', `✓ Verified via WhatsApp! Welcome, ${data.user.title || ''} ${data.user.name}.`);
+                loadDashboardData(data.user);
+              }, 1200);
+            } else if (waAuthModal.mode === 'register' || !data.isExistingUser) {
+              // Registered phone verified! Proceed to filling details
+              setTimeout(() => {
+                setRegWaVerifiedCode(waAuthModal.code);
+                setRegMobile(data.mobile);
+                setAuthMode('register');
+                setWaAuthModal(null);
+                setWaVerifiedSuccess(false);
+                showFeedback('success', '✓ WhatsApp number verified! Please complete your clerical profile details.');
+              }, 1200);
+            }
+          }
+        } catch (e) {
+          // Keep polling
+        }
+      }, 1500);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [waAuthModal, waAuthPolling]);
+
+  // Simulate/Test WhatsApp message reception directly
+  const handleSimulateWhatsAppConfirm = async (code) => {
+    try {
+      const res = await fetch('/api/auth/wa-confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showFeedback('success', '✓ WhatsApp simulated message received!');
+      } else {
+        showFeedback('error', data.error || 'Failed to simulate confirmation.');
+      }
+    } catch (e) {
+      showFeedback('error', 'Error simulating confirmation.');
+    }
+  };
+
+  // Submit password reset with verified WhatsApp code
+  const handleResetPasswordWa = async (e) => {
+    e.preventDefault();
+    if (!resetPasswordModal || !resetPasswordModal.newPassword) {
+      showFeedback('error', 'Please enter a new password.');
+      return;
+    }
+    if (resetPasswordModal.newPassword.length < 6) {
+      showFeedback('error', 'Password must be at least 6 characters.');
+      return;
+    }
+    setFormSubmitting(true);
+    try {
+      const res = await fetch('/api/auth/reset-password-wa', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: resetPasswordModal.code,
+          newPassword: resetPasswordModal.newPassword
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showFeedback('error', data.error || 'Failed to reset password.');
+      } else {
+        showFeedback('success', '✓ Password reset successfully! Please sign in with your new password.');
+        setLoginIdentifier(resetPasswordModal.mobile || '');
+        setLoginPassword(resetPasswordModal.newPassword);
+        setUsePasswordLogin(true);
+        setResetPasswordModal(null);
+      }
+    } catch (err) {
+      showFeedback('error', 'Network error resetting password.');
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
+
   // Auth Handlers
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -730,6 +900,11 @@ export default function App() {
       showFeedback('error', 'Valid 10-digit WhatsApp Mobile number is required.');
       return;
     }
+    if (!regWaVerifiedCode) {
+      showFeedback('error', 'Please verify your WhatsApp mobile number first before submitting registration.');
+      handleRequestWhatsAppAuth(regMobile, 'register');
+      return;
+    }
     const cleanPin = regPincode.replace(/\D/g, '');
     if (!cleanPin || cleanPin.length !== 6) {
       showFeedback('error', 'A valid 6-digit Postal PIN Code is required for parish/convent proximity.');
@@ -759,17 +934,20 @@ export default function App() {
         ? regResidenceAddress
         : (regResidenceAddress ? `${regResidenceAddress} - ${cleanPin}` : `PIN: ${cleanPin}`);
 
-      const res = await fetch('/api/auth/register', {
+      const targetEndpoint = regWaVerifiedCode ? '/api/auth/register-wa-verified' : '/api/auth/register';
+
+      const res = await fetch(targetEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          code: regWaVerifiedCode,
           title: regTitle,
           name: regName.trim(),
           congregation_abbr: (regTitle === 'Fr.' && regClergyType === 'diocesan') ? '' : regCongregationAbbr.trim(),
           mobile: getCanonicalMobile(regMobile),
           email: regEmail,
           dob: regDob,
-          password: regPassword,
+          password: regPassword || 'wa_verified_login',
           clergy_type: regTitle === 'Fr.' ? regClergyType : 'convent',
           religious_order: (regTitle === 'Fr.' && regClergyType === 'diocesan') ? null : regOrder,
           diocese_province: (regTitle === 'Fr.' && regClergyType === 'diocesan') ? regDiocese : '',
@@ -1246,9 +1424,207 @@ export default function App() {
       if (res.ok) {
         showFeedback('success', data.message);
         loadDashboardData();
+        fetchAdminData();
       }
     } catch (err) {
       showFeedback('error', 'Failed to update verification status.');
+    }
+  };
+
+  // --- Super-Admin Dashboard State & Handlers ---
+  const [adminTab, setAdminTab] = useState('directory'); // 'directory', 'bookings', 'verification', 'database'
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [adminBookings, setAdminBookings] = useState([]);
+  const [adminDbSnapshot, setAdminDbSnapshot] = useState(null);
+  const [adminUserSearch, setAdminUserSearch] = useState('');
+  const [adminUserRoleFilter, setAdminUserRoleFilter] = useState('all'); // 'all', 'priest', 'sister', 'admin'
+  const [adminBookingSearch, setAdminBookingSearch] = useState('');
+  const [adminBookingStatusFilter, setAdminBookingStatusFilter] = useState('all'); // 'all', 'pending', 'accepted', 'completed'
+  const [adminSelectedDbTable, setAdminSelectedDbTable] = useState('users'); // 'users', 'bookings', 'availability_slots'
+  const [adminEditingUser, setAdminEditingUser] = useState(null); // user object to edit
+  const [adminEditingBooking, setAdminEditingBooking] = useState(null); // booking object to edit/override
+  const [adminEditingRawRecord, setAdminEditingRawRecord] = useState(null); // { table, id, rawJson }
+  const [adminPasswordResetModal, setAdminPasswordResetModal] = useState(null); // { user, newPass }
+  const [adminLoading, setAdminLoading] = useState(false);
+
+  const fetchAdminData = async () => {
+    if (!user || user.is_admin !== 1) return;
+    setAdminLoading(true);
+    try {
+      const [resUsers, resBookings, resDb] = await Promise.all([
+        fetch('/api/admin/users', { headers: getHeaders() }),
+        fetch('/api/admin/bookings', { headers: getHeaders() }),
+        fetch('/api/admin/database/snapshot', { headers: getHeaders() })
+      ]);
+      if (resUsers.ok) setAdminUsers(await resUsers.json());
+      if (resBookings.ok) setAdminBookings(await resBookings.json());
+      if (resDb.ok) setAdminDbSnapshot(await resDb.json());
+    } catch (e) {
+      console.error('Failed fetching admin data:', e);
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  const handleAdminResetPassword = async (userId, newPass) => {
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/reset-password`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ newPassword: newPass || 'Jesus@123' })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showFeedback('success', data.message);
+        setAdminPasswordResetModal(null);
+        fetchAdminData();
+      } else {
+        showFeedback('error', data.error || 'Failed to reset password.');
+      }
+    } catch (e) {
+      showFeedback('error', 'Error resetting password.');
+    }
+  };
+
+  const handleAdminToggleRole = async (userId, field, currentVal) => {
+    try {
+      const res = await fetch(`/api/admin/users/${userId}/toggle-role`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ field, value: !currentVal })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showFeedback('success', data.message);
+        fetchAdminData();
+        loadDashboardData();
+      } else {
+        showFeedback('error', data.error || 'Failed to toggle role.');
+      }
+    } catch (e) {
+      showFeedback('error', 'Error toggling role.');
+    }
+  };
+
+  const handleAdminDeleteUser = async (userId, name) => {
+    if (!window.confirm(`Are you absolutely sure you want to permanently delete ${name}? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showFeedback('success', data.message);
+        fetchAdminData();
+        loadDashboardData();
+      } else {
+        showFeedback('error', data.error || 'Failed to delete user.');
+      }
+    } catch (e) {
+      showFeedback('error', 'Error deleting user.');
+    }
+  };
+
+  const handleAdminSaveUser = async (e) => {
+    e.preventDefault();
+    if (!adminEditingUser) return;
+    try {
+      const res = await fetch(`/api/admin/users/${adminEditingUser.id}`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify(adminEditingUser)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showFeedback('success', 'User profile updated successfully.');
+        setAdminEditingUser(null);
+        fetchAdminData();
+        loadDashboardData();
+      } else {
+        showFeedback('error', data.error || 'Failed to update user.');
+      }
+    } catch (e) {
+      showFeedback('error', 'Error updating user.');
+    }
+  };
+
+  const handleAdminSaveBooking = async (e) => {
+    e.preventDefault();
+    if (!adminEditingBooking) return;
+    try {
+      const res = await fetch(`/api/admin/bookings/${adminEditingBooking.id}`, {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify(adminEditingBooking)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showFeedback('success', 'Booking updated successfully.');
+        setAdminEditingBooking(null);
+        fetchAdminData();
+        loadDashboardData();
+      } else {
+        showFeedback('error', data.error || 'Failed to update booking.');
+      }
+    } catch (e) {
+      showFeedback('error', 'Error updating booking.');
+    }
+  };
+
+  const handleAdminDeleteBooking = async (bookingId) => {
+    if (!window.confirm('Are you sure you want to permanently delete this booking request?')) return;
+    try {
+      const res = await fetch(`/api/admin/bookings/${bookingId}`, {
+        method: 'DELETE',
+        headers: getHeaders()
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showFeedback('success', data.message);
+        fetchAdminData();
+        loadDashboardData();
+      } else {
+        showFeedback('error', data.error || 'Failed to delete booking.');
+      }
+    } catch (e) {
+      showFeedback('error', 'Error deleting booking.');
+    }
+  };
+
+  const handleAdminSaveRawRecord = async (e) => {
+    e.preventDefault();
+    if (!adminEditingRawRecord) return;
+    try {
+      let parsedUpdates;
+      try {
+        parsedUpdates = JSON.parse(adminEditingRawRecord.rawJson);
+      } catch (jsonErr) {
+        showFeedback('error', 'Invalid JSON syntax. Please check formatting.');
+        return;
+      }
+      const res = await fetch('/api/admin/database/record', {
+        method: 'PATCH',
+        headers: getHeaders(),
+        body: JSON.stringify({
+          table: adminEditingRawRecord.table,
+          id: adminEditingRawRecord.id,
+          updates: parsedUpdates
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showFeedback('success', 'Database record updated successfully.');
+        setAdminEditingRawRecord(null);
+        fetchAdminData();
+        loadDashboardData();
+      } else {
+        showFeedback('error', data.error || 'Failed to update record.');
+      }
+    } catch (e) {
+      showFeedback('error', 'Error saving database record.');
     }
   };
 
@@ -1615,69 +1991,181 @@ export default function App() {
           {successMsg && <div className="success-alert">{successMsg}</div>}
 
           {authMode === 'login' ? (
-            <form onSubmit={handleLogin}>
-              <div className="form-group">
-                <label className="form-label">WhatsApp Mobile or Email</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="+91 98765 43210 or admin@bookapriest.in"
-                  value={loginIdentifier}
-                  onChange={(e) => setLoginIdentifier(e.target.value)}
-                  required
-                />
-              </div>
+            <div>
+              {!usePasswordLogin ? (
+                /* Sleek, Minimal WhatsApp 1-Tap Login */
+                <div>
+                  <form onSubmit={(e) => { e.preventDefault(); handleRequestWhatsAppAuth(loginIdentifier, 'login'); }}>
+                    <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                      <label className="form-label" style={{ fontWeight: 600, color: '#334155' }}>WhatsApp Mobile</label>
+                      <div className="input-prefix-group">
+                        <span className="input-prefix-badge" style={{ color: '#475569', fontWeight: 700 }}>+91</span>
+                        <input
+                          type="tel"
+                          className="form-input-inline"
+                          placeholder="98765 43210"
+                          value={formatMobileDisplay(loginIdentifier)}
+                          onChange={(e) => setLoginIdentifier(e.target.value)}
+                          maxLength={11}
+                          required
+                          autoFocus
+                        />
+                      </div>
+                    </div>
 
-              <div className="form-group">
-                <label className="form-label">Password</label>
-                <div className="input-action-group">
-                  <input
-                    type={showLoginPassword ? 'text' : 'password'}
-                    className="form-input"
-                    placeholder="••••••••••••"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    required
-                  />
-                  <button
-                    type="button"
-                    className="input-action-btn"
-                    onClick={() => setShowLoginPassword(!showLoginPassword)}
-                    tabIndex="-1"
-                    title={showLoginPassword ? "Hide password" : "Show password"}
-                    style={{ padding: '0.4rem', color: '#64748B' }}
-                  >
-                    {showLoginPassword ? (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                        <line x1="1" y1="1" x2="23" y2="23" />
+                    <button
+                      type="submit"
+                      className="btn"
+                      style={{
+                        width: '100%',
+                        background: '#25D366',
+                        borderColor: '#22C55E',
+                        color: '#FFFFFF',
+                        fontWeight: 700,
+                        fontSize: '0.98rem',
+                        padding: '0.85rem',
+                        borderRadius: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '10px',
+                        boxShadow: '0 4px 12px rgba(37, 211, 102, 0.25)',
+                        cursor: 'pointer'
+                      }}
+                      disabled={formSubmitting}
+                    >
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2M12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.58 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 15 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67M8.53 7.33C8.37 7.33 8.1 7.39 7.87 7.64C7.65 7.89 7.02 8.48 7.02 9.69C7.02 10.9 7.9 12.07 8.02 12.23C8.15 12.4 9.73 14.82 12.16 15.86C12.74 16.11 13.19 16.26 13.54 16.37C14.12 16.56 14.65 16.53 15.07 16.47C15.54 16.4 16.51 15.88 16.71 15.31C16.92 14.74 16.92 14.26 16.86 14.16C16.79 14.05 16.63 13.99 16.39 13.87C16.15 13.75 14.97 13.17 14.75 13.09C14.53 13.01 14.37 12.97 14.21 13.22C14.05 13.46 13.59 14.01 13.45 14.17C13.31 14.33 13.17 14.35 12.93 14.23C12.69 14.11 11.91 13.86 10.99 13.04C10.28 12.4 9.8 11.62 9.66 11.38C9.52 11.14 9.65 11.01 9.77 10.89C9.88 10.78 10.02 10.6 10.14 10.46C10.26 10.32 10.3 10.22 10.38 10.06C10.46 9.9 10.42 9.76 10.36 9.64C10.3 9.52 9.84 8.38 9.64 7.91C9.45 7.46 9.26 7.52 9.11 7.51C8.97 7.51 8.81 7.51 8.65 7.51L8.53 7.33Z" />
                       </svg>
-                    ) : (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </svg>
-                    )}
-                  </button>
+                      <span>{formSubmitting ? 'Verifying...' : 'Log in via WhatsApp'}</span>
+                    </button>
+                  </form>
+
+                  <div style={{ margin: '1rem 0 0.5rem 0', textAlign: 'center', position: 'relative' }}>
+                    <div style={{ borderTop: '1px solid #E2E8F0', position: 'absolute', top: '50%', left: 0, right: 0 }}></div>
+                    <span style={{ position: 'relative', background: '#FFFFFF', padding: '0 12px', fontSize: '0.76rem', color: '#94A3B8', fontWeight: 600, textTransform: 'uppercase' }}>
+                      or
+                    </span>
+                  </div>
+
+                  <div style={{ textAlign: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => setUsePasswordLogin(true)}
+                      style={{ background: 'none', border: 'none', color: '#64748B', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', padding: '6px' }}
+                    >
+                      Sign in with password
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                /* Fallback: Password Login (For Admin or fallback) */
+                <form onSubmit={handleLogin}>
+                  <div className="form-group">
+                    <label className="form-label">WhatsApp Mobile</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="+91 98765 43210"
+                      value={loginIdentifier}
+                      onChange={(e) => setLoginIdentifier(e.target.value)}
+                      required
+                    />
+                  </div>
 
-              <button
-                type="submit"
-                className="btn btn-primary"
-                style={{ width: '100%', marginTop: '0.5rem' }}
-                disabled={formSubmitting}
-              >
-                {formSubmitting ? 'Verifying...' : 'Sign In to Portal'}
-              </button>
+                  <div className="form-group">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                      <label className="form-label" style={{ margin: 0 }}>Password</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const mob = loginIdentifier || '';
+                          if (!mob || mob.replace(/\D/g, '').length < 10) {
+                            showFeedback('error', 'Please enter your 10-digit WhatsApp mobile number above first.');
+                            return;
+                          }
+                          handleRequestWhatsAppAuth(mob, 'reset_password');
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#2563EB',
+                          fontSize: '0.76rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          padding: 0
+                        }}
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
+                    <div className="input-action-group">
+                      <input
+                        type={showLoginPassword ? 'text' : 'password'}
+                        className="form-input"
+                        placeholder="••••••••••••"
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="input-action-btn"
+                        onClick={() => setShowLoginPassword(!showLoginPassword)}
+                        tabIndex="-1"
+                        title={showLoginPassword ? "Hide password" : "Show password"}
+                        style={{ padding: '0.4rem', color: '#64748B' }}
+                      >
+                        {showLoginPassword ? (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                            <line x1="1" y1="2" x2="23" y2="23" />
+                          </svg>
+                        ) : (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                  </div>
 
-              <div className="auth-footer">
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    style={{ width: '100%', marginTop: '0.5rem' }}
+                    disabled={formSubmitting}
+                  >
+                    {formSubmitting ? 'Verifying...' : 'Sign In with Password'}
+                  </button>
+
+                  <div style={{ marginTop: '1rem', textAlign: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => setUsePasswordLogin(false)}
+                      style={{ background: 'none', border: 'none', color: '#25D366', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', padding: '4px' }}
+                    >
+                      ← Back to WhatsApp 1-Tap Login
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              <div className="auth-footer" style={{ borderTop: '1px solid #F1F5F9', marginTop: '1.25rem', paddingTop: '1rem' }}>
                 New User?{' '}
-                <span className="auth-link" onClick={() => setAuthMode('register')}>
-                  Create an Account Here
+                <span
+                  className="auth-link"
+                  onClick={() => {
+                    setAuthMode('register');
+                    setRegWaVerifiedCode(null);
+                  }}
+                  style={{ color: '#2563EB', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Create a new account
                 </span>
               </div>
-            </form>
+            </div>
           ) : (
             <form onSubmit={handleRegister} autoComplete="off">
               {/* Section 1: Clerical Identity */}
@@ -1960,34 +2448,103 @@ export default function App() {
                 <span>2. Contact & Location</span>
               </div>
 
-              {/* Contact Information Group */}
-              <div className="form-row">
-                <div className="form-group">
-                  <label className="form-label">
-                    <span>WhatsApp Mobile *</span>
-                  </label>
-                  <div className="input-prefix-group">
-                    <span className="input-prefix-badge" style={{ color: '#475569', fontWeight: 700 }}>+91</span>
-                    <input
-                      type="tel"
-                      className="form-input-inline"
-                      placeholder="98765 43210"
-                      value={formatMobileDisplay(regMobile)}
-                      onChange={(e) => setRegMobile(e.target.value)}
-                      maxLength={11}
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Email (optional)</label>
+              {/* WhatsApp Mobile with Seamless Inline Verification */}
+              <div className="form-group">
+                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>WhatsApp Mobile *</span>
+                  {!regWaVerifiedCode && (
+                    <span style={{ color: '#DC2626', fontSize: '0.74rem', fontWeight: 700 }}>
+                      WhatsApp Verification Required!
+                    </span>
+                  )}
+                </label>
+                <div
+                  className="input-prefix-group"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    paddingRight: '6px',
+                    borderColor: regWaVerifiedCode ? '#22C55E' : '#E2E8F0',
+                    background: regWaVerifiedCode ? '#F0FDF4' : '#FFFFFF',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <span className="input-prefix-badge" style={{ color: '#475569', fontWeight: 700, paddingLeft: '12px' }}>+91</span>
                   <input
-                    type="email"
-                    className="form-input"
-                    placeholder={regTitle === 'Sr.' ? 'sister@gmail.com' : 'father@gmail.com'}
-                    value={regEmail}
-                    onChange={(e) => setRegEmail(e.target.value)}
+                    type="tel"
+                    className="form-input-inline"
+                    placeholder="98765 43210"
+                    value={formatMobileDisplay(regMobile)}
+                    onChange={(e) => {
+                      setRegMobile(e.target.value);
+                      setRegWaVerifiedCode(null);
+                    }}
+                    maxLength={11}
+                    required
+                    disabled={!!regWaVerifiedCode}
+                    style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none' }}
                   />
+                  {regWaVerifiedCode ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', paddingRight: '4px' }}>
+                      <span
+                        style={{
+                          background: '#DCFCE7',
+                          color: '#15803D',
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          padding: '3px 8px',
+                          borderRadius: '9999px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        ✓ Verified
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setRegWaVerifiedCode(null)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#64748B',
+                          fontSize: '0.74rem',
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          padding: '2px 4px'
+                        }}
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleRequestWhatsAppAuth(regMobile, 'register')}
+                      disabled={formSubmitting || !regMobile || regMobile.replace(/\D/g, '').length < 10}
+                      style={{
+                        background: (regMobile && regMobile.replace(/\D/g, '').length >= 10) ? '#25D366' : '#F1F5F9',
+                        color: (regMobile && regMobile.replace(/\D/g, '').length >= 10) ? '#FFFFFF' : '#94A3B8',
+                        border: 'none',
+                        borderRadius: '6px',
+                        padding: '6px 12px',
+                        fontWeight: 600,
+                        fontSize: '0.78rem',
+                        cursor: (regMobile && regMobile.replace(/\D/g, '').length >= 10) ? 'pointer' : 'default',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        transition: 'all 0.2s ease',
+                        whiteSpace: 'nowrap'
+                      }}
+                      title="Verify via WhatsApp"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.771-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.312.045-.694.074-2.008-.472-1.681-.7-2.776-2.434-2.86-2.546-.084-.112-.682-.907-.682-1.729 0-.822.433-1.226.587-1.391.154-.165.336-.206.449-.206.112 0 .224.001.322.006.104.005.244-.04.381.29.144.35.492 1.2.535 1.288.043.088.072.191.014.306-.058.115-.088.187-.174.288-.087.102-.183.228-.261.306-.088.087-.18.182-.077.359.102.176.455.75 0.978 1.216.673.599 1.24.785 1.417.873.177.087.28.073.384-.045.105-.118.449-.523.57-.702.12-.18.241-.15.405-.089.164.061 1.042.492 1.22.582.179.089.298.134.342.208.043.075.043.434-.101.839z"/>
+                      </svg>
+                      Verify
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -2016,7 +2573,7 @@ export default function App() {
 
                 <div className="form-group">
                   <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Address (optional)</span>
+                    <span>Address</span>
                     {regLatitude && (
                       <span style={{ color: '#166534', fontSize: '0.74rem', fontWeight: 600 }}>
                         ✓ GPS Pin Set
@@ -2138,110 +2695,59 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Privacy & Authenticity Guarantee Card with Agreement Checkbox */}
-              <div
-                style={{
-                  background: 'linear-gradient(135deg, #F8FAFC 0%, #FEFCE8 100%)',
-                  border: '1px solid #FEF08A',
-                  borderLeft: '4px solid var(--accent-gold)',
-                  borderRadius: '8px',
-                  padding: '0.85rem 0.95rem',
-                  margin: '1rem 0 0.85rem 0'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.65rem' }}>
-                  <div style={{ color: 'var(--accent-gold)', marginTop: '2px', flexShrink: 0 }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                      <path d="M9 12l2 2 4-4" />
-                    </svg>
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: '#334155', lineHeight: 1.5, flex: 1 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '3px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.82rem' }}>
-                          Privacy & Authenticity Guarantee
-                        </span>
-                        <span style={{ fontSize: '0.65rem', background: '#FEF08A', color: '#854D0E', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
-                          Verified Catholic Forum
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <a
-                          href="mailto:bookapriestnow@gmail.com?subject=Registration%20Assistance%20-%20Book%20a%20Priest&body=Praise%20be%20Jesus!%20I%20am%20registering%20on%20Book%20a%20Priest%20and%20would%20like%20assistance%20completing%20my%20details."
-                          title="Contact support via email: bookapriestnow@gmail.com"
-                          style={{
-                            color: '#0369A1',
-                            textDecoration: 'none',
-                            fontWeight: 600,
-                            fontSize: '0.74rem',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            background: '#E0F2FE',
-                            padding: '3px 9px',
-                            borderRadius: '12px',
-                            border: '1px solid #BAE6FD'
-                          }}
-                        >
-                          ✉️ Need help?
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => setShowPrivacyPage(true)}
-                          title="Read privacy policy & website credentials"
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#0284C7',
-                            cursor: 'pointer',
-                            padding: 0,
-                            fontSize: '0.74rem',
-                            fontWeight: 600,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '3px'
-                          }}
-                        >
-                          <span
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              width: '16px',
-                              height: '16px',
-                              borderRadius: '50%',
-                              background: '#E0F2FE',
-                              color: '#0369A1',
-                              fontSize: '0.68rem',
-                              fontWeight: 700
-                            }}
-                          >
-                            i
-                          </span>
-                          <span>Details & Policy →</span>
-                        </button>
-                      </div>
-                    </div>
-                    <div>
-                      Managed exclusively by and for Catholic clergy & religious. Your personal details are <strong>100% confidential</strong> and never shared publicly.
-                    </div>
-                  </div>
-                </div>
-
-                {/* Agreement Checkbox */}
-                <div style={{ marginTop: '0.75rem', paddingTop: '0.65rem', borderTop: '1px dashed #E2E8F0' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer', fontSize: '0.8rem', color: '#0F172A', fontWeight: 600, userSelect: 'none' }}>
-                    <input
-                      type="checkbox"
-                      checked={regAgreed}
-                      onChange={(e) => setRegAgreed(e.target.checked)}
-                      style={{ width: '16px', height: '16px', accentColor: '#CA8A04', cursor: 'pointer' }}
-                      required
-                    />
-                    <span>I have read and understood the privacy policy and terms</span>
-                  </label>
-                </div>
+              {/* Sleek Integrated Privacy & Policy Agreement */}
+              <div style={{ margin: '1.25rem 0 0.85rem 0' }}>
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.65rem',
+                    cursor: 'pointer',
+                    fontSize: '0.78rem',
+                    color: '#475569',
+                    lineHeight: 1.45,
+                    userSelect: 'none'
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={regAgreed}
+                    onChange={(e) => setRegAgreed(e.target.checked)}
+                    style={{
+                      width: '16px',
+                      height: '16px',
+                      accentColor: 'var(--primary-color, #0F172A)',
+                      marginTop: '2px',
+                      cursor: 'pointer',
+                      flexShrink: 0
+                    }}
+                    required
+                  />
+                  <span>
+                    Exclusively for Catholic clergy & religious. Managed manually by & for the verified Catholic forum. I confirm my details and agree to the{' '}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setShowPrivacyPage(true);
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#0284C7',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        padding: 0,
+                        textDecoration: 'underline',
+                        fontSize: 'inherit'
+                      }}
+                    >
+                      Privacy Policy & Terms
+                    </button>
+                    . All details remain 100% confidential.
+                  </span>
+                </label>
               </div>
 
               <button
@@ -2257,27 +2763,21 @@ export default function App() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '8px',
-                  boxShadow: regAgreed && !formSubmitting ? '0 4px 14px rgba(15, 23, 42, 0.2)' : 'none',
-                  opacity: regAgreed && !formSubmitting ? 1 : 0.45,
-                  cursor: regAgreed && !formSubmitting ? 'pointer' : 'not-allowed',
+                  boxShadow: (regAgreed && !formSubmitting) ? '0 4px 14px rgba(15, 23, 42, 0.2)' : 'none',
+                  opacity: (regAgreed && !formSubmitting) ? 1 : 0.5,
+                  cursor: (regAgreed && !formSubmitting) ? 'pointer' : 'not-allowed',
                   transition: 'all 0.2s ease'
                 }}
                 disabled={!regAgreed || formSubmitting}
-                title={!regAgreed ? 'Please read and check the agreement box above to proceed' : 'Submit Registration'}
+                title={!regAgreed ? 'Please read and check the agreement box above to proceed' : 'Submit'}
               >
                 {formSubmitting ? (
                   <>
                     <span style={{ fontSize: '1rem', animation: 'spin 1s linear infinite' }}>⏳</span>
-                    <span>Submitting Registration...</span>
+                    <span>Submitting...</span>
                   </>
                 ) : (
-                  <>
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                    </svg>
-                    <span>Submit Registration</span>
-                  </>
+                  <span>Submit</span>
                 )}
               </button>
 
@@ -2290,6 +2790,207 @@ export default function App() {
             </form>
           )}
         </div>
+
+        {/* --- ROUTE 3: WHATSAPP 1-TAP VERIFICATION OVERLAY MODAL --- */}
+        {waAuthModal && (
+          <div className="modal-overlay" style={{ zIndex: 10000, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(5px)' }}>
+            <div className="modal-container" style={{ maxWidth: '440px', padding: '1.75rem 1.5rem', textAlign: 'center', borderRadius: '18px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+              
+              {/* Animated WhatsApp Icon */}
+              <div style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '50%',
+                background: waVerifiedSuccess ? '#DCFCE7' : '#25D366',
+                color: '#FFFFFF',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '1rem',
+                boxShadow: '0 8px 20px rgba(37, 211, 102, 0.35)',
+                transition: 'all 0.3s ease'
+              }}>
+                {waVerifiedSuccess ? (
+                  <span style={{ fontSize: '2rem', color: '#16A34A' }}>✓</span>
+                ) : (
+                  <span style={{ fontSize: '2rem' }}>💬</span>
+                )}
+              </div>
+
+              {waVerifiedSuccess ? (
+                <div>
+                  <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.25rem', fontWeight: 800, color: '#16A34A' }}>
+                    WhatsApp Verified!
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.88rem', color: '#475569' }}>
+                    {waAuthModal.mode === 'login' ? 'Logging you into your dashboard...' : 'Loading profile registration form...'}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <h3 style={{ margin: '0 0 0.4rem 0', fontSize: '1.25rem', fontWeight: 800, color: '#0F172A', fontFamily: 'Outfit' }}>
+                    1-Tap WhatsApp Verification
+                  </h3>
+                  <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.84rem', color: '#64748B', lineHeight: '1.5' }}>
+                    Tap the button below to open WhatsApp and send the pre-filled message:
+                  </p>
+
+                  {/* Pre-filled Message Bubble Preview */}
+                  <div style={{
+                    background: '#F0FDF4',
+                    border: '1.5px dashed #86EFAC',
+                    borderRadius: '12px',
+                    padding: '0.85rem 1rem',
+                    marginBottom: '1.25rem',
+                    textAlign: 'left'
+                  }}>
+                    <div style={{ fontSize: '0.72rem', color: '#166534', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px' }}>
+                      Pre-filled Message Preview
+                    </div>
+                    <div style={{ fontSize: '0.92rem', color: '#0F172A', fontWeight: 600, fontFamily: 'monospace' }}>
+                      {waAuthModal.messageText}
+                    </div>
+                  </div>
+
+                  {/* Main Action: Open WhatsApp */}
+                  <a
+                    href={waAuthModal.waLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      background: '#25D366',
+                      borderColor: '#22C55E',
+                      color: '#FFFFFF',
+                      fontSize: '1rem',
+                      fontWeight: 800,
+                      padding: '0.85rem 1.25rem',
+                      borderRadius: '10px',
+                      textDecoration: 'none',
+                      marginBottom: '0.75rem',
+                      boxShadow: '0 4px 14px rgba(37, 211, 102, 0.35)'
+                    }}
+                  >
+                    <span>💬</span>
+                    <span>Send Message on WhatsApp</span>
+                  </a>
+
+                  {/* Polling / Listening Radar Status */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.8rem', color: '#64748B', margin: '0.85rem 0' }}>
+                    <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#22C55E', animation: 'pulse 1.2s infinite' }}></span>
+                    <span>Waiting for your WhatsApp message to arrive...</span>
+                  </div>
+
+                  {/* Dev / Quick Test: Simulate Click */}
+                  <div style={{ borderTop: '1px solid #F1F5F9', paddingTop: '0.85rem', marginTop: '0.5rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleSimulateWhatsAppConfirm(waAuthModal.code)}
+                      style={{
+                        background: '#F8FAFC',
+                        border: '1px solid #E2E8F0',
+                        color: '#475569',
+                        padding: '0.4rem 0.85rem',
+                        borderRadius: '6px',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                        fontWeight: 600
+                      }}
+                      title="Simulates that your WhatsApp message arrived at the server"
+                    >
+                      ⚡ Test: Simulate Incoming WhatsApp Message
+                    </button>
+                  </div>
+
+                  <div style={{ marginTop: '1rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWaAuthModal(null);
+                        setWaAuthPolling(false);
+                      }}
+                      style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '0.8rem', cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* --- SET NEW PASSWORD MODAL (AFTER WHATSAPP VERIFICATION) --- */}
+        {resetPasswordModal && (
+          <div className="modal-overlay" style={{ zIndex: 10001, background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(5px)' }}>
+            <div className="modal-container" style={{ maxWidth: '420px', padding: '1.75rem 1.5rem', borderRadius: '18px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)' }}>
+              <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+                <div style={{
+                  width: '56px',
+                  height: '56px',
+                  borderRadius: '50%',
+                  background: '#DCFCE7',
+                  color: '#16A34A',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '1.8rem',
+                  marginBottom: '0.75rem'
+                }}>
+                  🔐
+                </div>
+                <h3 style={{ margin: '0 0 0.35rem 0', fontSize: '1.2rem', fontWeight: 800, color: '#0F172A' }}>
+                  Reset Your Password
+                </h3>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748B' }}>
+                  WhatsApp verified for <strong>{resetPasswordModal.mobile}</strong>. Enter your new password below:
+                </p>
+              </div>
+
+              <form onSubmit={handleResetPasswordWa}>
+                <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                  <label className="form-label">New Password *</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    placeholder="Enter new password (min. 6 chars)"
+                    value={resetPasswordModal.newPassword}
+                    onChange={(e) => setResetPasswordModal({ ...resetPasswordModal, newPassword: e.target.value })}
+                    required
+                    minLength={6}
+                    autoFocus
+                  />
+                  <span style={{ fontSize: '0.72rem', color: '#64748B', display: 'block', marginTop: '4px' }}>
+                    Minimum 6 characters.
+                  </span>
+                </div>
+
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ width: '100%', padding: '0.8rem', fontWeight: 700 }}
+                  disabled={formSubmitting || !resetPasswordModal.newPassword || resetPasswordModal.newPassword.length < 6}
+                >
+                  {formSubmitting ? 'Updating...' : 'Set New Password'}
+                </button>
+
+                <div style={{ marginTop: '0.85rem', textAlign: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => setResetPasswordModal(null)}
+                    style={{ background: 'none', border: 'none', color: '#94A3B8', fontSize: '0.8rem', cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* --- AUTH PAGE FOOTER (DISCREET & PRIVACY-CONSCIOUS) --- */}
         <footer style={{ marginTop: '0.5rem', textAlign: 'center', fontSize: '0.78rem', color: '#64748B', lineHeight: '1.6' }}>
@@ -2348,7 +3049,7 @@ export default function App() {
             </div>
             <div className="user-tag" style={{ textAlign: 'left' }}>
               <span className="user-name" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                <span>{formatEcclesiasticalName(user)}</span>
+                <span>{user.is_admin === 1 ? 'Administrator' : formatEcclesiasticalName(user)}</span>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#64748B" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.85 }}>
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
@@ -2356,107 +3057,112 @@ export default function App() {
               </span>
               <span className="user-status" style={{ justifyContent: 'flex-start' }}>
                 <span className={`status-dot ${user.is_verified === 1 ? 'verified' : 'pending'}`}></span>
-                {user.is_verified === 1 ? 'Verified' : 'Pending Verification'}
+                {user.is_admin === 1 ? 'System Admin' : user.is_verified === 1 ? 'Verified' : 'Pending Verification'}
               </span>
             </div>
           </button>
 
-          {/* Favorite Ministers Quick Access Button */}
-          <div className="header-notif-wrapper">
-            <button
-              type="button"
-              className="header-notif-btn"
-              onClick={() => setShowFavoritesModal(true)}
-              title="My Favorite Ministers"
-              aria-label="View favorite ministers"
-              style={{
-                borderColor: showFavoritesModal ? '#EAB308' : '#E2E8F0',
-                background: showFavoritesModal ? '#FEFCE8' : '#FFFFFF',
-                color: showFavoritesModal ? '#CA8A04' : '#64748B'
-              }}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill={user?.favorite_ministers?.length > 0 ? '#EAB308' : 'none'} stroke="#EAB308" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
-              {(() => {
-                const favCount = Array.isArray(user?.favorite_ministers) ? user.favorite_ministers.length : 0;
-                return favCount > 0 ? (
-                  <span className="header-notif-badge" style={{ background: '#EAB308', color: '#FFFFFF', boxShadow: '0 2px 4px rgba(234, 179, 8, 0.4)' }}>
-                    {favCount}
-                  </span>
-                ) : null;
-              })()}
-            </button>
-          </div>
+          {/* Favorite Ministers Quick Access Button (Hide for Super-Admin) */}
+          {user.is_admin !== 1 && (
+            <div className="header-notif-wrapper">
+              <button
+                type="button"
+                className="header-notif-btn"
+                onClick={() => setShowFavoritesModal(true)}
+                title="My Favorite Ministers"
+                aria-label="View favorite ministers"
+                style={{
+                  borderColor: showFavoritesModal ? '#EAB308' : '#E2E8F0',
+                  background: showFavoritesModal ? '#FEFCE8' : '#FFFFFF',
+                  color: showFavoritesModal ? '#CA8A04' : '#64748B'
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill={user?.favorite_ministers?.length > 0 ? '#EAB308' : 'none'} stroke="#EAB308" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+                {(() => {
+                  const favCount = Array.isArray(user?.favorite_ministers) ? user.favorite_ministers.length : 0;
+                  return favCount > 0 ? (
+                    <span className="header-notif-badge" style={{ background: '#EAB308', color: '#FFFFFF', boxShadow: '0 2px 4px rgba(234, 179, 8, 0.4)' }}>
+                      {favCount}
+                    </span>
+                  ) : null;
+                })()}
+              </button>
+            </div>
+          )}
 
-          {/* Monthly Booking Calendar Quick Access Button */}
-          <div className="header-notif-wrapper">
-            <button
-              type="button"
-              className="header-notif-btn"
-              onClick={() => {
-                const todayStr = new Date().toISOString().split('T')[0];
-                setCalMonthOffset(0);
-                // Look for upcoming celebration dates for this user
-                const confirmedUserBookings = bookings.filter(b => (b.status === 'accepted' || b.status === 'completed') && (b.responder_id === user.id || b.requester_id === user.id));
-                const datesWithBookings = confirmedUserBookings
-                  .map(b => b.datetime ? b.datetime.split('T')[0] : null)
-                  .filter(Boolean)
-                  .sort();
-                // Select today if it has a booking, or the next upcoming date, or first available, or today
-                const upcomingDate = datesWithBookings.find(d => d >= todayStr);
-                const targetDate = datesWithBookings.includes(todayStr) ? todayStr : (upcomingDate || datesWithBookings[0] || todayStr);
-                setCalendarSelectedDate(targetDate);
-                setShowCalendarModal(true);
-              }}
-              title="Monthly Ministry & Booking Calendar"
-              aria-label="View monthly booking calendar"
-              style={{
-                borderColor: showCalendarModal ? '#2563EB' : '#E2E8F0',
-                background: showCalendarModal ? '#EFF6FF' : '#FFFFFF',
-                color: showCalendarModal ? '#1D4ED8' : '#334155'
-              }}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-              {(() => {
-                // Count confirmed bookings for this priest/user in the current or upcoming schedule
-                const confirmedCount = bookings.filter(b => (b.status === 'accepted' || b.status === 'completed') && (b.responder_id === user.id || b.requester_id === user.id)).length;
-                return confirmedCount > 0 ? (
-                  <span className="header-notif-badge" style={{ background: '#2563EB', boxShadow: '0 2px 4px rgba(37, 99, 235, 0.35)' }}>
-                    {confirmedCount}
-                  </span>
-                ) : null;
-              })()}
-            </button>
-          </div>
+          {/* Monthly Booking Calendar Quick Access Button (Hide for Super-Admin) */}
+          {user.is_admin !== 1 && (
+            <div className="header-notif-wrapper">
+              <button
+                type="button"
+                className="header-notif-btn"
+                onClick={() => {
+                  const todayStr = new Date().toISOString().split('T')[0];
+                  setCalMonthOffset(0);
+                  // Look for upcoming celebration dates for this user
+                  const confirmedUserBookings = bookings.filter(b => (b.status === 'accepted' || b.status === 'completed') && (b.responder_id === user.id || b.requester_id === user.id));
+                  const datesWithBookings = confirmedUserBookings
+                    .map(b => b.datetime ? b.datetime.split('T')[0] : null)
+                    .filter(Boolean)
+                    .sort();
+                  // Select today if it has a booking, or the next upcoming date, or first available, or today
+                  const upcomingDate = datesWithBookings.find(d => d >= todayStr);
+                  const targetDate = datesWithBookings.includes(todayStr) ? todayStr : (upcomingDate || datesWithBookings[0] || todayStr);
+                  setCalendarSelectedDate(targetDate);
+                  setShowCalendarModal(true);
+                }}
+                title="Monthly Ministry & Booking Calendar"
+                aria-label="View monthly booking calendar"
+                style={{
+                  borderColor: showCalendarModal ? '#2563EB' : '#E2E8F0',
+                  background: showCalendarModal ? '#EFF6FF' : '#FFFFFF',
+                  color: showCalendarModal ? '#1D4ED8' : '#334155'
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+                {(() => {
+                  // Count confirmed bookings for this priest/user in the current or upcoming schedule
+                  const confirmedCount = bookings.filter(b => (b.status === 'accepted' || b.status === 'completed') && (b.responder_id === user.id || b.requester_id === user.id)).length;
+                  return confirmedCount > 0 ? (
+                    <span className="header-notif-badge" style={{ background: '#2563EB', boxShadow: '0 2px 4px rgba(37, 99, 235, 0.35)' }}>
+                      {confirmedCount}
+                    </span>
+                  ) : null;
+                })()}
+              </button>
+            </div>
+          )}
 
-          {/* Facebook-Style Notification Bell & Floating Dropdown Overlay */}
-          <div className="header-notif-wrapper">
-            <button
-              type="button"
-              className="header-notif-btn"
-              onClick={() => setShowNotificationsModal(!showNotificationsModal)}
-              title="Notifications & Ministry History Timeline"
-              aria-label="View notifications and history"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-              </svg>
-              {(() => {
-                const count = bookings.filter(b => {
-                  if (b.status === 'accepted' && (b.responder_id === user.id || b.requester_id === user.id)) return true;
-                  if (b.requester_id === user.id && (b.applicants || []).length > 0) return true;
-                  return false;
-                }).length;
-                return count > 0 ? <span className="header-notif-badge">{count}</span> : null;
-              })()}
-            </button>
+          {/* Facebook-Style Notification Bell & Floating Dropdown Overlay (Hide for Super-Admin) */}
+          {user.is_admin !== 1 && (
+            <div className="header-notif-wrapper">
+              <button
+                type="button"
+                className="header-notif-btn"
+                onClick={() => setShowNotificationsModal(!showNotificationsModal)}
+                title="Notifications & Ministry History Timeline"
+                aria-label="View notifications and history"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+                {(() => {
+                  const count = bookings.filter(b => {
+                    if (b.status === 'accepted' && (b.responder_id === user.id || b.requester_id === user.id)) return true;
+                    if (b.requester_id === user.id && (b.applicants || []).length > 0) return true;
+                    return false;
+                  }).length;
+                  return count > 0 ? <span className="header-notif-badge">{count}</span> : null;
+                })()}
+              </button>
 
             {/* FLOATING OVERLAY DROPDOWN */}
             {showNotificationsModal && (
@@ -2689,8 +3395,9 @@ export default function App() {
               </>
             )}
           </div>
+        )}
 
-          {/* Sign Out Action Button (Styled matching the circular header action buttons) */}
+        {/* Sign Out Action Button (Styled matching the circular header action buttons) */}
           <div className="header-notif-wrapper">
             <button
               type="button"
@@ -2738,25 +3445,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Admin Navigation Tab */}
-        {user.is_admin === 1 && (
-          <div className="tabs" style={{ marginBottom: '1rem' }}>
-            <div
-              className={`tab ${activeMode !== 'admin' ? 'active' : ''}`}
-              onClick={() => setActiveMode('roster')}
-            >
-              ⛪ Liturgical Platform
-            </div>
-            <div
-              className={`tab ${activeMode === 'admin' ? 'active' : ''}`}
-              onClick={() => setActiveMode('admin')}
-            >
-              ⚙️ Admin Verification Queue ({pendingUsers.length})
-            </div>
-          </div>
-        )}
-
-        {activeMode !== 'admin' && (
+        {/* Liturgical Platform: Only rendered for standard Clergy & Sister accounts (Admins exclusively use Admin Control Suite) */}
+        {user.is_admin !== 1 && (
           <>
             {/* ========================================================================= */}
             {/* UNIFIED 4-TAB DASHBOARD (PRIESTS & SISTERS)                              */}
@@ -4681,77 +5371,951 @@ export default function App() {
           </>
         )}
 
-        {/* --- ADMIN QUEUE TAB --- */}
-        {activeMode === 'admin' && user.is_admin === 1 && (
-          <div>
-            <div className="dashboard-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-              <div className="dashboard-title">
-                <h2>Admin Manual Verification Queue</h2>
-                <p>Verify raw priest and religious order credentials before unlocking app features</p>
+        {/* --- SUPER-ADMIN CONTROL SUITE --- */}
+        {user.is_admin === 1 && (
+          <div style={{ maxWidth: '1200px', margin: '0 auto', width: '100%' }}>
+            {/* Super Admin Header & Quick Stats */}
+            <div className="glass-card" style={{ padding: '1.25rem 1.5rem', marginBottom: '1.25rem', background: '#FFFFFF', borderRadius: '14px', border: '1px solid #E2E8F0', boxShadow: '0 4px 12px rgba(15,23,42,0.04)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid #F1F5F9', paddingBottom: '1rem', marginBottom: '1rem' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '1.4rem' }}>🛡️</span>
+                    <h2 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 800, color: '#0F172A', fontFamily: 'Outfit' }}>
+                      Super-Admin Control Suite
+                    </h2>
+                    <span style={{ fontSize: '0.72rem', background: '#FEF3C7', color: '#92400E', fontWeight: 800, padding: '2px 8px', borderRadius: '999px', border: '1px solid #FDE68A' }}>
+                      Master Access
+                    </span>
+                  </div>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '0.84rem', color: '#64748B' }}>
+                    Complete diocesan authority: manage priests, sisters, liturgical bookings, and live database tables.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={fetchAdminData}
+                    disabled={adminLoading}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', padding: '0.5rem 0.85rem' }}
+                  >
+                    <span>🔄</span>
+                    <span>{adminLoading ? 'Refreshing...' : 'Refresh Live Data'}</span>
+                  </button>
+
+                  <a
+                    href="/api/admin/database/download-backup"
+                    className="btn btn-secondary btn-sm"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', padding: '0.5rem 0.85rem', textDecoration: 'none', background: '#EFF6FF', color: '#1D4ED8', borderColor: '#BFDBFE' }}
+                  >
+                    <span>💾</span>
+                    <span>Download DB Backup (.json)</span>
+                  </a>
+
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => {
+                      setAdminOnboardSuccess(null);
+                      setOnboardTitle('Sr.');
+                      setOnboardName('');
+                      setOnboardCongregationAbbr('');
+                      setOnboardMobile('');
+                      setOnboardOrder('');
+                      setOnboardResidenceName('');
+                      setOnboardAddress('');
+                      setOnboardPincode('');
+                      setOnboardPassword('Jesus@123');
+                      setShowAdminOnboardModal(true);
+                    }}
+                    style={{ background: '#16A34A', borderColor: '#15803D', display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.82rem', padding: '0.5rem 0.85rem' }}
+                  >
+                    <span>➕</span>
+                    <span>Register Clergy / Sister</span>
+                  </button>
+                </div>
               </div>
+
+              {/* Quick Health & Stats Pills */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
+                <div style={{ background: '#F8FAFC', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                  <div style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600 }}>Total Registered</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0F172A' }}>{adminDbSnapshot?.stats?.total_users || adminUsers.length} Users</div>
+                </div>
+                <div style={{ background: '#F0FDF4', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid #BBF7D0' }}>
+                  <div style={{ fontSize: '0.74rem', color: '#166534', fontWeight: 600 }}>Verified Clergy</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#15803D' }}>{adminDbSnapshot?.stats?.verified_users || adminUsers.filter(u => u.is_verified === 1).length}</div>
+                </div>
+                <div style={{ background: '#FEF2F2', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid #FECACA' }}>
+                  <div style={{ fontSize: '0.74rem', color: '#991B1B', fontWeight: 600 }}>Pending Queue</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#DC2626' }}>{pendingUsers.length}</div>
+                </div>
+                <div style={{ background: '#EFF6FF', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid #BFDBFE' }}>
+                  <div style={{ fontSize: '0.74rem', color: '#1E40AF', fontWeight: 600 }}>Total Bookings</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#2563EB' }}>{adminDbSnapshot?.stats?.total_bookings || bookings.length}</div>
+                </div>
+                <div style={{ background: '#FAF5FF', padding: '0.75rem 1rem', borderRadius: '10px', border: '1px solid #E9D5FF' }}>
+                  <div style={{ fontSize: '0.74rem', color: '#6B21A8', fontWeight: 600 }}>Database Sync</div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 800, color: adminDbSnapshot?.stats?.turso_connected ? '#16A34A' : '#D97706', marginTop: '4px' }}>
+                    {adminDbSnapshot?.stats?.turso_connected ? '⚡ Turso Cloud' : '📁 Local SQLite/JSON'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Admin Sub-Tabs Navigation */}
+            <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid #E2E8F0', marginBottom: '1.5rem', overflowX: 'auto', paddingBottom: '2px' }}>
               <button
                 type="button"
-                className="btn btn-primary"
-                onClick={() => {
-                  setAdminOnboardSuccess(null);
-                  setOnboardTitle('Sr.');
-                  setOnboardName('');
-                  setOnboardCongregationAbbr('');
-                  setOnboardMobile('');
-                  setOnboardOrder('');
-                  setOnboardResidenceName('');
-                  setOnboardAddress('');
-                  setOnboardPincode('');
-                  setOnboardPassword('Jesus@123');
-                  setShowAdminOnboardModal(true);
-                }}
+                onClick={() => setAdminTab('directory')}
                 style={{
-                  background: '#16A34A',
-                  borderColor: '#15803D',
-                  padding: '0.65rem 1.1rem',
+                  padding: '0.65rem 1.25rem',
+                  border: 'none',
+                  background: 'transparent',
+                  borderBottom: adminTab === 'directory' ? '3px solid #2563EB' : '3px solid transparent',
+                  color: adminTab === 'directory' ? '#2563EB' : '#64748B',
+                  fontWeight: adminTab === 'directory' ? 800 : 600,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: '6px',
-                  fontWeight: 700
+                  whiteSpace: 'nowrap'
                 }}
               >
-                <span>➕</span>
-                <span>Register Sister / Clergy Directly</span>
+                <span>👥</span>
+                <span>Clergy &amp; Convent Directory</span>
+                <span style={{ fontSize: '0.72rem', background: '#F1F5F9', color: '#475569', padding: '1px 6px', borderRadius: '999px' }}>
+                  {adminUsers.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAdminTab('bookings')}
+                style={{
+                  padding: '0.65rem 1.25rem',
+                  border: 'none',
+                  background: 'transparent',
+                  borderBottom: adminTab === 'bookings' ? '3px solid #2563EB' : '3px solid transparent',
+                  color: adminTab === 'bookings' ? '#2563EB' : '#64748B',
+                  fontWeight: adminTab === 'bookings' ? 800 : 600,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <span>📋</span>
+                <span>All Diocesan Bookings</span>
+                <span style={{ fontSize: '0.72rem', background: '#F1F5F9', color: '#475569', padding: '1px 6px', borderRadius: '999px' }}>
+                  {adminBookings.length || bookings.length}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAdminTab('verification')}
+                style={{
+                  padding: '0.65rem 1.25rem',
+                  border: 'none',
+                  background: 'transparent',
+                  borderBottom: adminTab === 'verification' ? '3px solid #2563EB' : '3px solid transparent',
+                  color: adminTab === 'verification' ? '#2563EB' : '#64748B',
+                  fontWeight: adminTab === 'verification' ? 800 : 600,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <span>🛡️</span>
+                <span>Pending Approvals</span>
+                {pendingUsers.length > 0 && (
+                  <span style={{ fontSize: '0.72rem', background: '#DC2626', color: '#FFFFFF', padding: '1px 6px', borderRadius: '999px', fontWeight: 800 }}>
+                    {pendingUsers.length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAdminTab('database')}
+                style={{
+                  padding: '0.65rem 1.25rem',
+                  border: 'none',
+                  background: 'transparent',
+                  borderBottom: adminTab === 'database' ? '3px solid #2563EB' : '3px solid transparent',
+                  color: adminTab === 'database' ? '#2563EB' : '#64748B',
+                  fontWeight: adminTab === 'database' ? 800 : 600,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <span>💾</span>
+                <span>Live Database Tables</span>
+                <span style={{ fontSize: '0.72rem', background: '#FEF3C7', color: '#92400E', padding: '1px 6px', borderRadius: '999px', fontWeight: 700 }}>
+                  Raw View
+                </span>
               </button>
             </div>
 
-            <div className="admin-queue">
-              {pendingUsers.length === 0 ? (
-                <div className="no-data">
-                  <div className="no-data-icon">👥</div>
-                  <p>All registered clergy and religious accounts have been verified. No pending reviews in queue.</p>
+            {/* TAB 1: CLERGY & CONVENT DIRECTORY */}
+            {adminTab === 'directory' && (
+              <div>
+                {/* Search & Filter Bar */}
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '1.2rem', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '1 1 260px', position: 'relative' }}>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="🔍 Search priest or sister by name, mobile, parish, order..."
+                      value={adminUserSearch}
+                      onChange={(e) => setAdminUserSearch(e.target.value)}
+                      style={{ paddingLeft: '1rem', background: '#FFFFFF', borderRadius: '8px' }}
+                    />
+                    {adminUserSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setAdminUserSearch('')}
+                        style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {['all', 'priest', 'sister', 'admin'].map((role) => (
+                      <button
+                        key={role}
+                        type="button"
+                        className={`filter-chip ${adminUserRoleFilter === role ? 'active' : ''}`}
+                        onClick={() => setAdminUserRoleFilter(role)}
+                        style={{ textTransform: 'capitalize', fontSize: '0.8rem', padding: '0.45rem 0.85rem' }}
+                      >
+                        {role === 'all' ? 'All Roles' : role === 'priest' ? 'Priests (Fr.)' : role === 'sister' ? 'Sisters (Sr.)' : 'Super Admins'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              ) : (
-                pendingUsers.map((u) => (
-                  <div className="admin-card" key={u.id}>
-                    <div className="admin-info">
-                      <div className="admin-priest-name">
-                        {formatEcclesiasticalName(u.title || (u.clergy_type === 'convent' ? 'Sr.' : 'Fr.'), u.name, u.congregation_abbr)}
+
+                {/* Directory List / Table */}
+                {(() => {
+                  const filtered = adminUsers.filter((u) => {
+                    const q = adminUserSearch.toLowerCase().trim();
+                    const matchesSearch = !q ||
+                      (u.name && u.name.toLowerCase().includes(q)) ||
+                      (u.mobile && u.mobile.includes(q)) ||
+                      (u.email && u.email.toLowerCase().includes(q)) ||
+                      (u.diocese_province && u.diocese_province.toLowerCase().includes(q)) ||
+                      (u.religious_order && u.religious_order.toLowerCase().includes(q)) ||
+                      (u.residence_name && u.residence_name.toLowerCase().includes(q));
+
+                    if (!matchesSearch) return false;
+
+                    if (adminUserRoleFilter === 'priest') return u.title === 'Fr.' || u.clergy_type === 'religious' || u.clergy_type === 'diocesan';
+                    if (adminUserRoleFilter === 'sister') return u.title === 'Sr.' || u.clergy_type === 'convent' || u.clergy_type === 'convent_sister';
+                    if (adminUserRoleFilter === 'admin') return u.is_admin === 1;
+                    return true;
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="no-data" style={{ background: '#FFFFFF', borderRadius: '12px', padding: '2.5rem' }}>
+                        <div className="no-data-icon">🔍</div>
+                        <p>No clergy or sisters found matching "{adminUserSearch}".</p>
                       </div>
-                      <div className="admin-priest-meta">
-                        <span>📱 {u.mobile}</span>
-                        <span>⛪ {u.clergy_type === 'religious' ? u.religious_order : (u.diocese_province || u.religious_order)}</span>
-                        <span>📍 {u.residence_name ? `${u.residence_name}, ` : ''}{u.residence_address || 'No address set'}</span>
-                        <span>{u.title === 'Fr.' ? `🏍️ ${u.transport_mode} | Max: ${u.max_travel_km} km` : '🕊️ Religious Community'}</span>
+                    );
+                  }
+
+                  return (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '14px' }}>
+                      {filtered.map((u) => (
+                        <div
+                          key={u.id}
+                          className="glass-card"
+                          style={{
+                            background: '#FFFFFF',
+                            borderRadius: '12px',
+                            border: u.is_admin === 1 ? '1.5px solid #F59E0B' : '1px solid #E2E8F0',
+                            padding: '1.15rem',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            boxShadow: '0 2px 6px rgba(15,23,42,0.04)'
+                          }}
+                        >
+                          <div>
+                            {/* Card Top: Avatar, Name, Status Pill */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{ width: '42px', height: '42px', borderRadius: '50%', overflow: 'hidden', background: '#F1F5F9', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  {u.profile_photo ? (
+                                    <img src={u.profile_photo} alt={u.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  ) : (
+                                    renderDefaultAvatar(u.title, u.clergy_type, 26)
+                                  )}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: 800, fontSize: '0.98rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span>{formatEcclesiasticalName(u)}</span>
+                                    {u.is_admin === 1 && (
+                                      <span style={{ fontSize: '0.65rem', background: '#FEF3C7', color: '#92400E', padding: '1px 5px', borderRadius: '4px', fontWeight: 800 }}>
+                                        ADMIN
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
+                                    ID: #{u.id} &bull; {u.clergy_type || 'Clergy'}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <span
+                                style={{
+                                  fontSize: '0.7rem',
+                                  padding: '2px 8px',
+                                  borderRadius: '999px',
+                                  fontWeight: 700,
+                                  background: u.is_verified === 1 ? '#DCFCE7' : '#FEE2E2',
+                                  color: u.is_verified === 1 ? '#15803D' : '#DC2626'
+                                }}
+                              >
+                                {u.is_verified === 1 ? '✓ Verified' : '⏳ Pending'}
+                              </span>
+                            </div>
+
+                            {/* Details Grid */}
+                            <div style={{ fontSize: '0.82rem', color: '#334155', display: 'flex', flexDirection: 'column', gap: '4px', background: '#F8FAFC', padding: '0.65rem 0.85rem', borderRadius: '8px', marginBottom: '0.85rem' }}>
+                              <div>📱 <strong>Mobile:</strong> <a href={`tel:${u.mobile}`} style={{ color: '#2563EB', textDecoration: 'none' }}>{u.mobile}</a></div>
+                              {u.email && <div>✉️ <strong>Email:</strong> {u.email}</div>}
+                              <div>⛪ <strong>Diocese/Order:</strong> {u.clergy_type === 'religious' ? (u.religious_order || 'Religious') : (u.diocese_province || 'Diocesan')}</div>
+                              <div>📍 <strong>Residence:</strong> {u.residence_name ? `${u.residence_name}, ` : ''}{u.residence_address || 'No address set'}</div>
+                              <div style={{ display: 'flex', gap: '12px', marginTop: '3px', fontSize: '0.75rem', color: '#64748B' }}>
+                                <span>🤝 Celebrated: <strong>{u.ministries_celebrated || 0}</strong></span>
+                                <span>📋 Posted: <strong>{u.requests_posted || 0}</strong></span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Quick Admin Action Toolbar */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', borderTop: '1px solid #F1F5F9', paddingTop: '0.75rem' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => setAdminEditingUser({ ...u })}
+                              style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem', flex: '1 1 auto' }}
+                            >
+                              ✏️ Edit Profile
+                            </button>
+
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => setAdminPasswordResetModal({ user: u, newPass: 'Jesus@123' })}
+                              style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem', flex: '1 1 auto' }}
+                            >
+                              🔑 Reset Pass
+                            </button>
+
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => handleAdminToggleRole(u.id, 'is_verified', u.is_verified === 1)}
+                              style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem', color: u.is_verified === 1 ? '#D97706' : '#16A34A' }}
+                            >
+                              {u.is_verified === 1 ? 'Suspend' : 'Verify'}
+                            </button>
+
+                            {u.id !== user.id && (
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => handleAdminToggleRole(u.id, 'is_admin', u.is_admin === 1)}
+                                style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem', color: u.is_admin === 1 ? '#6B21A8' : '#2563EB' }}
+                              >
+                                {u.is_admin === 1 ? 'Demote Admin' : 'Make Admin'}
+                              </button>
+                            )}
+
+                            {u.id !== user.id && (
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => handleAdminDeleteUser(u.id, u.name)}
+                                style={{ fontSize: '0.75rem', padding: '0.35rem 0.55rem', color: '#DC2626', borderColor: '#FECACA' }}
+                              >
+                                🗑️
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* TAB 2: ALL DIOCESAN BOOKINGS */}
+            {adminTab === 'bookings' && (
+              <div>
+                {/* Search & Filter Bar */}
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '1.2rem', flexWrap: 'wrap' }}>
+                  <div style={{ flex: '1 1 260px' }}>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="🔍 Search bookings by location, priest, service, intention..."
+                      value={adminBookingSearch}
+                      onChange={(e) => setAdminBookingSearch(e.target.value)}
+                      style={{ background: '#FFFFFF', borderRadius: '8px' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {['all', 'pending', 'accepted', 'completed'].map((status) => (
+                      <button
+                        key={status}
+                        type="button"
+                        className={`filter-chip ${adminBookingStatusFilter === status ? 'active' : ''}`}
+                        onClick={() => setAdminBookingStatusFilter(status)}
+                        style={{ textTransform: 'capitalize', fontSize: '0.8rem', padding: '0.45rem 0.85rem' }}
+                      >
+                        {status === 'all' ? 'All Bookings' : status === 'pending' ? 'Open Requests' : status === 'accepted' ? 'Confirmed' : 'Concluded'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Bookings List */}
+                {(() => {
+                  const sourceBookings = adminBookings.length > 0 ? adminBookings : bookings;
+                  const filteredBookings = sourceBookings.filter((b) => {
+                    const q = adminBookingSearch.toLowerCase().trim();
+                    const matchesSearch = !q ||
+                      (b.service_type && b.service_type.toLowerCase().includes(q)) ||
+                      (b.location && b.location.toLowerCase().includes(q)) ||
+                      (b.requester_name && b.requester_name.toLowerCase().includes(q)) ||
+                      (b.responder_name && b.responder_name.toLowerCase().includes(q)) ||
+                      (b.notes && b.notes.toLowerCase().includes(q));
+
+                    if (!matchesSearch) return false;
+                    if (adminBookingStatusFilter !== 'all' && b.status !== adminBookingStatusFilter) return false;
+                    return true;
+                  });
+
+                  if (filteredBookings.length === 0) {
+                    return (
+                      <div className="no-data" style={{ background: '#FFFFFF', borderRadius: '12px', padding: '2.5rem' }}>
+                        <div className="no-data-icon">📋</div>
+                        <p>No bookings found matching filter criteria.</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {filteredBookings.map((b) => {
+                        const { date, time } = formatDateTime(b.datetime, b.datetime_end);
+                        return (
+                          <div
+                            key={b.id}
+                            className="glass-card"
+                            style={{
+                              background: '#FFFFFF',
+                              borderRadius: '10px',
+                              border: '1px solid #E2E8F0',
+                              padding: '1rem 1.25rem',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              flexWrap: 'wrap',
+                              gap: '12px'
+                            }}
+                          >
+                            <div style={{ flex: '1 1 340px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                                <span style={{ fontWeight: 800, fontSize: '0.98rem', color: '#0F172A' }}>
+                                  {b.service_type || 'Holy Mass'}
+                                </span>
+                                <span
+                                  style={{
+                                    fontSize: '0.7rem',
+                                    fontWeight: 700,
+                                    padding: '2px 8px',
+                                    borderRadius: '999px',
+                                    background: b.status === 'accepted' ? '#DCFCE7' : b.status === 'pending' ? '#FEF3C7' : '#F1F5F9',
+                                    color: b.status === 'accepted' ? '#15803D' : b.status === 'pending' ? '#92400E' : '#475569'
+                                  }}
+                                >
+                                  {b.status.toUpperCase()}
+                                </span>
+                                <span style={{ fontSize: '0.74rem', color: '#94A3B8' }}>Ticket #{b.id}</span>
+                              </div>
+
+                              <div style={{ fontSize: '0.82rem', color: '#475569', display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                                <span>📅 {date}</span>
+                                <span>⏰ {time}</span>
+                                <span>📍 {b.location}</span>
+                                {b.honorarium && <span>🪙 ₹{b.honorarium}</span>}
+                              </div>
+
+                              <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '4px' }}>
+                                <span>Requested by: <strong>{formatEcclesiasticalName(b.requester_title || 'Sr.', b.requester_name, b.requester_congregation_abbr)}</strong></span>
+                                {b.responder_id && (
+                                  <span style={{ marginLeft: '10px' }}>
+                                    &bull; Celebrant: <strong style={{ color: '#16A34A' }}>{formatEcclesiasticalName(b.responder_title || 'Fr.', b.responder_name, b.responder_congregation_abbr)}</strong>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => setAdminEditingBooking({ ...b })}
+                                style={{ fontSize: '0.78rem', padding: '0.4rem 0.75rem' }}
+                              >
+                                ✏️ Override / Reassign
+                              </button>
+
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => handleAdminDeleteBooking(b.id)}
+                                style={{ fontSize: '0.78rem', padding: '0.4rem 0.65rem', color: '#DC2626', borderColor: '#FECACA' }}
+                              >
+                                🗑️ Purge
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* TAB 3: PENDING VERIFICATION QUEUE */}
+            {adminTab === 'verification' && (
+              <div>
+                <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: '10px', padding: '1rem', marginBottom: '1.25rem' }}>
+                  <h4 style={{ margin: '0 0 4px 0', color: '#92400E', fontSize: '0.92rem' }}>🛡️ Mandatory Identity Checks</h4>
+                  <p style={{ margin: 0, fontSize: '0.82rem', color: '#78350F' }}>
+                    Review registration credentials of newly registered priests and sisters. Approving immediately unlocks their access to offer availability and accept ministry appointments.
+                  </p>
+                </div>
+
+                <div className="admin-queue">
+                  {pendingUsers.length === 0 ? (
+                    <div className="no-data" style={{ background: '#FFFFFF', borderRadius: '12px', padding: '2.5rem' }}>
+                      <div className="no-data-icon">✓</div>
+                      <p>All registered clergy and religious accounts are verified. No pending reviews in queue.</p>
+                    </div>
+                  ) : (
+                    pendingUsers.map((u) => (
+                      <div className="admin-card" key={u.id} style={{ background: '#FFFFFF', borderRadius: '12px', padding: '1.2rem', border: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                        <div className="admin-info">
+                          <div className="admin-priest-name" style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>
+                            {formatEcclesiasticalName(u.title || (u.clergy_type === 'convent' ? 'Sr.' : 'Fr.'), u.name, u.congregation_abbr)}
+                          </div>
+                          <div className="admin-priest-meta" style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', marginTop: '6px', fontSize: '0.82rem', color: '#475569' }}>
+                            <span>📱 {u.mobile}</span>
+                            <span>⛪ {u.clergy_type === 'religious' ? u.religious_order : (u.diocese_province || u.religious_order)}</span>
+                            <span>📍 {u.residence_name ? `${u.residence_name}, ` : ''}{u.residence_address || 'No address set'}</span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button
+                            type="button"
+                            className="btn btn-success btn-sm"
+                            onClick={() => handleVerifyUser(u.id, true)}
+                            style={{ padding: '0.5rem 1rem', fontWeight: 800 }}
+                          >
+                            ✓ Approve Account
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: LIVE DATABASE TABLE INSPECTOR */}
+            {adminTab === 'database' && (
+              <div>
+                <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '10px', padding: '1rem', marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                  <div>
+                    <h4 style={{ margin: '0 0 4px 0', fontSize: '0.92rem', color: '#0F172A' }}>💾 Direct Database Record Inspector</h4>
+                    <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748B' }}>
+                      Inspect, edit, or fix raw database rows directly without terminal or SQL queries.
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    {['users', 'bookings', 'availability_slots'].map((tbl) => (
+                      <button
+                        key={tbl}
+                        type="button"
+                        className={`filter-chip ${adminSelectedDbTable === tbl ? 'active' : ''}`}
+                        onClick={() => setAdminSelectedDbTable(tbl)}
+                        style={{ fontSize: '0.8rem', padding: '0.45rem 0.85rem' }}
+                      >
+                        📄 table_{tbl} ({adminDbSnapshot?.tables?.[tbl]?.length || 0})
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Raw Table View */}
+                {(() => {
+                  const tableRows = adminDbSnapshot?.tables?.[adminSelectedDbTable] || [];
+                  if (tableRows.length === 0) {
+                    return (
+                      <div className="no-data" style={{ background: '#FFFFFF', borderRadius: '12px', padding: '2.5rem' }}>
+                        <div className="no-data-icon">📁</div>
+                        <p>No rows in table '{adminSelectedDbTable}'.</p>
+                      </div>
+                    );
+                  }
+
+                  const firstRow = tableRows[0] || {};
+                  const columns = Object.keys(firstRow).slice(0, 7); // preview first 7 columns
+
+                  return (
+                    <div style={{ background: '#FFFFFF', borderRadius: '12px', border: '1px solid #E2E8F0', overflowX: 'auto', boxShadow: '0 2px 6px rgba(15,23,42,0.03)' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', textAlign: 'left' }}>
+                        <thead>
+                          <tr style={{ background: '#F1F5F9', borderBottom: '2px solid #CBD5E1', color: '#334155' }}>
+                            <th style={{ padding: '0.65rem 0.85rem' }}>Actions</th>
+                            {columns.map((c) => (
+                              <th key={c} style={{ padding: '0.65rem 0.85rem', fontWeight: 700 }}>{c}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {tableRows.map((row) => (
+                            <tr key={row.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                              <td style={{ padding: '0.55rem 0.85rem', whiteSpace: 'nowrap' }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => setAdminEditingRawRecord({ table: adminSelectedDbTable, id: row.id, rawJson: JSON.stringify(row, null, 2) })}
+                                  style={{ fontSize: '0.72rem', padding: '0.25rem 0.55rem' }}
+                                >
+                                  ✏️ Edit Row
+                                </button>
+                              </td>
+                              {columns.map((c) => {
+                                const val = typeof row[c] === 'object' ? JSON.stringify(row[c]) : String(row[c] !== undefined ? row[c] : '');
+                                return (
+                                  <td key={c} style={{ padding: '0.55rem 0.85rem', maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#0F172A' }}>
+                                    {val}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* --- ADMIN MODAL: EDIT USER PROFILE --- */}
+            {adminEditingUser && (
+              <div className="modal-overlay">
+                <div className="modal-container" style={{ maxWidth: '580px', maxHeight: '90vh', overflowY: 'auto' }}>
+                  <div className="modal-header">
+                    <h3 className="modal-title">✏️ Admin Edit: {adminEditingUser.name}</h3>
+                    <button className="modal-close" onClick={() => setAdminEditingUser(null)}>&times;</button>
+                  </div>
+                  <form onSubmit={handleAdminSaveUser}>
+                    <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                      <div className="form-row">
+                        <div className="form-group" style={{ flex: '0 0 100px' }}>
+                          <label className="form-label">Title</label>
+                          <select
+                            className="form-control"
+                            value={adminEditingUser.title || 'Fr.'}
+                            onChange={(e) => setAdminEditingUser({ ...adminEditingUser, title: e.target.value })}
+                          >
+                            <option value="Fr.">Fr.</option>
+                            <option value="Sr.">Sr.</option>
+                            <option value="Br.">Br.</option>
+                          </select>
+                        </div>
+                        <div className="form-group" style={{ flex: 1 }}>
+                          <label className="form-label">Full Name</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={adminEditingUser.name || ''}
+                            onChange={(e) => setAdminEditingUser({ ...adminEditingUser, name: e.target.value })}
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label className="form-label">Mobile Number</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={adminEditingUser.mobile || ''}
+                            onChange={(e) => setAdminEditingUser({ ...adminEditingUser, mobile: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Email</label>
+                          <input
+                            type="email"
+                            className="form-control"
+                            value={adminEditingUser.email || ''}
+                            onChange={(e) => setAdminEditingUser({ ...adminEditingUser, email: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label className="form-label">Diocese / Province</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={adminEditingUser.diocese_province || ''}
+                            onChange={(e) => setAdminEditingUser({ ...adminEditingUser, diocese_province: e.target.value })}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Religious Order</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={adminEditingUser.religious_order || ''}
+                            onChange={(e) => setAdminEditingUser({ ...adminEditingUser, religious_order: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Parish / Convent / Residence</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={adminEditingUser.residence_name || ''}
+                          onChange={(e) => setAdminEditingUser({ ...adminEditingUser, residence_name: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Full Address</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={adminEditingUser.residence_address || ''}
+                          onChange={(e) => setAdminEditingUser({ ...adminEditingUser, residence_address: e.target.value })}
+                        />
                       </div>
                     </div>
-                    <div>
-                      <button
-                        className="btn btn-success btn-sm"
-                        onClick={() => handleVerifyUser(u.id, true)}
-                      >
-                        ✓ Approve Account
+                    <div className="modal-footer">
+                      <button type="button" className="btn btn-secondary" onClick={() => setAdminEditingUser(null)}>
+                        Cancel
+                      </button>
+                      <button type="submit" className="btn btn-primary">
+                        💾 Save Changes
                       </button>
                     </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* --- ADMIN MODAL: OVERRIDE / REASSIGN BOOKING --- */}
+            {adminEditingBooking && (
+              <div className="modal-overlay">
+                <div className="modal-container" style={{ maxWidth: '580px', maxHeight: '90vh', overflowY: 'auto' }}>
+                  <div className="modal-header">
+                    <h3 className="modal-title">📋 Override Booking #{adminEditingBooking.id}</h3>
+                    <button className="modal-close" onClick={() => setAdminEditingBooking(null)}>&times;</button>
                   </div>
-                ))
-              )}
-            </div>
+                  <form onSubmit={handleAdminSaveBooking}>
+                    <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label className="form-label">Booking Status</label>
+                          <select
+                            className="form-control"
+                            value={adminEditingBooking.status}
+                            onChange={(e) => setAdminEditingBooking({ ...adminEditingBooking, status: e.target.value })}
+                          >
+                            <option value="pending">Pending (Open to Explore)</option>
+                            <option value="accepted">Accepted (Locked with Celebrant)</option>
+                            <option value="completed">Completed (Celebrated)</option>
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Honorarium (₹)</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={adminEditingBooking.honorarium || ''}
+                            onChange={(e) => setAdminEditingBooking({ ...adminEditingBooking, honorarium: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Assign Celebrant / Minister</label>
+                        <select
+                          className="form-control"
+                          value={adminEditingBooking.responder_id || ''}
+                          onChange={(e) => setAdminEditingBooking({ ...adminEditingBooking, responder_id: e.target.value ? Number(e.target.value) : null })}
+                        >
+                          <option value="">-- No Celebrant Assigned (Open Slot) --</option>
+                          {adminUsers
+                            .filter(u => u.title === 'Fr.' || u.clergy_type === 'religious' || u.clergy_type === 'diocesan')
+                            .map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.title} {p.name} {p.congregation_abbr ? `(${p.congregation_abbr})` : ''} - {p.mobile}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Service Type</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={adminEditingBooking.service_type || ''}
+                          onChange={(e) => setAdminEditingBooking({ ...adminEditingBooking, service_type: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Venue / Location</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={adminEditingBooking.location || ''}
+                          onChange={(e) => setAdminEditingBooking({ ...adminEditingBooking, location: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Special Notes / Intentions</label>
+                        <textarea
+                          className="form-control"
+                          rows="2"
+                          value={adminEditingBooking.notes || ''}
+                          onChange={(e) => setAdminEditingBooking({ ...adminEditingBooking, notes: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <div className="modal-footer">
+                      <button type="button" className="btn btn-secondary" onClick={() => setAdminEditingBooking(null)}>
+                        Cancel
+                      </button>
+                      <button type="submit" className="btn btn-primary">
+                        💾 Update Booking
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {/* --- ADMIN MODAL: RESET PASSWORD --- */}
+            {adminPasswordResetModal && (
+              <div className="modal-overlay">
+                <div className="modal-container" style={{ maxWidth: '440px' }}>
+                  <div className="modal-header">
+                    <h3 className="modal-title">🔑 Reset Password</h3>
+                    <button className="modal-close" onClick={() => setAdminPasswordResetModal(null)}>&times;</button>
+                  </div>
+                  <div className="modal-body">
+                    <p style={{ fontSize: '0.85rem', color: '#475569', marginBottom: '1rem' }}>
+                      Set a new temporary password for <strong>{formatEcclesiasticalName(adminPasswordResetModal.user)}</strong>.
+                    </p>
+                    <div className="form-group">
+                      <label className="form-label">New Password</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={adminPasswordResetModal.newPass}
+                        onChange={(e) => setAdminPasswordResetModal({ ...adminPasswordResetModal, newPass: e.target.value })}
+                        placeholder="Jesus@123"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button type="button" className="btn btn-secondary" onClick={() => setAdminPasswordResetModal(null)}>
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => handleAdminResetPassword(adminPasswordResetModal.user.id, adminPasswordResetModal.newPass)}
+                    >
+                      Save New Password
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* --- ADMIN MODAL: RAW RECORD JSON EDITOR --- */}
+            {adminEditingRawRecord && (
+              <div className="modal-overlay">
+                <div className="modal-container" style={{ maxWidth: '640px' }}>
+                  <div className="modal-header">
+                    <h3 className="modal-title">💾 Edit Row: {adminEditingRawRecord.table} #{adminEditingRawRecord.id}</h3>
+                    <button className="modal-close" onClick={() => setAdminEditingRawRecord(null)}>&times;</button>
+                  </div>
+                  <form onSubmit={handleAdminSaveRawRecord}>
+                    <div className="modal-body">
+                      <p style={{ fontSize: '0.8rem', color: '#64748B', marginBottom: '0.5rem' }}>
+                        Modify raw database fields in JSON format:
+                      </p>
+                      <textarea
+                        className="form-control"
+                        rows="12"
+                        value={adminEditingRawRecord.rawJson}
+                        onChange={(e) => setAdminEditingRawRecord({ ...adminEditingRawRecord, rawJson: e.target.value })}
+                        style={{ fontFamily: 'monospace', fontSize: '0.82rem', lineHeight: '1.4' }}
+                      />
+                    </div>
+                    <div className="modal-footer">
+                      <button type="button" className="btn btn-secondary" onClick={() => setAdminEditingRawRecord(null)}>
+                        Cancel
+                      </button>
+                      <button type="submit" className="btn btn-primary">
+                        💾 Save Row Updates
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </main>

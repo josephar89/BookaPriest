@@ -70,7 +70,221 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
-// --- Auth Routes ---
+// --- In-Memory Store for Route 3 WhatsApp Verification Challenges ---
+const pendingWaChallenges = new Map();
+
+// Helper to clean up expired challenges (older than 10 mins)
+const cleanupExpiredChallenges = () => {
+  const now = Date.now();
+  for (const [code, item] of pendingWaChallenges.entries()) {
+    if (item.expiresAt < now) {
+      pendingWaChallenges.delete(code);
+    }
+  }
+};
+setInterval(cleanupExpiredChallenges, 60000);
+
+// Admin WhatsApp Hotline number for Book a Priest
+const HELPLINE_WHATSAPP = process.env.HELPLINE_WHATSAPP || '919999999999';
+
+// 1. Request WhatsApp Verification Code & Link
+app.post('/api/auth/wa-request-code', (req, res) => {
+  const { mobile } = req.body;
+  if (!mobile) {
+    return res.status(400).json({ error: 'Mobile number is required.' });
+  }
+
+  let digits = mobile.replace(/\D/g, '');
+  if (digits.length > 10 && digits.startsWith('91')) {
+    digits = digits.slice(2);
+  } else if (digits.length > 10 && digits.startsWith('0')) {
+    digits = digits.slice(1);
+  }
+  digits = digits.slice(-10);
+  if (digits.length !== 10) {
+    return res.status(400).json({ error: 'Please enter a valid 10-digit mobile number.' });
+  }
+  const canonicalMobile = `+91${digits}`;
+
+  // Generate 4-digit numeric code
+  const code = Math.floor(1000 + Math.random() * 9000).toString();
+  const challengeId = `wa_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
+  // Find if user already exists
+  const existingUser = db.getUserByMobile(canonicalMobile);
+
+  pendingWaChallenges.set(code, {
+    challengeId,
+    code,
+    mobile: canonicalMobile,
+    isExistingUser: !!existingUser,
+    userId: existingUser ? existingUser.id : null,
+    verified: false,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + 10 * 60 * 1000 // 10 minutes
+  });
+
+  const messageText = `Praise be Jesus! Verify my BookaPriest account: #${code}`;
+  const waLink = `https://wa.me/${HELPLINE_WHATSAPP.replace(/\D/g, '')}?text=${encodeURIComponent(messageText)}`;
+
+  return res.json({
+    challengeId,
+    code,
+    mobile: canonicalMobile,
+    waLink,
+    helpline: HELPLINE_WHATSAPP,
+    messageText,
+    isExistingUser: !!existingUser
+  });
+});
+
+// 2. Poll Verification Status (called by frontend every 1.5s)
+app.get('/api/auth/wa-check-status/:code', (req, res) => {
+  const { code } = req.params;
+  const challenge = pendingWaChallenges.get(code);
+
+  if (!challenge) {
+    return res.status(404).json({ error: 'Verification session expired or invalid.' });
+  }
+
+  if (challenge.verified) {
+    let userResponse = null;
+    if (challenge.userId) {
+      const u = db.getUserById(challenge.userId);
+      if (u) {
+        const { password_hash, ...clean } = u;
+        userResponse = clean;
+      }
+    }
+    return res.json({
+      verified: true,
+      mobile: challenge.mobile,
+      isExistingUser: challenge.isExistingUser,
+      user: userResponse
+    });
+  }
+
+  return res.json({ verified: false, mobile: challenge.mobile });
+});
+
+// 3. Confirm / Simulate WhatsApp verification (Triggered when WhatsApp message arrives or via direct 1-tap test)
+app.post('/api/auth/wa-confirm', (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: 'Verification code is required.' });
+
+  const challenge = pendingWaChallenges.get(String(code).trim());
+  if (!challenge) {
+    return res.status(404).json({ error: 'Code not found or expired.' });
+  }
+
+  challenge.verified = true;
+  let userResponse = null;
+  if (challenge.userId) {
+    const u = db.getUserById(challenge.userId);
+    if (u) {
+      const { password_hash, ...clean } = u;
+      userResponse = clean;
+    }
+  }
+
+  return res.json({
+    message: 'WhatsApp verification confirmed successfully!',
+    verified: true,
+    mobile: challenge.mobile,
+    isExistingUser: challenge.isExistingUser,
+    user: userResponse
+  });
+});
+
+// 4. Complete Registration with WhatsApp-verified mobile
+app.post('/api/auth/register-wa-verified', (req, res) => {
+  const {
+    code, name, title, congregation_abbr, mobile, email,
+    diocese_province, clergy_type, religious_order,
+    residence_name, residence_address, pincode,
+    latitude, longitude, max_travel_km, transport_mode, dob, profile_photo
+  } = req.body;
+
+  const challenge = pendingWaChallenges.get(String(code).trim());
+  if (!challenge || !challenge.verified) {
+    return res.status(403).json({ error: 'WhatsApp mobile verification required before completing registration.' });
+  }
+
+  const cleanMob = challenge.mobile;
+  if (db.getUserByMobile(cleanMob)) {
+    return res.status(400).json({ error: 'An account with this mobile number already exists.' });
+  }
+
+  const fullAddress = pincode && !residence_address.includes(pincode)
+    ? `${residence_address} - ${pincode}`
+    : residence_address;
+
+  try {
+    const newUser = db.createUser({
+      name: (name || '').trim(),
+      title: title || (clergy_type === 'convent' || clergy_type === 'convent_sister' ? 'Sr.' : 'Fr.'),
+      congregation_abbr: congregation_abbr || '',
+      mobile: cleanMob,
+      email: email ? email.trim() : '',
+      password: 'wa_verified_login',
+      diocese_province: diocese_province || '',
+      clergy_type: clergy_type || 'diocesan',
+      religious_order: religious_order || '',
+      residence_name: residence_name || '',
+      residence_address: fullAddress || '',
+      latitude,
+      longitude,
+      max_travel_km: max_travel_km || 25,
+      transport_mode: transport_mode || 'own_bike',
+      transport_modes: req.body.transport_modes || [transport_mode || 'own_bike'],
+      profile_photo: profile_photo || null,
+      dob: dob || null,
+      is_verified: 0 // Mandatory Admin Manual Verification Required!
+    });
+
+    // Remove used challenge
+    pendingWaChallenges.delete(String(code).trim());
+
+    const { password_hash, ...userResponse } = newUser;
+    return res.status(201).json({
+      message: 'Registration successful! Your profile has been sent to the Diocesan Administrator for verification.',
+      user: userResponse
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    return res.status(500).json({ error: 'Failed to complete registration.' });
+  }
+});
+
+// 5. Reset Password using WhatsApp-verified challenge
+app.post('/api/auth/reset-password-wa', async (req, res) => {
+  const { code, newPassword } = req.body;
+  if (!code || !newPassword) {
+    return res.status(400).json({ error: 'Verification code and new password are required.' });
+  }
+
+  const challenge = pendingWaChallenges.get(String(code).trim());
+  if (!challenge || !challenge.verified) {
+    return res.status(403).json({ error: 'WhatsApp verification required before resetting password.' });
+  }
+
+  const user = db.getUserByMobile(challenge.mobile);
+  if (!user) {
+    return res.status(404).json({ error: 'No user account found with this WhatsApp mobile number.' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+  }
+
+  await db.adminResetPassword(user.id, newPassword);
+  pendingWaChallenges.delete(String(code).trim());
+
+  return res.json({
+    message: 'Password reset successfully! You can now sign in with your new password.',
+    mobile: challenge.mobile
+  });
+});
 
 app.post('/api/auth/register', (req, res) => {
   const {
@@ -430,6 +644,171 @@ app.post('/api/admin/onboard-user', authenticate, requireAdmin, async (req, res)
   } catch (error) {
     console.error('Admin direct onboarding error:', error);
     return res.status(500).json({ error: 'Failed to onboard user.' });
+  }
+});
+
+// --- Super-Admin Management API Endpoints ---
+
+// Get all registered users (Priests, Sisters, Admins) with detailed statistics
+app.get('/api/admin/users', authenticate, requireAdmin, (req, res) => {
+  try {
+    const users = db.getAllUsersForAdmin();
+    return res.json(users);
+  } catch (error) {
+    console.error('Error fetching admin users:', error);
+    return res.status(500).json({ error: 'Failed to fetch users list.' });
+  }
+});
+
+// Admin update user details (phone, email, title, parish, diocese, admin, verification)
+app.patch('/api/admin/users/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const updates = req.body;
+    const updated = await db.updateUser(userId, updates);
+    if (!updated) return res.status(404).json({ error: 'User not found.' });
+    const { password_hash, ...cleanUser } = updated;
+    return res.json({ message: 'User profile updated successfully.', user: cleanUser });
+  } catch (error) {
+    console.error('Admin error updating user:', error);
+    return res.status(500).json({ error: 'Failed to update user.' });
+  }
+});
+
+// Admin reset user password
+app.post('/api/admin/users/:id/reset-password', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { newPassword } = req.body;
+    const updated = await db.adminResetPassword(userId, newPassword);
+    if (!updated) return res.status(404).json({ error: 'User not found.' });
+    return res.json({ message: `Password reset successfully for ${updated.name}.`, newPassword: newPassword || 'Jesus@123' });
+  } catch (error) {
+    console.error('Admin error resetting password:', error);
+    return res.status(500).json({ error: 'Failed to reset password.' });
+  }
+});
+
+// Admin toggle user role (admin, verification)
+app.post('/api/admin/users/:id/toggle-role', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { field, value } = req.body;
+    if (field !== 'is_admin' && field !== 'is_verified') {
+      return res.status(400).json({ error: 'Invalid field to toggle.' });
+    }
+    const updated = await db.adminToggleRole(userId, field, value);
+    if (!updated) return res.status(404).json({ error: 'User not found.' });
+    const { password_hash, ...cleanUser } = updated;
+    return res.json({ message: `User ${field} set to ${value ? 1 : 0}.`, user: cleanUser });
+  } catch (error) {
+    console.error('Admin error toggling role:', error);
+    return res.status(500).json({ error: 'Failed to toggle role.' });
+  }
+});
+
+// Admin delete user account
+app.delete('/api/admin/users/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const userId = req.params.id;
+    if (parseInt(userId) === req.user.id) {
+      return res.status(400).json({ error: 'You cannot delete your own admin account.' });
+    }
+    const success = await db.adminDeleteUser(userId);
+    if (!success) return res.status(404).json({ error: 'User not found.' });
+    return res.json({ message: 'User account and associated roster slots deleted successfully.' });
+  } catch (error) {
+    console.error('Admin error deleting user:', error);
+    return res.status(500).json({ error: 'Failed to delete user.' });
+  }
+});
+
+// Admin get all bookings across the diocese
+app.get('/api/admin/bookings', authenticate, requireAdmin, (req, res) => {
+  try {
+    const allBookings = db.getAllBookingsForAdmin();
+    return res.json(allBookings);
+  } catch (error) {
+    console.error('Admin error fetching bookings:', error);
+    return res.status(500).json({ error: 'Failed to fetch bookings.' });
+  }
+});
+
+// Admin override / update booking
+app.patch('/api/admin/bookings/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const updates = req.body;
+    const updated = await db.adminOverrideBooking(bookingId, updates);
+    if (!updated) return res.status(404).json({ error: 'Booking not found.' });
+    return res.json({ message: 'Booking updated successfully.', booking: updated });
+  } catch (error) {
+    console.error('Admin error overriding booking:', error);
+    return res.status(500).json({ error: 'Failed to override booking.' });
+  }
+});
+
+// Admin delete / purge booking
+app.delete('/api/admin/bookings/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const success = await db.adminDeleteBooking(bookingId);
+    if (!success) return res.status(404).json({ error: 'Booking not found.' });
+    return res.json({ message: 'Booking deleted successfully.' });
+  } catch (error) {
+    console.error('Admin error deleting booking:', error);
+    return res.status(500).json({ error: 'Failed to delete booking.' });
+  }
+});
+
+// Admin Raw Database Inspection & Health Stats
+app.get('/api/admin/database/snapshot', authenticate, requireAdmin, (req, res) => {
+  try {
+    const snapshot = db.getDatabaseRawSnapshot();
+    return res.json(snapshot);
+  } catch (error) {
+    console.error('Admin error getting DB snapshot:', error);
+    return res.status(500).json({ error: 'Failed to get database snapshot.' });
+  }
+});
+
+// Admin 1-Click Database JSON Backup Download
+app.get('/api/admin/database/download-backup', authenticate, requireAdmin, (req, res) => {
+  try {
+    const dateStr = new Date().toISOString().split('T')[0];
+    const fileName = `bookapriest_db_backup_${dateStr}.json`;
+    const dataToExport = {
+      exported_at: new Date().toISOString(),
+      exported_by: req.user.name,
+      stats: db.getDatabaseRawSnapshot().stats,
+      data: {
+        users: db.data.users.map(({ password_hash, ...u }) => u),
+        bookings: db.data.bookings,
+        availability_slots: db.data.availability_slots
+      }
+    };
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Content-Type', 'application/json');
+    return res.send(JSON.stringify(dataToExport, null, 2));
+  } catch (error) {
+    console.error('Admin backup download error:', error);
+    return res.status(500).json({ error: 'Failed to download backup.' });
+  }
+});
+
+// Admin Raw Record Editor
+app.patch('/api/admin/database/record', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { table, id, updates } = req.body;
+    if (!table || !id || !updates) {
+      return res.status(400).json({ error: 'Table, record ID, and updates are required.' });
+    }
+    const updated = await db.adminUpdateRawRecord(table, id, updates);
+    if (!updated) return res.status(404).json({ error: 'Record or table not found.' });
+    return res.json({ message: 'Database record updated successfully.', record: updated });
+  } catch (error) {
+    console.error('Admin error updating raw record:', error);
+    return res.status(500).json({ error: 'Failed to update database record.' });
   }
 });
 
