@@ -704,9 +704,9 @@ export default function App() {
       });
       setWaAuthPolling(true);
 
-      // Automatically trigger WhatsApp URL on mobile devices
+      // Automatically trigger WhatsApp deep-link on mobile devices
       if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-        window.open(data.waLink, '_blank');
+        window.location.href = data.waLink;
       }
     } catch (err) {
       showFeedback('error', 'Network error requesting WhatsApp verification.');
@@ -1984,7 +1984,12 @@ export default function App() {
         <div className="glass-card auth-card">
           <div className="auth-header">
             <h1>Book a Priest</h1>
-            <p>Connecting Priests, Parishes & Religious Communities</p>
+            <p style={{ margin: '0 0 4px 0', fontSize: '0.88rem', color: '#64748B' }}>
+              Tired of searching for a priest for Holy Mass?
+            </p>
+            <p style={{ margin: 0, fontSize: '0.92rem', color: '#0F172A', fontWeight: 600 }}>
+              Instantly connect with available priests nearby!
+            </p>
           </div>
 
           {errorMsg && <div className="error-alert">{errorMsg}</div>}
@@ -2151,20 +2156,6 @@ export default function App() {
                   </div>
                 </form>
               )}
-
-              <div className="auth-footer" style={{ borderTop: '1px solid #F1F5F9', marginTop: '1.25rem', paddingTop: '1rem' }}>
-                New User?{' '}
-                <span
-                  className="auth-link"
-                  onClick={() => {
-                    setAuthMode('register');
-                    setRegWaVerifiedCode(null);
-                  }}
-                  style={{ color: '#2563EB', fontWeight: 700, cursor: 'pointer' }}
-                >
-                  Create a new account
-                </span>
-              </div>
             </div>
           ) : (
             <form onSubmit={handleRegister} autoComplete="off">
