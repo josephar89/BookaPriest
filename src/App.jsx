@@ -2857,18 +2857,55 @@ export default function App() {
                       background: '#25D366',
                       borderColor: '#22C55E',
                       color: '#FFFFFF',
-                      fontSize: '1rem',
+                      fontSize: '0.98rem',
                       fontWeight: 800,
                       padding: '0.85rem 1.25rem',
                       borderRadius: '10px',
                       textDecoration: 'none',
-                      marginBottom: '0.75rem',
+                      marginBottom: '0.65rem',
                       boxShadow: '0 4px 14px rgba(37, 211, 102, 0.35)'
                     }}
                   >
                     <span>💬</span>
-                    <span>Send Message on WhatsApp</span>
+                    <span>Open in WhatsApp</span>
                   </a>
+
+                  {/* Dual WhatsApp / Number Chooser Helper */}
+                  <div style={{
+                    background: '#F8FAFC',
+                    border: '1px solid #E2E8F0',
+                    borderRadius: '8px',
+                    padding: '0.65rem 0.85rem',
+                    marginBottom: '0.85rem',
+                    textAlign: 'left'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569' }}>
+                        📱 Dual WhatsApp / Multiple Accounts?
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(waAuthModal.messageText);
+                          showFeedback('success', '✓ Verification message copied! Paste in your chosen WhatsApp chat.');
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#2563EB',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          padding: 0
+                        }}
+                      >
+                        Copy Text
+                      </button>
+                    </div>
+                    <div style={{ fontSize: '0.74rem', color: '#64748B', lineHeight: 1.4 }}>
+                      Make sure you send from <strong>{waAuthModal.mobile}</strong> to <strong>{waAuthModal.helpline}</strong>.
+                    </div>
+                  </div>
 
                   {/* Polling / Listening Radar Status */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '0.8rem', color: '#64748B', margin: '0.85rem 0' }}>
