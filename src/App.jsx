@@ -1,3 +1,4 @@
+import BookAPriestLogo from './components/BookAPriestLogo';
 import React, { useState, useEffect } from 'react';
 
 export default function App() {
@@ -1996,12 +1997,54 @@ export default function App() {
     return (
       <div className="auth-page" style={{ flexDirection: 'column', minHeight: '100vh', justifyContent: 'center', alignItems: 'center', gap: '1.5rem', padding: '2rem 1rem' }}>
         <div className="glass-card auth-card">
-          <div className="auth-header">
-            <h1>Book a Priest</h1>
-            <p style={{ margin: '0 0 4px 0', fontSize: '0.88rem', color: '#64748B' }}>
+          <div className="auth-header" style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
+              <div style={{
+                background: '#FFFFFF',
+                borderRadius: '24px',
+                padding: '6px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 10px 25px -5px rgba(26, 34, 56, 0.12), 0 4px 10px -2px rgba(247, 185, 24, 0.2)'
+              }}>
+                <BookAPriestLogo size={76} />
+              </div>
+            </div>
+
+            <h1 style={{
+              fontSize: '2rem',
+              fontWeight: 800,
+              fontFamily: "'Outfit', sans-serif",
+              color: '#1A2238',
+              letterSpacing: '-0.03em',
+              margin: '0 0 4px 0',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px'
+            }}>
+              <span>Book</span>
+              <span style={{ color: '#F7B918' }}>a</span>
+              <span>Priest</span>
+            </h1>
+
+            <div style={{
+              fontSize: '0.72rem',
+              fontWeight: 800,
+              color: '#1A2238',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              marginBottom: '0.75rem',
+              opacity: 0.85
+            }}>
+              Connecting Parishes & Clergy
+            </div>
+
+            <p style={{ margin: '0 0 3px 0', fontSize: '0.84rem', color: '#64748B' }}>
               Tired of searching for a priest for Holy Mass?
             </p>
-            <p style={{ margin: 0, fontSize: '0.92rem', color: '#0F172A', fontWeight: 600 }}>
+            <p style={{ margin: 0, fontSize: '0.88rem', color: '#1A2238', fontWeight: 600 }}>
               Instantly connect with available priests nearby!
             </p>
           </div>
@@ -2016,7 +2059,7 @@ export default function App() {
                 <div>
                   <form onSubmit={(e) => { e.preventDefault(); handleRequestWhatsAppAuth(loginIdentifier, 'login'); }}>
                     <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-                      <label className="form-label" style={{ fontWeight: 600, color: '#334155' }}>WhatsApp Mobile</label>
+                      <label className="form-label" style={{ fontWeight: 600, color: '#334155' }}>Mobile Number</label>
                       <div className="input-prefix-group">
                         <span className="input-prefix-badge" style={{ color: '#475569', fontWeight: 700 }}>+91</span>
                         <input
@@ -2037,8 +2080,8 @@ export default function App() {
                       className="btn"
                       style={{
                         width: '100%',
-                        background: '#25D366',
-                        borderColor: '#22C55E',
+                        background: '#1A2238',
+                        borderColor: '#1A2238',
                         color: '#FFFFFF',
                         fontWeight: 700,
                         fontSize: '0.98rem',
@@ -2048,15 +2091,19 @@ export default function App() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '10px',
-                        boxShadow: '0 4px 12px rgba(37, 211, 102, 0.25)',
-                        cursor: 'pointer'
+                        boxShadow: '0 6px 18px rgba(26, 34, 56, 0.35)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
                       }}
                       disabled={formSubmitting}
                     >
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2M12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.58 20.15 12.04 20.15C10.56 20.15 9.11 19.76 7.85 19L7.55 18.83L4.43 19.65L5.26 16.61L5.06 16.29C4.24 15 3.8 13.47 3.8 11.91C3.81 7.37 7.5 3.67 12.05 3.67M8.53 7.33C8.37 7.33 8.1 7.39 7.87 7.64C7.65 7.89 7.02 8.48 7.02 9.69C7.02 10.9 7.9 12.07 8.02 12.23C8.15 12.4 9.73 14.82 12.16 15.86C12.74 16.11 13.19 16.26 13.54 16.37C14.12 16.56 14.65 16.53 15.07 16.47C15.54 16.4 16.51 15.88 16.71 15.31C16.92 14.74 16.92 14.26 16.86 14.16C16.79 14.05 16.63 13.99 16.39 13.87C16.15 13.75 14.97 13.17 14.75 13.09C14.53 13.01 14.37 12.97 14.21 13.22C14.05 13.46 13.59 14.01 13.45 14.17C13.31 14.33 13.17 14.35 12.93 14.23C12.69 14.11 11.91 13.86 10.99 13.04C10.28 12.4 9.8 11.62 9.66 11.38C9.52 11.14 9.65 11.01 9.77 10.89C9.88 10.78 10.02 10.6 10.14 10.46C10.26 10.32 10.3 10.22 10.38 10.06C10.46 9.9 10.42 9.76 10.36 9.64C10.3 9.52 9.84 8.38 9.64 7.91C9.45 7.46 9.26 7.52 9.11 7.51C8.97 7.51 8.81 7.51 8.65 7.51L8.53 7.33Z" />
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
+                        <line x1="12" y1="18" x2="12.01" y2="18" />
+                        <line x1="9" y1="7" x2="15" y2="7" />
+                        <line x1="9" y1="11" x2="15" y2="11" />
                       </svg>
-                      <span>{formSubmitting ? 'Verifying...' : 'Log in via WhatsApp'}</span>
+                      <span>{formSubmitting ? 'Sending OTP...' : 'Log in with OTP'}</span>
                     </button>
                   </form>
 
@@ -2081,7 +2128,7 @@ export default function App() {
                 /* Fallback: Password Login (For Admin or fallback) */
                 <form onSubmit={handleLogin}>
                   <div className="form-group">
-                    <label className="form-label">WhatsApp Mobile</label>
+                    <label className="form-label">Mobile Number</label>
                     <input
                       type="text"
                       className="form-input"
@@ -2163,9 +2210,9 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => setUsePasswordLogin(false)}
-                      style={{ background: 'none', border: 'none', color: '#25D366', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', padding: '4px' }}
+                      style={{ background: 'none', border: 'none', color: '#2563EB', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', padding: '4px' }}
                     >
-                      ← Back to WhatsApp 1-Tap Login
+                      ← Back to OTP Login
                     </button>
                   </div>
                 </form>
@@ -3033,8 +3080,23 @@ export default function App() {
     <div className="app-container">
       {/* Header */}
       <header className="navbar">
-        <div className="brand-section">
-          <span className="brand-logo">Book a Priest</span>
+        <div className="brand-section" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '12px',
+            padding: '2px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 2px 8px rgba(26, 34, 56, 0.1)'
+          }}>
+            <BookAPriestLogo size={36} />
+          </div>
+          <span className="brand-logo" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+            <span>Book</span>
+            <span style={{ color: '#F7B918' }}>a</span>
+            <span>Priest</span>
+          </span>
           <span className="brand-badge">India</span>
         </div>
 
