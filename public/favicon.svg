@@ -1,45 +1,50 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512">
+<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Soft Rounded Badge Container -->
+  <rect x="5" y="5" width="90" height="90" rx="24" fill="#FFFFFF" />
   
-  <defs>
-    <!-- Left Semicircle Clip -->
-    <clipPath id="semicircle-left">
-      <rect x="0" y="0" width="50" height="100" />
-    </clipPath>
-  </defs>
+  <!-- Papal Gold Left Split Circle -->
+  <path
+    d="M 50 14 A 36 36 0 0 0 50 86 Z"
+    fill="#F59E0B"
+  />
 
-  <!-- Papal Gold Left Disc (Flat, no outer stroke) -->
-  <circle cx="50" cy="50" r="41" fill="#F7B918" clip-path="url(#semicircle-left)" />
+  <!-- Navy Outer Ring Contour -->
+  <circle
+    cx="50"
+    cy="50"
+    r="36"
+    stroke="#0F172A"
+    stroke-width="4"
+    fill="none"
+  />
 
-  <!-- Priest Silhouette Group -->
-  <!-- Priestly Body / Hood White Fill (masks the gold behind the head and stole) -->
-  <!-- Head & Pin Contour -->
-  <path 
-    d="M 50 13 C 35 13 31 27 31 39 C 31 49 39 57 44 61 L 30 67 C 26 69 24 74 24 81 L 26.5 88.5 C 27 90 28.5 90.5 30.5 89.5 L 38 85.5 C 39.5 84.5 40 82.5 39.5 81 L 36.5 71 C 41 67.5 45.5 66 50 66 C 54.5 66 59 67.5 63.5 71 L 60.5 81 C 60 82.5 60.5 84.5 62 85.5 L 69.5 89.5 C 71.5 90.5 73 90 73.5 88.5 L 76 81 C 76 74 74 69 70 67 L 56 61 C 61 57 69 49 69 39 C 69 27 65 13 50 13 Z" 
+  <!-- Stole Drapes (Left & Right) -->
+  <path
+    d="M 33 56 C 26 66 26 78 32 82 M 67 56 C 74 66 74 78 68 82"
+    stroke="#0F172A"
+    stroke-width="4.5"
+    stroke-linecap="round"
+    fill="none"
+  />
+
+  <!-- Main Map Pin / Clergy Silhouette -->
+  <path
+    d="M 50 20 C 37 20 34 32 34 42 C 34 54 46 68 50 71 C 54 68 66 54 66 42 C 66 32 63 20 50 20 Z"
     fill="#FFFFFF"
-    stroke="#1A2238" 
-    stroke-width="5" 
-    stroke-linecap="round" 
+    stroke="#0F172A"
+    stroke-width="4.5"
     stroke-linejoin="round"
   />
 
   <!-- Central Latin Cross -->
-  <line x1="50" y1="21" x2="50" y2="47" stroke="#1A2238" stroke-width="5.5" stroke-linecap="round" />
-  <line x1="39" y1="29" x2="61" y2="29" stroke="#1A2238" stroke-width="5.5" stroke-linecap="round" />
-
-  <!-- Inner Collar / Stole Clasp Curve -->
-  <path 
-    d="M 40 52 C 45 58 55 58 60 52" 
-    fill="none" 
-    stroke="#1A2238" 
-    stroke-width="4.5" 
-    stroke-linecap="round" 
+  <path
+    d="M 50 28 V 50 M 41 36 H 59"
+    stroke="#0F172A"
+    stroke-width="4"
+    stroke-linecap="round"
   />
 
-  <!-- Left Stole Red Liturgical Cross -->
-  <line x1="32" y1="76" x2="32" y2="83" stroke="#C22E28" stroke-width="3" stroke-linecap="round" />
-  <line x1="28.5" y1="79.5" x2="35.5" y2="79.5" stroke="#C22E28" stroke-width="3" stroke-linecap="round" />
-
-  <!-- Right Stole Red Liturgical Cross -->
-  <line x1="68" y1="76" x2="68" y2="83" stroke="#C22E28" stroke-width="3" stroke-linecap="round" />
-  <line x1="64.5" y1="79.5" x2="71.5" y2="79.5" stroke="#C22E28" stroke-width="3" stroke-linecap="round" />
+  <!-- Small Red Sacramental Crosses on Stole Ends -->
+  <path d="M 32 76 H 32.1 M 32 74 V 78" stroke="#DC2626" stroke-width="3" stroke-linecap="round" />
+  <path d="M 68 76 H 68.1 M 68 74 V 78" stroke="#DC2626" stroke-width="3" stroke-linecap="round" />
 </svg>
