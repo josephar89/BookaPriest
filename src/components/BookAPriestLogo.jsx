@@ -1,103 +1,216 @@
 import React from 'react';
 
-export const BookAPriestLogo = ({ className = "", size, showText = false }) => {
-  // Compute inline dimension if `size` is passed (e.g. size={76} or size={36})
-  const inlineStyle = size ? { width: `${size}px`, height: `${size}px` } : undefined;
+/**
+ * Book a Priest official brand logo component.
+ * Faithful vector recreation of the Papal Vatican colorway brand proposal.
+ *
+ * @param {number|string} size - Overall width/height or symbol size (e.g. 36, 76, "48px")
+ * @param {'light'|'dark'|'app-icon'|'app-icon-light'} variant - Visual theme
+ * @param {boolean} showText - Whether to render the "Book a Priest" wordmark
+ * @param {boolean} showTagline - Whether to render "CONNECTING PARISHES & CLERGY"
+ * @param {'horizontal'|'vertical'} layout - Layout orientation when text is shown
+ * @param {string} className - Optional wrapper CSS class
+ * @param {React.CSSProperties} style - Optional wrapper inline styles
+ */
+export const BookAPriestLogo = ({
+  size = 48,
+  variant = 'light',
+  showText = false,
+  showTagline = false,
+  layout = 'horizontal',
+  className = '',
+  style = {}
+}) => {
+  const isDark = variant === 'dark';
+  const isAppIcon = variant === 'app-icon';
+  const isAppIconLight = variant === 'app-icon-light';
+
+  // Palette definitions from BookaPriest brand identity
+  const PAPAL_GOLD = '#F7B918';
+  const MIDNIGHT_NAVY = '#1A2238';
+  const LITURGICAL_RED = '#C22E28';
+  const WHITE = '#FFFFFF';
+
+  // SVG Line and fill colors based on active variant
+  const strokeColor = isDark ? PAPAL_GOLD : MIDNIGHT_NAVY;
+  const crossColor = isDark ? PAPAL_GOLD : MIDNIGHT_NAVY;
+  const stoleCrossColor = isDark ? PAPAL_GOLD : LITURGICAL_RED;
+  const bodyFill = isDark ? MIDNIGHT_NAVY : WHITE;
+
+  // Pixel dimension calculation
+  const dim = typeof size === 'number' ? `${size}px` : size;
 
   return (
-    <div 
+    <div
       className={`bookapriest-brand-wrapper ${className}`}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        flexDirection: layout === 'vertical' ? 'column' : 'row',
+        gap: layout === 'vertical' ? '0.5rem' : '0.75rem',
+        ...style
+      }}
     >
-      {/* SVG Icon Emblem */}
+      {/* Vector Emblem */}
       <svg
         viewBox="0 0 100 100"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         style={{
-          width: size ? `${size}px` : '100%',
-          height: size ? `${size}px` : 'auto',
+          width: dim,
+          height: dim,
           flexShrink: 0,
-          display: 'block',
-          ...inlineStyle
+          display: 'block'
         }}
+        aria-label="Book a Priest Logo"
+        role="img"
       >
-        {/* Background Circle - Papal Split (Left: Gold, Right: White) */}
-        <mask id="circle-split">
-          <circle cx="50" cy="50" r="45" fill="white" />
-        </mask>
-        
-        {/* Outline of the background circle */}
-        <circle cx="50" cy="50" r="45" fill="#FFFFFF" stroke="#1E1E2C" strokeWidth="6" />
-        {/* Papal Gold half */}
-        <path d="M 50,5 A 45,45 0 0,0 50,95 Z" fill="#F9C300" mask="url(#circle-split)" />
-        
-        {/* The Outer Stole (Draping downwards) */}
-        <path 
-          d="M 28,68 C 28,50 34,42 50,42 C 66,42 72,50 72,68 C 72,83 67,84 67,88" 
-          stroke="#1E1E2C" 
-          strokeWidth="6" 
-          strokeLinecap="round" 
-          strokeLinejoin="round"
-          fill="none"
-        />
-        <path 
-          d="M 28,68 C 28,83 33,84 33,88" 
-          stroke="#1E1E2C" 
-          strokeWidth="6" 
-          strokeLinecap="round" 
-          strokeLinejoin="round"
-          fill="none"
-        />
-        
-        {/* Map Pin / Head Contour */}
-        <path 
-          d="M 50,15 C 33.5,15 31,31 31,43 C 31,55 45,69 50,71 C 55,69 69,55 69,43 C 69,31 66.5,15 50,15 Z" 
-          fill="#FFFFFF" 
-          stroke="#1E1E2C" 
-          strokeWidth="6.5" 
-          strokeLinejoin="round"
-        />
+        <defs>
+          <clipPath id={`papal-split-${variant}`}>
+            <rect x="0" y="0" width="50" height="100" />
+          </clipPath>
+        </defs>
 
-        {/* Central Latin Cross */}
-        <path 
-          d="M 50,22 V 46" 
-          stroke="#1E1E2C" 
-          strokeWidth="5.5" 
-          strokeLinecap="round" 
-        />
-        <path 
-          d="M 40,30 H 60" 
-          stroke="#1E1E2C" 
-          strokeWidth="5.5" 
-          strokeLinecap="round" 
-        />
+        {/* Squircle Tile background for App-Icon variants */}
+        {isAppIcon && (
+          <rect width="100" height="100" rx="22" fill={MIDNIGHT_NAVY} />
+        )}
+        {isAppIconLight && (
+          <>
+            <rect width="100" height="100" rx="22" fill={WHITE} />
+            <rect width="98" height="98" x="1" y="1" rx="21" fill="none" stroke="#E5E7EB" strokeWidth="2" />
+          </>
+        )}
 
-        {/* Inner Clasp / Neck Line */}
-        <path 
-          d="M 37,51 C 41,56 59,56 63,51" 
-          stroke="#1E1E2C" 
-          strokeWidth="5" 
-          strokeLinecap="round" 
-          fill="none"
-        />
+        <g transform={(isAppIcon || isAppIconLight) ? "translate(5, 5) scale(0.9)" : undefined}>
+          {/* Semicircle Backdrop - Shown in light & app-icon modes */}
+          {!isDark && (
+            <circle
+              cx="50"
+              cy="50"
+              r="41"
+              fill={PAPAL_GOLD}
+              clipPath={`url(#papal-split-${variant})`}
+            />
+          )}
 
-        {/* Miniature Cross Stole Accents */}
-        {/* Left Accent */}
-        <path d="M 33,76 H 33.1 M 33,73 V 79" stroke="#E11D48" strokeWidth="4" strokeLinecap="round" />
-        {/* Right Accent */}
-        <path d="M 67,76 H 67.1 M 67,73 V 79" stroke="#E11D48" strokeWidth="4" strokeLinecap="round" />
+          {/* Priest Hood & Stole Contour */}
+          <path
+            d="M 50 13 C 35 13 31 27 31 39 C 31 49 39 57 44 61 L 30 67 C 26 69 24 74 24 81 L 26.5 88.5 C 27 90 28.5 90.5 30.5 89.5 L 38 85.5 C 39.5 84.5 40 82.5 39.5 81 L 36.5 71 C 41 67.5 45.5 66 50 66 C 54.5 66 59 67.5 63.5 71 L 60.5 81 C 60 82.5 60.5 84.5 62 85.5 L 69.5 89.5 C 71.5 90.5 73 90 73.5 88.5 L 76 81 C 76 74 74 69 70 67 L 56 61 C 61 57 69 49 69 39 C 69 27 65 13 50 13 Z"
+            fill={bodyFill}
+            stroke={strokeColor}
+            strokeWidth="5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+
+          {/* Central Latin Cross */}
+          <line
+            x1="50"
+            y1="21"
+            x2="50"
+            y2="47"
+            stroke={crossColor}
+            strokeWidth="5.5"
+            strokeLinecap="round"
+          />
+          <line
+            x1="39"
+            y1="29"
+            x2="61"
+            y2="29"
+            stroke={crossColor}
+            strokeWidth="5.5"
+            strokeLinecap="round"
+          />
+
+          {/* Inner Collar Clasp Curve */}
+          <path
+            d="M 40 52 C 45 58 55 58 60 52"
+            fill="none"
+            stroke={strokeColor}
+            strokeWidth="4.5"
+            strokeLinecap="round"
+          />
+
+          {/* Left Liturgical Cross on Stole */}
+          <line
+            x1="32"
+            y1="76"
+            x2="32"
+            y2="83"
+            stroke={stoleCrossColor}
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+          <line
+            x1="28.5"
+            y1="79.5"
+            x2="35.5"
+            y2="79.5"
+            stroke={stoleCrossColor}
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+
+          {/* Right Liturgical Cross on Stole */}
+          <line
+            x1="68"
+            y1="76"
+            x2="68"
+            y2="83"
+            stroke={stoleCrossColor}
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+          <line
+            x1="64.5"
+            y1="79.5"
+            x2="71.5"
+            y2="79.5"
+            stroke={stoleCrossColor}
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+        </g>
       </svg>
 
-      {/* Typography: "Book a Priest" */}
+      {/* Typography: "Book a Priest" Wordmark */}
       {showText && (
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', lineHeight: 1.1 }}>
-          <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.025em', fontFamily: "'Outfit', sans-serif" }}>
-            Book <span style={{ color: '#F9C300', fontWeight: 900 }}>a</span> Priest
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: layout === 'vertical' ? 'center' : 'flex-start',
+            lineHeight: 1.15
+          }}
+        >
+          <span
+            style={{
+              fontSize: '1.25rem',
+              fontWeight: 800,
+              color: isDark ? WHITE : MIDNIGHT_NAVY,
+              letterSpacing: '-0.025em',
+              fontFamily: "'Outfit', system-ui, -apple-system, sans-serif"
+            }}
+          >
+            Book <span style={{ color: PAPAL_GOLD, fontWeight: 900 }}>a</span> Priest
           </span>
-          <span style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.15em', color: '#4B5563', fontWeight: 700, marginTop: '2px' }}>
-            Connecting Parishes & Clergy
-          </span>
+          {showTagline && (
+            <span
+              style={{
+                fontSize: '9px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.15em',
+                color: isDark ? '#9CA3AF' : '#4B5563',
+                fontWeight: 700,
+                marginTop: '3px'
+              }}
+            >
+              Connecting Parishes & Clergy
+            </span>
+          )}
         </div>
       )}
     </div>
