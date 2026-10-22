@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
-  <!-- Solid Navy #131E3C Background (Matching master-icon-1024) -->
-  <rect width="120" height="120" rx="26" fill="#131E3C" />
+  <!-- Clean Pure White Background (Matching white icon-pack) -->
+  <rect width="120" height="120" rx="26" fill="#FFFFFF" />
 
   <!-- Map Pin Body (Papal Gold fill + Midnight Navy outer contour) -->
   <g transform="translate(10, 2)">
@@ -13,8 +13,8 @@
          C 13.6 72.8 8 61.2 8 48
          C 8 24.804 26.804 6 50 6 Z"
       fill="#FCD116"
-      stroke="#FFFFFF"
-      stroke-width="5"
+      stroke="#131E3C"
+      stroke-width="7.5"
       stroke-linejoin="round"
       stroke-linecap="round"
     />

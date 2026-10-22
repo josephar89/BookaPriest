@@ -4,22 +4,16 @@
   "description": "Book a Priest - Priests at your call. Connecting Priests, Parishes & Religious Communities across India.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#131E3C",
+  "background_color": "#FFFFFF",
   "theme_color": "#131E3C",
   "icons": [
     {
-      "src": "/favicon-32x32.png",
+      "src": "/favicon-32.png",
       "sizes": "32x32",
       "type": "image/png"
     },
     {
       "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/pwa-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
