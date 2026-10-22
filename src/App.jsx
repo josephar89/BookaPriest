@@ -2035,10 +2035,30 @@ export default function App() {
               color: '#131E3C',
               letterSpacing: '0.12em',
               textTransform: 'uppercase',
-              marginBottom: '1rem',
+              marginBottom: '0.85rem',
               opacity: 0.9
             }}>
               Priests at your call
+            </div>
+
+            {/* Access Note Badge */}
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              background: '#FFFBEB',
+              border: '1px solid #FDE68A',
+              color: '#92400E',
+              padding: '6px 12px',
+              borderRadius: '9999px',
+              fontSize: '0.74rem',
+              fontWeight: 600,
+              letterSpacing: '0.01em',
+              boxShadow: '0 1px 2px rgba(245, 158, 11, 0.08)'
+            }}>
+              <span style={{ fontSize: '0.85rem' }}>🔒</span>
+              <span>For verified clergy & religious only. Access by approval</span>
             </div>
           </div>
 

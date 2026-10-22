@@ -1,50 +1,47 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120" width="120" height="144">
-  <defs>
-    <filter id="pin-shadow" x="-10%" y="-10%" width="120%" height="120%">
-      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#131E3C" flood-opacity="0.15" />
-    </filter>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <!-- Solid Navy #131E3C Background (Matching master-icon-1024) -->
+  <rect width="120" height="120" rx="26" fill="#131E3C" />
 
   <!-- Map Pin Body (Papal Gold fill + Midnight Navy outer contour) -->
-  <path
-    d="M 50 6
-       C 73.196 6 92 24.804 92 48
-       C 92 61.2 86.4 72.8 77.2 82.8
-       L 50 114
-       L 22.8 82.8
-       C 13.6 72.8 8 61.2 8 48
-       C 8 24.804 26.804 6 50 6 Z"
-    fill="#FCD116"
-    stroke="#131E3C"
-    stroke-width="7.5"
-    stroke-linejoin="round"
-    stroke-linecap="round"
-  />
-
-  <!-- Priest Silhouette Group (Midnight Navy #131E3C) -->
-  <g fill="#131E3C">
-    <!-- Priest Head (Updated: Larger, more prominent) -->
-    <circle cx="50" cy="38" r="15.5" />
-
-    <!-- Neck Base -->
-    <rect x="45" y="50" width="10" height="11" />
-
-    <!-- Priest Shoulders / Bust -->
+  <g transform="translate(10, 2)">
     <path
-      d="M 45 59
-         C 34 60 28 69 28 82
-         C 34 91 66 91 72 82
-         C 72 69 66 60 55 59
-         Z"
+      d="M 50 6
+         C 73.196 6 92 24.804 92 48
+         C 92 61.2 86.4 72.8 77.2 82.8
+         L 50 114
+         L 22.8 82.8
+         C 13.6 72.8 8 61.2 8 48
+         C 8 24.804 26.804 6 50 6 Z"
+      fill="#FCD116"
+      stroke="#FFFFFF"
+      stroke-width="5"
+      stroke-linejoin="round"
+      stroke-linecap="round"
     />
+
+    <!-- Priest Silhouette Group (Midnight Navy #131E3C) -->
+    <g fill="#131E3C">
+      <!-- Priest Head -->
+      <circle cx="50" cy="38" r="15.5" />
+
+      <!-- Neck Base -->
+      <rect x="45" y="50" width="10" height="11" />
+
+      <!-- Priest Shoulders / Bust -->
+      <path
+        d="M 45 59
+           C 34 60 28 69 28 82
+           C 34 91 66 91 72 82
+           C 72 69 66 60 55 59
+           Z"
+      />
+    </g>
+
+    <!-- Roman Clerical Collar Tab -->
+    <rect x="47" y="53.5" width="6" height="5.5" fill="#FFFFFF" rx="0.5" />
+
+    <!-- White Latin Cross on Pectoral Vestment -->
+    <rect x="46.5" y="63.5" width="7" height="22" fill="#FFFFFF" rx="0.5" />
+    <rect x="38.5" y="69.5" width="23" height="7" fill="#FFFFFF" rx="0.5" />
   </g>
-
-  <!-- Roman Clerical Collar Tab (Updated: wider white tab) -->
-  <rect x="47" y="53.5" width="6" height="5.5" fill="#FFFFFF" rx="0.5" />
-
-  <!-- White Latin Cross on Pectoral Vestment (Updated: Bolder, wider arms) -->
-  <!-- Vertical Beam -->
-  <rect x="46.5" y="63.5" width="7" height="22" fill="#FFFFFF" rx="0.5" />
-  <!-- Horizontal Crossbar -->
-  <rect x="38.5" y="69.5" width="23" height="7" fill="#FFFFFF" rx="0.5" />
 </svg>

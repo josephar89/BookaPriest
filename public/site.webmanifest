@@ -1,11 +1,11 @@
 {
   "name": "Book a Priest",
   "short_name": "BookaPriest",
-  "description": "Book a Priest - Priests at your call",
+  "description": "Book a Priest - Priests at your call. Connecting Priests, Parishes & Religious Communities across India.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#131E3C",
-  "theme_color": "#FCD116",
+  "theme_color": "#131E3C",
   "icons": [
     {
       "src": "/favicon-32x32.png",
@@ -13,15 +13,28 @@
       "type": "image/png"
     },
     {
-      "src": "/pwa-192x192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "/pwa-512x512.png",
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
