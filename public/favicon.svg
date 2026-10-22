@@ -1,50 +1,50 @@
-<svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Soft Rounded Badge Container -->
-  <rect x="5" y="5" width="90" height="90" rx="24" fill="#FFFFFF" />
-  
-  <!-- Papal Gold Left Split Circle -->
-  <path
-    d="M 50 14 A 36 36 0 0 0 50 86 Z"
-    fill="#F59E0B"
-  />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120" width="120" height="144">
+  <defs>
+    <filter id="pin-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#131E3C" flood-opacity="0.15" />
+    </filter>
+  </defs>
 
-  <!-- Navy Outer Ring Contour -->
-  <circle
-    cx="50"
-    cy="50"
-    r="36"
-    stroke="#0F172A"
-    stroke-width="4"
-    fill="none"
-  />
-
-  <!-- Stole Drapes (Left & Right) -->
+  <!-- Map Pin Body (Papal Gold fill + Midnight Navy outer contour) -->
   <path
-    d="M 33 56 C 26 66 26 78 32 82 M 67 56 C 74 66 74 78 68 82"
-    stroke="#0F172A"
-    stroke-width="4.5"
-    stroke-linecap="round"
-    fill="none"
-  />
-
-  <!-- Main Map Pin / Clergy Silhouette -->
-  <path
-    d="M 50 20 C 37 20 34 32 34 42 C 34 54 46 68 50 71 C 54 68 66 54 66 42 C 66 32 63 20 50 20 Z"
-    fill="#FFFFFF"
-    stroke="#0F172A"
-    stroke-width="4.5"
+    d="M 50 6
+       C 73.196 6 92 24.804 92 48
+       C 92 61.2 86.4 72.8 77.2 82.8
+       L 50 114
+       L 22.8 82.8
+       C 13.6 72.8 8 61.2 8 48
+       C 8 24.804 26.804 6 50 6 Z"
+    fill="#FCD116"
+    stroke="#131E3C"
+    stroke-width="7.5"
     stroke-linejoin="round"
-  />
-
-  <!-- Central Latin Cross -->
-  <path
-    d="M 50 28 V 50 M 41 36 H 59"
-    stroke="#0F172A"
-    stroke-width="4"
     stroke-linecap="round"
   />
 
-  <!-- Small Red Sacramental Crosses on Stole Ends -->
-  <path d="M 32 76 H 32.1 M 32 74 V 78" stroke="#DC2626" stroke-width="3" stroke-linecap="round" />
-  <path d="M 68 76 H 68.1 M 68 74 V 78" stroke="#DC2626" stroke-width="3" stroke-linecap="round" />
+  <!-- Priest Silhouette Group (Midnight Navy #131E3C) -->
+  <g fill="#131E3C">
+    <!-- Priest Head -->
+    <circle cx="50" cy="40" r="13.5" />
+
+    <!-- Neck Base -->
+    <rect x="46" y="52" width="8" height="10" />
+
+    <!-- Priest Shoulders / Bust -->
+    <path
+      d="M 46 60
+         C 35 61 28 69 28 82
+         C 34 91 66 91 72 82
+         C 72 69 65 61 54 60
+         Z"
+    />
+  </g>
+
+  <!-- Roman Clerical Collar Tab (Pure White #FFFFFF) -->
+  <rect x="48" y="55" width="4" height="6.5" fill="#FFFFFF" rx="0.5" />
+
+  <!-- White Latin Cross on Pectoral Vestment -->
+  <!-- Vertical Beam -->
+  <rect x="47.2" y="65.5" width="5.6" height="20" fill="#FFFFFF" rx="0.5" />
+  <!-- Horizontal Crossbar -->
+  <rect x="41" y="71" width="18" height="5.6" fill="#FFFFFF" rx="0.5" />
 </svg>

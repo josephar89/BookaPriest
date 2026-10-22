@@ -2016,7 +2016,7 @@ export default function App() {
               fontSize: '2rem',
               fontWeight: 800,
               fontFamily: "'Outfit', sans-serif",
-              color: '#1A2238',
+              color: '#131E3C',
               letterSpacing: '-0.03em',
               margin: '0 0 4px 0',
               display: 'inline-flex',
@@ -2025,20 +2025,20 @@ export default function App() {
               gap: '6px'
             }}>
               <span>Book</span>
-              <span style={{ color: '#F7B918' }}>a</span>
+              <span style={{ color: '#FCD116' }}>a</span>
               <span>Priest</span>
             </h1>
 
             <div style={{
-              fontSize: '0.72rem',
+              fontSize: '0.75rem',
               fontWeight: 800,
-              color: '#1A2238',
-              letterSpacing: '0.14em',
+              color: '#131E3C',
+              letterSpacing: '0.12em',
               textTransform: 'uppercase',
               marginBottom: '0.75rem',
-              opacity: 0.85
+              opacity: 0.9
             }}>
-              Connecting Parishes & Clergy
+              Priests at your call
             </div>
 
             <p style={{ margin: '0 0 3px 0', fontSize: '0.84rem', color: '#64748B' }}>
@@ -3094,7 +3094,7 @@ export default function App() {
           </div>
           <span className="brand-logo" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
             <span>Book</span>
-            <span style={{ color: '#F7B918' }}>a</span>
+            <span style={{ color: '#FCD116' }}>a</span>
             <span>Priest</span>
           </span>
           <span className="brand-badge">India</span>
