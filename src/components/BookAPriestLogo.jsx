@@ -8,7 +8,7 @@ import React from 'react';
  * @param {number|string} size - Overall width or icon size (e.g. 76, 36)
  * @param {'color'|'monochrome'|'dark'} variant - Color variant
  * @param {boolean} showText - Whether to render "Book a Priest" wordmark
- * @param {boolean} showTagline - Whether to render "Priests at your call"
+ * @param {boolean} showTagline - Whether to render "Shepherds at your call"
  * @param {'horizontal'|'vertical'} layout - Orientation when text is shown
  * @param {string} className - Optional CSS class
  * @param {React.CSSProperties} style - Optional inline styles
@@ -140,7 +140,7 @@ export const BookAPriestLogo = ({
                 textTransform: 'uppercase'
               }}
             >
-              Priests at your call
+              Shepherds at your call
             </span>
           )}
         </div>

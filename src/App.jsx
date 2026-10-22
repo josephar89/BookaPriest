@@ -1998,67 +1998,58 @@ export default function App() {
       <div className="auth-page" style={{ flexDirection: 'column', minHeight: '100vh', justifyContent: 'center', alignItems: 'center', gap: '1.5rem', padding: '2rem 1rem' }}>
         <div className="glass-card auth-card">
           <div className="auth-header" style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.85rem' }}>
+            {/* Horizontal Unified Lockup: Book [Pin] Priest */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '12px',
+              marginBottom: '0.45rem',
+              flexWrap: 'nowrap'
+            }}>
+              <span style={{
+                fontSize: '2.5rem',
+                fontWeight: 900,
+                fontFamily: "'Outfit', sans-serif",
+                color: '#131E3C',
+                letterSpacing: '-0.03em',
+                lineHeight: 1
+              }}>
+                Book
+              </span>
+
+              {/* The Pin Icon in place of "a" */}
               <div style={{
-                background: '#FFFFFF',
-                borderRadius: '24px',
-                padding: '6px',
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                boxShadow: '0 10px 25px -5px rgba(26, 34, 56, 0.12), 0 4px 10px -2px rgba(247, 185, 24, 0.2)'
+                flexShrink: 0
               }}>
-                <BookAPriestLogo size={76} />
+                <BookAPriestLogo size={46} />
               </div>
+
+              <span style={{
+                fontSize: '2.5rem',
+                fontWeight: 900,
+                fontFamily: "'Outfit', sans-serif",
+                color: '#131E3C',
+                letterSpacing: '-0.03em',
+                lineHeight: 1
+              }}>
+                Priest
+              </span>
             </div>
 
-            <h1 style={{
-              fontSize: '2rem',
-              fontWeight: 800,
-              fontFamily: "'Outfit', sans-serif",
-              color: '#131E3C',
-              letterSpacing: '-0.03em',
-              margin: '0 0 4px 0',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px'
-            }}>
-              <span>Book</span>
-              <span style={{ color: '#FCD116' }}>a</span>
-              <span>Priest</span>
-            </h1>
-
+            {/* Tagline */}
             <div style={{
-              fontSize: '0.75rem',
+              fontSize: '0.78rem',
               fontWeight: 800,
               color: '#131E3C',
-              letterSpacing: '0.12em',
+              letterSpacing: '0.14em',
               textTransform: 'uppercase',
-              marginBottom: '0.85rem',
-              opacity: 0.9
+              opacity: 0.85
             }}>
-              Priests at your call
-            </div>
-
-            {/* Access Note Badge */}
-            <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              background: '#FFFBEB',
-              border: '1px solid #FDE68A',
-              color: '#92400E',
-              padding: '6px 12px',
-              borderRadius: '9999px',
-              fontSize: '0.74rem',
-              fontWeight: 600,
-              letterSpacing: '0.01em',
-              boxShadow: '0 1px 2px rgba(245, 158, 11, 0.08)'
-            }}>
-              <span style={{ fontSize: '0.85rem' }}>🔒</span>
-              <span>For verified clergy & religious only. Access by approval</span>
+              Shepherds at your call
             </div>
           </div>
 
@@ -2135,6 +2126,8 @@ export default function App() {
                     >
                       Sign in with password
                     </button>
+
+
                   </div>
                 </div>
               ) : (
@@ -3059,6 +3052,22 @@ export default function App() {
 
         {/* --- AUTH PAGE FOOTER (DISCREET & PRIVACY-CONSCIOUS) --- */}
         <footer style={{ marginTop: '0.5rem', textAlign: 'center', fontSize: '0.78rem', color: '#64748B', lineHeight: '1.6' }}>
+          {/* Subtle Access Note */}
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            fontSize: '0.74rem',
+            color: '#64748B',
+            fontWeight: 500,
+            marginBottom: '0.5rem',
+            letterSpacing: '0.01em'
+          }}>
+            <span style={{ fontSize: '0.82rem', opacity: 0.9 }}>🔒</span>
+            <span>For verified clergy & religious only. Access by approval</span>
+          </div>
+
           <div style={{ marginBottom: '0.25rem', fontWeight: 500 }}>
             Managed under Catholic Religious Administration
           </div>
