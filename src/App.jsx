@@ -2035,18 +2035,11 @@ export default function App() {
               color: '#131E3C',
               letterSpacing: '0.12em',
               textTransform: 'uppercase',
-              marginBottom: '0.75rem',
+              marginBottom: '1rem',
               opacity: 0.9
             }}>
               Priests at your call
             </div>
-
-            <p style={{ margin: '0 0 3px 0', fontSize: '0.84rem', color: '#64748B' }}>
-              Tired of searching for a priest for Holy Mass?
-            </p>
-            <p style={{ margin: 0, fontSize: '0.88rem', color: '#1A2238', fontWeight: 600 }}>
-              Instantly connect with available priests nearby!
-            </p>
           </div>
 
           {errorMsg && <div className="error-alert">{errorMsg}</div>}
