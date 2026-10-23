@@ -3054,22 +3054,17 @@ export default function App() {
         <footer style={{ marginTop: '0.5rem', textAlign: 'center', fontSize: '0.78rem', color: '#64748B', lineHeight: '1.6' }}>
           {/* Subtle Access Note */}
           <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
             fontSize: '0.74rem',
             color: '#64748B',
             fontWeight: 500,
             marginBottom: '0.5rem',
             letterSpacing: '0.01em'
           }}>
-            <span style={{ fontSize: '0.82rem', opacity: 0.9 }}>🔒</span>
-            <span>For verified clergy & religious only. Access by approval</span>
+            Catholic Clerics &amp; Religious Only • Access by Approval
           </div>
 
           <div style={{ marginBottom: '0.25rem', fontWeight: 500 }}>
-            Managed under Catholic Religious Administration
+            Managed under Catholic Religious Forum
           </div>
           <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
             <span>&copy; <a href="https://josephcap.com" target="_blank" rel="noreferrer" style={{ color: '#0284C7', textDecoration: 'none', fontWeight: 600 }}>josephcap.com</a></span>
